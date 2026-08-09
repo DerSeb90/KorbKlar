@@ -1,5 +1,6 @@
 import ast
 import re
+import subprocess
 import sys
 import tomllib
 from pathlib import Path
@@ -11,11 +12,20 @@ PACKAGE = SRC / "supermarkt"
 
 
 def _release_paths():
-    for path in ROOT.rglob("*"):
-        relative = path.relative_to(ROOT)
-        if relative.parts and relative.parts[0] == ".git":
-            continue
-        yield path
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(ROOT), "ls-files", "-z"],
+            check=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+        )
+    except (FileNotFoundError, subprocess.CalledProcessError):
+        yield from ROOT.rglob("*")
+        return
+
+    for item in result.stdout.split(b"\0"):
+        if item:
+            yield ROOT / item.decode("utf-8")
 
 
 def _dependency_names() -> set[str]:
