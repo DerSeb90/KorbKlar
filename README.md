@@ -6,16 +6,19 @@ Nach dem Start öffnet man die Weboberfläche, gibt **nur die Postleitzahl** ein
 
 ## Schnellstart
 
-Vorausgesetzt werden nur **Docker Engine**, **Docker Compose v2** und Internetzugriff für den Container.
+Vorausgesetzt werden **Docker Engine**, **Docker Compose v2**, Git und Internetzugriff für den Container.
 
-Repository klonen oder als ZIP herunterladen und anschließend im Projektverzeichnis starten:
+Repository klonen und starten:
 
 ```bash
+git clone https://github.com/lesecuritae/supermarkt-preisvergleich.git
 cd supermarkt-preisvergleich
 docker compose up -d --build
 ```
 
-Danach im Browser öffnen:
+Alternativ kann das Repository über GitHub als ZIP heruntergeladen und entpackt werden. Danach im entpackten Projektverzeichnis `docker compose up -d --build` ausführen.
+
+Anschließend im Browser öffnen:
 
 ```text
 http://SERVER-IP:8000
@@ -39,6 +42,8 @@ Status prüfen:
 docker compose ps
 curl http://127.0.0.1:8000/health
 ```
+
+Wenn ein anderer Host-Port gesetzt wurde, muss beim `curl`-Aufruf entsprechend dieser Port verwendet werden.
 
 Logs:
 
@@ -201,189 +206,106 @@ Beispiel mit mehreren Bonusprogrammen:
 }
 ```
 
-### Optionaler API-Schutz
+### Optionaler API-Schlüssel
 
-Der Browserbetrieb funktioniert ohne Schlüssel. Soll nur der REST-Vergleichsendpunkt zusätzlich mit Bearer-Authentifizierung geschützt werden, kann eine `.env` angelegt werden:
+Der Browserbetrieb funktioniert ohne API-Schlüssel. Wer den API-Endpunkt zusätzlich absichern will, setzt `SUPERMARKT_API_KEY`.
 
-```bash
-cp .env.example .env
-```
-
-Dann beispielsweise:
+Beispiel in `.env`:
 
 ```dotenv
-SUPERMARKT_API_KEY=ein-langer-zufaelliger-schluessel
+SUPERMARKT_API_KEY=einen-langen-zufaelligen-schluessel-hier-eintragen
 ```
 
-Danach:
+Ein Request benötigt dann:
 
-```bash
-docker compose up -d
+```text
+X-API-Key: einen-langen-zufaelligen-schluessel-hier-eintragen
 ```
-
-`SUPERMARKT_API_KEY` schützt nur `POST /api/v1/compare`. Wer den gesamten Dienst direkt aus dem Internet erreichbar macht, sollte den Zugang auf Netzwerk- oder Proxy-Ebene zusätzlich absichern. Für den normalen LAN-Betrieb ist das nicht nötig.
-
-## Signierte Ergebnis- und Bildlinks
-
-Für Ergebnisansichten und den Bildproxy erzeugt der Dienst beim ersten Start selbstständig einen zufälligen HMAC-Schlüssel und speichert ihn mit restriktiven Dateirechten im persistenten Daten-Volume.
-
-Der Nutzer muss diesen Schlüssel nicht anlegen oder verwalten. Dadurch bleiben Ergebnislinks auch nach einem Container-Neustart gültig, solange das Daten-Volume erhalten bleibt.
-
-Der Bildproxy validiert externe Bildziele, blockiert private und Loopback-Adressen und verwirft typische Tracking-, Pixel-, Logo- und Platzhalter-URLs. Marktguru-Angebote, die nur eine Bildanzahl statt einer fertigen Bild-URL liefern, werden über den bekannten CDN-Pfad der Angebots-ID aufgelöst.
-
-## Händler- und Packungsdarstellung
-
-Bei Auswahl genau eines Händlers blendet die Ergebnisansicht die redundante Händlerspalte aus. Bei der Ansicht aller Händler bleibt sie sichtbar. Standardmäßig werden nur die günstigsten sicheren Vergleichstreffer angezeigt. Über den Reiter `Teurere Dubletten einblenden` können die ausgeblendeten Vergleichsangebote jederzeit wieder eingeblendet werden. Quellen-Platzhalter wie `This is no brand` werden als fehlende Marke behandelt und nicht vor den Produktnamen gesetzt.
-
-Mehrere Packungsgrößen werden nur dann addiert, wenn die Quelle ausdrücklich ein Kombipack mit `+` beschreibt. Angaben wie `85 g oder 100 g` erscheinen als `85 g / 100 g`; Bereiche wie `85–100 g` bleiben als Bereich erhalten. Für mehrdeutige Größen wird kein eigener Grundpreis aus nur einer Teilgröße berechnet.
 
 ## Daten und Cache
 
-SQLite ist Bestandteil der Python-Standardbibliothek. Ein externer Datenbankserver wird nicht benötigt.
+Der Dienst speichert Suchergebnisse als Snapshots in SQLite. Dadurch können bereits erzeugte Ergebnisansichten erneut geöffnet werden, ohne die Händlerquellen bei jedem Seitenaufruf neu abzufragen.
 
-Standardmäßig speichert der Container unter `/data`:
+Zusätzlich gibt es getrennte lokale Caches für:
 
-- Angebots-Snapshots
-- den automatisch erzeugten Signierschlüssel
-- den Bildcache
+- Produktbilder
+- Kaufland-Filialzuordnungen
+- REWE-Filialzuordnungen
 
-Docker Compose bindet dafür das benannte Volume `supermarkt-data` ein.
-
-Der Snapshot-Cache verhindert, dass Filter, Sortierung und beim Scrollen nachgeladene Ergebnisblöcke die Händlerquellen immer wieder neu abrufen. Kaufland speichert zusätzlich die Zuordnung `PLZ → Filiale` und den bereits gesetzten Browserzustand standardmäßig 24 Stunden. REWE speichert die Zuordnung `PLZ → Markt` ebenfalls 24 Stunden. Die Angebotsseiten selbst werden bei einem neuen Quellenabruf weiterhin frisch geladen. Cache-Frische und Link-Lebensdauer sind getrennt: Standardmäßig werden Quelldaten 30 Minuten wiederverwendet, während erzeugte Ergebnislinks sieben Tage abrufbar bleiben. Eine spätere Aktualisierung derselben PLZ löscht den älteren Ergebnislink nicht sofort.
+Die Standardwerte sind so gewählt, dass der Dienst ohne zusätzliche Konfiguration läuft. Alle unterstützten Umgebungsvariablen sind in `.env.example` dokumentiert.
 
 ## Abhängigkeiten
 
-Die Python-Runtime ist bewusst klein gehalten:
+### Docker
 
-| Paket | Aufgabe |
-|---|---|
-| FastAPI | Web- und REST-Routen |
-| Pydantic | Eingabevalidierung |
-| curl-cffi | HTTP-Zugriff für entsprechende Quellen |
-| Beautiful Soup | HTML-Parsing |
-| Uvicorn | ASGI-Server |
-| python-multipart | Verarbeitung des PLZ-Webformulars |
+Der empfohlene Betrieb läuft vollständig über Docker. Das Image basiert auf Python 3.13 und installiert die benötigten Systempakete selbst:
 
-Im Docker-Image kommen hinzu:
+- Chromium
+- curl
+- CA-Zertifikate
 
-| Komponente | Aufgabe |
-|---|---|
-| Chromium | Händlerseiten, bei denen gerendertes HTML benötigt wird |
-| curl | begrenzter Fallback eines Händleradapters |
-| ca-certificates | TLS-Zertifikatsprüfung |
+Die Python-Laufzeitabhängigkeiten werden ebenfalls beim Image-Build installiert:
 
-Nicht benötigt werden unter anderem Redis, PostgreSQL, Node.js, Selenium, Playwright, ein separater Marktguru-Dienst oder eine LLM.
+- FastAPI
+- Pydantic
+- curl-cffi
+- Beautiful Soup 4
+- Uvicorn
+- python-multipart
 
-## Konfiguration
+Es werden **kein Redis, kein Node.js, kein Selenium und kein Playwright** benötigt.
 
-Für den Standardbetrieb ist keine Konfiguration erforderlich. Die Werte in `.env.example` sind nur optionale Anpassungen:
+### Installation ohne Docker
 
-```dotenv
-SUPERMARKT_PORT=8000
-SUPERMARKT_API_KEY=
-
-SUPERMARKT_DATA_DIR=/data
-SUPERMARKT_CACHE_DB=/data/supermarkt-cache.sqlite3
-SUPERMARKT_SIGNING_SECRET_FILE=/data/.signing-secret
-SUPERMARKT_SIGNING_SECRET=
-SUPERMARKT_IMAGE_CACHE_DIR=/data/supermarkt-images
-SUPERMARKT_KAUFLAND_CACHE_DIR=/data/kaufland
-SUPERMARKT_REWE_CACHE_DIR=/data/rewe
-
-SUPERMARKT_CACHE_TTL_MINUTES=30
-SUPERMARKT_CACHE_MAX_SNAPSHOTS=100
-SUPERMARKT_RESULT_RETENTION_HOURS=168
-SUPERMARKT_TIMEOUT_SECONDS=25
-SUPERMARKT_MARKTGURU_PAGE_SIZE=500
-SUPERMARKT_MAX_WORKERS=8
-SUPERMARKT_USER_AGENT=
-SUPERMARKT_KAUFLAND_STORE_CACHE_TTL_SECONDS=86400
-SUPERMARKT_REWE_STORE_CACHE_TTL_SECONDS=86400
-SUPERMARKT_IMAGE_CACHE_TTL_SECONDS=604800
-SUPERMARKT_IMAGE_CACHE_MAX_BYTES=536870912
-SUPERMARKT_IMAGE_MAX_FILE_BYTES=4194304
-```
-
-## Python ohne Docker
-
-Docker ist der empfohlene Weg. Für Entwicklung oder eine manuelle Installation kann das Paket auch direkt mit Python **3.12 oder neuer** betrieben werden:
+Eine direkte Python-Installation ist möglich, wenn die Systemabhängigkeiten selbst bereitgestellt werden.
 
 ```bash
-python -m venv .venv
+python3 -m venv .venv
 . .venv/bin/activate
-pip install -e .
+python -m pip install --upgrade pip
+pip install .
 uvicorn supermarkt.asgi:app --host 0.0.0.0 --port 8000
 ```
 
-Dann werden zusätzlich Chromium und `curl` auf dem Host benötigt. Ohne `SUPERMARKT_DATA_DIR` legt die Python-Anwendung ihre Laufzeitdaten unter `$XDG_STATE_HOME/supermarkt-preisvergleich` beziehungsweise `~/.local/state/supermarkt-preisvergleich` ab.
+Zusätzlich müssen `chromium` und `curl` im Systempfad verfügbar sein.
 
 ## Tests
 
-Entwicklungsabhängigkeiten installieren und Offline-Suite starten:
+Die normalen Tests laufen ohne Live-Zugriff auf Händlerseiten:
 
 ```bash
-pip install -e '.[dev]'
+python -m pip install -e '.[dev]'
 pytest -m 'not live'
 ```
 
-Live-Tests gegen externe Händlerquellen sind bewusst opt-in:
+Die Live-Tests werden absichtlich nicht bei jedem Testlauf ausgeführt, weil sie echte Händlerseiten anfragen:
 
 ```bash
 RUN_LIVE_TESTS=1 pytest -m live
 ```
 
-Die Offline-Suite deckt unter anderem ab:
+GitHub Actions führt bei Änderungen auf `main` und bei Pull Requests die normalen Python-Tests, einen Wheel-Build und einen Docker-Smoke-Test aus.
 
-- PLZ-Validierung
-- Browser-Einstieg und Redirect zur Ergebnisansicht
-- optionale API-Authentifizierung
-- persistente Signierschlüssel
-- getrennte Cache-Frische und Ergebnis-Aufbewahrung
-- Packungs- und Grundpreisnormalisierung
-- Bonuskombinationen
-- Vergleich mit und ohne Bonus
-- Händlerfilter ohne Nulltreffer
-- Marktguru-CDN-Bilder
-- signierten Bildproxy und SSRF-Schutz
-- OpenAPI-Oberfläche
-- Runtime-Abhängigkeiten und Release-Sauberkeit
-
-## Architektur
+## Projektstruktur
 
 ```text
-src/supermarkt/
-├── sources/       Händleradapter
-├── models.py      Datenmodelle und Händlerdefinitionen
-├── common.py      Normalisierung und gemeinsame Helfer
-├── region.py      regionale Zuordnung, unter anderem ALDI Nord/Süd
-├── compare.py     Mapping, Deduplizierung und Preisvergleich
-├── loyalty.py     Bonusprogramme und bezifferbare Vorteile
-├── cache.py       SQLite-Snapshot-Cache
-├── service.py     Orchestrierung der Quellen und blockweises Ergebnisladen
-├── presentation.py API-Ausgabefelder
-├── images.py      Bilddownload, Cache und SSRF-Schutz
-├── security.py    persistente Signaturen und optionaler API-Key
-├── ui.py          Start- und Ergebnisoberfläche
-└── web.py         HTTP-Routing und Orchestrierung der Webanfragen
+src/supermarkt/        Python-Core und Webanwendung
+src/supermarkt/sources Händleradapter
+tests/                 Offline- und optionale Live-Tests
+Dockerfile             Container-Image
+compose.yml             Docker-Compose-Konfiguration
+.env.example            dokumentierte Konfiguration
 ```
 
-Die Händleradapter kennen die Webseiten. Der Vergleichskern kennt keine HTML-Oberfläche. Die UI berechnet keine Preise. Dadurch können Quellen, Darstellung und externe Integrationen getrennt geändert und getestet werden.
+## Geplante Erweiterungen
 
-## Grenzen
+Für spätere Versionen sind zusätzliche Integrationen vorgesehen. Dazu gehören insbesondere:
 
-Händlerseiten und nicht dokumentierte Webschnittstellen können sich ändern. Ein einzelner Adapter kann deshalb zeitweise ausfallen, obwohl der Dienst selbst läuft. Wo für dieselbe Zielwoche regionale Marktguru-Daten vorhanden sind, nutzt der Dienst sie als händlerspezifischen Fallback; andernfalls bleibt der Vergleich mit den übrigen Quellen nutzbar und zeigt den Fehler als Hinweis an.
-
-Die Daten sind nur so vollständig und aktuell wie die jeweils erreichbaren Quellen. Fehlende Preise oder nicht bezifferte Bonusvorteile werden nicht erfunden.
-
-## Roadmap
-
-Für spätere Versionen sind zusätzliche Integrationen geplant. Dazu gehören insbesondere:
-
-- **Grocy**: Übergabe günstiger Angebote beziehungsweise ausgewählter Produkte an Einkaufslisten und Vorratsverwaltung
+- **Grocy**: Übergabe günstiger Angebote oder ausgewählter Produkte an Einkaufslisten und Vorratsverwaltung
 - **KitchenOwl**: Anbindung an den selbst gehosteten Einkaufslisten- und Rezeptmanager, damit Angebote künftig mit Einkaufslisten, Rezepten und Essensplanung zusammenspielen können
 - weitere REST-/OpenAPI-Anbindungen für lokale Automationen und Agenten
 
-Diese Funktionen sind für spätere Versionen vorgesehen und **noch nicht Bestandteil von 0.0.1**. Die aktuelle Version bleibt bewusst unabhängig von Grocy, KitchenOwl oder einer LLM.
+Diese Funktionen sind geplant und noch nicht Bestandteil von Version 0.0.1. Die aktuelle Version bleibt unabhängig von Grocy, KitchenOwl und einer LLM.
 
 ## Projekt unterstützen
 
@@ -401,8 +323,8 @@ Vor einer späteren Spende sollte die Adresse sicherheitshalber noch einmal auf 
 
 ## Lizenz und Marken
 
-Der Quellcode steht unter der [BSD-3-Clause-Lizenz](LICENSE).
+Veröffentlicht unter der **BSD-3-Clause-Lizenz**.
 
 Copyright (c) 2026 lesecuritae für Tarnkappe.info
 
-Das Projekt ist unabhängig und weder mit den genannten Händlern noch mit deren Kundenprogrammen verbunden. Händler-, Produkt- und Programmnamen gehören den jeweiligen Rechteinhabern.
+Namen, Marken und Logos der genannten Händler und Bonusprogramme gehören den jeweiligen Rechteinhabern. Das Projekt steht in keiner offiziellen Verbindung zu den Händlern, Bonusprogrammen oder Marktguru.
