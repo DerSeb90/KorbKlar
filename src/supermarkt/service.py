@@ -1,0 +1,375 @@
+from __future__ import annotations
+
+import threading
+import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from dataclasses import asdict, replace
+from typing import Any
+
+from .cache import PersistentSnapshotStore
+from .common import clean_text, deduplicate_offers, filter_offers, normalize_aldi_region, normalize_view
+from .compare import OfferComparator, OfferMapper
+from .config import (
+    CACHE_DB,
+    CACHE_MAX_SNAPSHOTS,
+    CACHE_TTL_MINUTES,
+    KAUFLAND_CACHE_DIR,
+    KAUFLAND_STORE_CACHE_TTL_SECONDS,
+    REWE_CACHE_DIR,
+    REWE_STORE_CACHE_TTL_SECONDS,
+    MARKTGURU_PAGE_SIZE,
+    MAX_WORKERS,
+    RESULT_RETENTION_HOURS,
+    TIMEOUT_SECONDS,
+)
+from .http import HttpClient, PostalCodeLocator
+from .loyalty import available_programs, normalize_program_ids
+from .models import AGGREGATOR_RETAILERS, RETAILER_SPECS, Offer, RetailerContext, ToolError, offer_from_dict, offer_to_dict
+from .presentation import offer_for_response, offer_sort_key, resolve_retailer_name
+from .region import AldiRegionResolver
+from .sources import MarktguruClient, OfficialAldiSource, OfficialEdekaSource, OfficialKauflandSource, OfficialMarktkaufSource, OfficialReweSource
+
+class SourceLoader:
+    def __init__(self) -> None:
+        http = HttpClient(TIMEOUT_SECONDS)
+        locator = PostalCodeLocator(http)
+        self.locator = locator
+        self.marktguru = MarktguruClient(http, MARKTGURU_PAGE_SIZE, MAX_WORKERS)
+        self.aldi_region = AldiRegionResolver(http)
+        self.official_aldi = OfficialAldiSource(http)
+        self.official_rewe = OfficialReweSource(
+            locator,
+            TIMEOUT_SECONDS,
+            cache_dir=REWE_CACHE_DIR,
+            store_cache_ttl_seconds=REWE_STORE_CACHE_TTL_SECONDS,
+        )
+        self.official_edeka = OfficialEdekaSource(TIMEOUT_SECONDS)
+        self.official_marktkauf = OfficialMarktkaufSource(TIMEOUT_SECONDS)
+        self.official_kaufland = OfficialKauflandSource(
+            http,
+            locator,
+            TIMEOUT_SECONDS,
+            cache_dir=KAUFLAND_CACHE_DIR,
+            store_cache_ttl_seconds=KAUFLAND_STORE_CACHE_TTL_SECONDS,
+        )
+        self.mapper = OfferMapper()
+
+    @staticmethod
+    def _contexts() -> dict[str, RetailerContext]:
+        return {
+            spec.name: RetailerContext(
+                name=spec.name,
+                aliases=tuple(alias.casefold() for alias in spec.aliases),
+                excluded_aliases=tuple(alias.casefold() for alias in spec.excluded_aliases),
+                color=spec.color,
+                market_label=spec.name,
+                market_url=spec.fallback_url,
+            )
+            for spec in RETAILER_SPECS
+        }
+
+    @staticmethod
+    def _context_with_market(context: RetailerContext, label: str, url: str) -> RetailerContext:
+        return replace(
+            context,
+            market_label=clean_text(label) or context.market_label,
+            market_url=clean_text(url) or context.market_url,
+        )
+
+    def load(self, postal_code: str, aldi_region: str) -> dict[str, Any]:
+        contexts = self._contexts()
+        request_errors: list[str] = []
+        store_warnings: list[str] = []
+
+        resolved = normalize_aldi_region(aldi_region)
+        if resolved == "auto":
+            resolved = self.aldi_region.detect(postal_code)
+        aldi_name = "ALDI Nord" if resolved == "nord" else "ALDI Süd" if resolved == "sued" else ""
+        if not aldi_name:
+            detail = clean_text(self.aldi_region.last_error)
+            warning = "ALDI-Region konnte geografisch nicht eindeutig bestimmt werden; ALDI wurde für diesen Abruf ausgelassen."
+            store_warnings.append(warning + (f" ({detail})" if detail else ""))
+
+        active_contexts = dict(contexts)
+        for name in ("ALDI Nord", "ALDI Süd"):
+            if name != aldi_name:
+                active_contexts.pop(name, None)
+
+        source_states = {name: "keine Treffer" for name in active_contexts}
+        final_by_retailer: dict[str, list[Offer]] = {}
+        failed_primary: set[str] = set()
+
+        # Retailers with maintained first-party adapters always prefer their
+        # official source. A partial aggregator result must never suppress a
+        # complete official catalogue or be mixed into it.
+        official_jobs: dict[str, Any] = {
+            "REWE": lambda: self.official_rewe.load(postal_code),
+            "EDEKA": lambda: self.official_edeka.load(postal_code),
+            "Kaufland": lambda: self.official_kaufland.load(postal_code),
+            "Marktkauf": lambda: self.official_marktkauf.load(postal_code),
+        }
+        with ThreadPoolExecutor(max_workers=len(official_jobs)) as executor:
+            futures = {executor.submit(loader): name for name, loader in official_jobs.items()}
+            for future in as_completed(futures):
+                name = futures[future]
+                try:
+                    offers = deduplicate_offers(list(future.result()))
+                except Exception as exc:
+                    failed_primary.add(name)
+                    if name == "Marktkauf":
+                        source_states[name] = "kein Markt"
+                    else:
+                        request_errors.append(f"{name} offiziell: {type(exc).__name__}: {exc}")
+                    continue
+                if not offers:
+                    failed_primary.add(name)
+                    if name == "Marktkauf":
+                        source_states[name] = "kein Markt"
+                    else:
+                        request_errors.append(f"{name} offiziell: keine Angebote für die Zielwoche")
+                    continue
+                final_by_retailer[name] = offers
+                source_states[name] = "offiziell"
+
+        # ALDI is also first-party-first. Only the region determined for the
+        # supplied postcode is loaded.
+        if aldi_name:
+            try:
+                aldi_result = self.official_aldi.load(aldi_name)
+                request_errors.extend(aldi_result.request_errors)
+                aldi_offers = deduplicate_offers(list(aldi_result.offers))
+            except Exception as exc:
+                aldi_offers = []
+                request_errors.append(f"{aldi_name} offiziell: {type(exc).__name__}: {exc}")
+            if aldi_offers:
+                final_by_retailer[aldi_name] = aldi_offers
+                source_states[aldi_name] = "offiziell"
+            else:
+                failed_primary.add(aldi_name)
+
+        # Lidl, PENNY, Netto and GLOBUS currently use Marktguru as their
+        # catalogue source. The broad regional term search is supplemented by
+        # retailer-name searches; those name queries are never treated as a
+        # complete catalogue on their own. Failed first-party adapters may use
+        # the same data only as a fallback.
+        aggregator_names = {
+            name for name in AGGREGATOR_RETAILERS
+            if name in active_contexts
+        }
+        fallback_names = {
+            name for name in failed_primary
+            if name in active_contexts
+        }
+        marketguru_candidates = aggregator_names | fallback_names
+        marketguru_mapped: list[Offer] = []
+        if marketguru_candidates:
+            raw: list[dict[str, Any]] = []
+            try:
+                broad_raw, errors = self.marktguru.load_offers(postal_code)
+                raw.extend(broad_raw)
+                request_errors.extend(errors)
+            except Exception as exc:
+                request_errors.append(f"Marktguru: {type(exc).__name__}: {exc}")
+
+            try:
+                targeted_raw, errors = self.marktguru.load_retailer_queries(
+                    postal_code,
+                    sorted(marketguru_candidates, key=str.casefold),
+                )
+                raw.extend(targeted_raw)
+                request_errors.extend(errors)
+            except Exception as exc:
+                request_errors.append(f"Marktguru Händlerergänzung: {type(exc).__name__}: {exc}")
+
+            if raw:
+                marketguru_mapped = deduplicate_offers(self.mapper.map_all(raw, active_contexts))
+
+        for name in sorted(aggregator_names, key=str.casefold):
+            offers = deduplicate_offers([
+                offer for offer in marketguru_mapped
+                if offer.retailer == name
+            ])
+            if offers:
+                final_by_retailer[name] = offers
+                source_states[name] = "Marktguru"
+            elif not next((spec.optional for spec in RETAILER_SPECS if spec.name == name), False):
+                request_errors.append(f"{name}: Marktguru lieferte keine Angebote für die Zielwoche")
+
+        for name in sorted(fallback_names, key=str.casefold):
+            # Never mix a fallback with a first-party catalogue that succeeded.
+            if name in final_by_retailer:
+                continue
+            offers = deduplicate_offers([
+                offer for offer in marketguru_mapped
+                if offer.retailer == name
+            ])
+            if not offers:
+                continue
+            final_by_retailer[name] = offers
+            source_states[name] = "Marktguru-Fallback"
+            store_warnings.append(
+                f"{name}: offizielle Quelle war nicht verfügbar; Marktguru wurde als Fallback verwendet."
+            )
+
+        # Update labels only from first-party adapters that actually supplied
+        # the catalogue displayed to the user.
+        if source_states.get("REWE") == "offiziell" and self.official_rewe.last_market_url:
+            active_contexts["REWE"] = self._context_with_market(
+                active_contexts["REWE"], self.official_rewe.last_market_label, self.official_rewe.last_market_url
+            )
+        if source_states.get("EDEKA") == "offiziell" and self.official_edeka.last_market_url:
+            active_contexts["EDEKA"] = self._context_with_market(
+                active_contexts["EDEKA"], self.official_edeka.last_market_label, self.official_edeka.last_market_url
+            )
+        if source_states.get("Marktkauf") == "offiziell" and self.official_marktkauf.last_market_url:
+            active_contexts["Marktkauf"] = self._context_with_market(
+                active_contexts["Marktkauf"], self.official_marktkauf.last_market_label, self.official_marktkauf.last_market_url
+            )
+        if source_states.get("Kaufland") == "offiziell" and self.official_kaufland.last_store_url:
+            label = "Kaufland " + clean_text(self.official_kaufland.last_locality)
+            active_contexts["Kaufland"] = self._context_with_market(
+                active_contexts["Kaufland"], label, self.official_kaufland.last_store_url
+            )
+
+        offers = deduplicate_offers([
+            offer
+            for retailer_offers in final_by_retailer.values()
+            for offer in retailer_offers
+        ])
+        if not offers:
+            raise ToolError("Keine Supermarktangebote konnten geladen werden")
+
+        return {
+            "postal_code": postal_code,
+            "resolved_aldi_region": resolved,
+            "offers": [offer_to_dict(offer) for offer in offers],
+            "retailers": {name: asdict(context) for name, context in active_contexts.items()},
+            "source_states": source_states,
+            "request_errors": list(dict.fromkeys(clean_text(x) for x in request_errors if clean_text(x))),
+            "store_warnings": list(dict.fromkeys(clean_text(x) for x in store_warnings if clean_text(x))),
+        }
+
+class SupermarketEngine:
+    def __init__(self) -> None:
+        self.store = PersistentSnapshotStore(CACHE_DB, CACHE_TTL_MINUTES, RESULT_RETENTION_HOURS, CACHE_MAX_SNAPSHOTS)
+        self.loader = SourceLoader()
+        self.comparator = OfferComparator()
+        self._refresh_lock = threading.Lock()
+
+    @staticmethod
+    def cache_key(postal_code: str, aldi_region: str) -> str:
+        return f"{postal_code}:{normalize_aldi_region(aldi_region)}"
+
+    def snapshot(self, postal_code: str, aldi_region: str, refresh: bool = False) -> tuple[dict[str, Any], bool]:
+        key = self.cache_key(postal_code, aldi_region)
+        if not refresh:
+            cached = self.store.get_by_key(key)
+            if cached is not None:
+                return cached, True
+        with self._refresh_lock:
+            if not refresh:
+                cached = self.store.get_by_key(key)
+                if cached is not None:
+                    return cached, True
+            fresh = self.loader.load(postal_code, aldi_region)
+            return self.store.put(key, fresh), False
+
+    def by_id(self, search_id: str) -> dict[str, Any]:
+        snapshot = self.store.get_by_id(search_id)
+        if snapshot is None:
+            raise ToolError("Dieser Supermarktvergleich ist abgelaufen. Bitte die Suche neu starten.")
+        return snapshot
+
+    def page(
+        self,
+        snapshot: dict[str, Any],
+        *,
+        filter_text: str = "",
+        retailer: str = "",
+        page: int = 1,
+        page_size: int = 100,
+        view: str = "best_only",
+        loyalty_programs: tuple[str, ...] = (),
+        sort: str = "price",
+        include_image_urls: bool = False,
+    ) -> dict[str, Any]:
+        offers = [offer_from_dict(item) for item in snapshot.get("offers", []) if isinstance(item, dict)]
+        selected_programs = normalize_program_ids(loyalty_programs)
+        source_retailer_counts: dict[str, int] = {}
+        for offer in offers:
+            source_retailer_counts[offer.retailer] = source_retailer_counts.get(offer.retailer, 0) + 1
+
+        normalized_view = normalize_view(view)
+        all_comparison = self.comparator.compare(offers, selected_programs, "all")
+        best_comparison = self.comparator.compare(offers, selected_programs, "best_only")
+
+        retailers_raw = snapshot.get("retailers") or {}
+        retailers = {
+            name: RetailerContext(**value)
+            for name, value in retailers_raw.items()
+            if isinstance(name, str) and isinstance(value, dict)
+        }
+        selected_retailer = resolve_retailer_name(retailer, retailers)
+
+        def scope(items: list[Offer]) -> list[Offer]:
+            scoped = filter_offers(items, filter_text)
+            if selected_retailer:
+                scoped = [
+                    offer
+                    for offer in scoped
+                    if offer.retailer.casefold() == selected_retailer.casefold()
+                ]
+            return scoped
+
+        all_scoped = scope(all_comparison.offers)
+        best_scoped = scope(best_comparison.offers)
+        hidden_count = max(0, len(all_scoped) - len(best_scoped))
+        filtered = all_scoped if normalized_view == "all" else best_scoped
+
+        # Chip counts intentionally reflect the current text filter and view,
+        # but not the selected retailer chip itself, so switching retailers
+        # remains possible without resetting the other filters.
+        comparison_for_counts = all_comparison if normalized_view == "all" else best_comparison
+        count_scope = filter_offers(comparison_for_counts.offers, filter_text)
+        counts: dict[str, int] = {}
+        for offer in count_scope:
+            counts[offer.retailer] = counts.get(offer.retailer, 0) + 1
+
+        ordered = sorted(filtered, key=lambda offer: offer_sort_key(offer, sort))
+        page_size = max(1, min(int(page_size), 100))
+        page_count = max(1, (len(ordered) + page_size - 1) // page_size)
+        page = max(1, min(int(page), page_count))
+        start = (page - 1) * page_size
+        selected = ordered[start:start + page_size]
+
+        result = {
+            "search_id": snapshot["search_id"],
+            "postal_code": snapshot.get("postal_code", ""),
+            "resolved_aldi_region": snapshot.get("resolved_aldi_region", "auto"),
+            "cache_age_seconds": max(0, int(time.time() - float(snapshot.get("created_at", time.time())))),
+            "source_offer_count": len(snapshot.get("offers", [])),
+            "compared_offer_count": len(comparison_for_counts.offers),
+            "filtered_offer_count": len(ordered),
+            "hidden_count": hidden_count,
+            "page": page,
+            "page_size": page_size,
+            "page_count": page_count,
+            "has_next": page < page_count,
+            "has_previous": page > 1,
+            "retailer": selected_retailer,
+            "view": normalized_view,
+            "retailer_counts": counts,
+            "selected_loyalty_programs": list(selected_programs),
+            "available_loyalty_programs": available_programs(source_retailer_counts, offers),
+            "loyalty_note": (
+                "Es werden nur öffentlich ausgewiesene Direktpreise und Euro-Guthaben verrechnet. "
+                "Personalisierte Coupons oder Punkte ohne konkreten Angebotswert werden nicht geschätzt."
+            ),
+            "source_states": snapshot.get("source_states", {}),
+            "warnings": list(dict.fromkeys([
+                *snapshot.get("request_errors", []),
+                *snapshot.get("store_warnings", []),
+            ]))[:12],
+            "offers": [offer_for_response(offer, include_image_urls=include_image_urls) for offer in selected],
+        }
+        return result

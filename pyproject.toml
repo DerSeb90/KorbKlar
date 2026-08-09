@@ -1,0 +1,34 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "supermarkt-preisvergleich"
+version = "0.0.1"
+description = "Self-hosted Docker service for comparing regional supermarket offers in Germany."
+readme = "README.md"
+requires-python = ">=3.12"
+license = "BSD-3-Clause"
+authors = [{name = "lesecuritae"}]
+dependencies = [
+  "fastapi>=0.141,<1",
+  "pydantic>=2.13,<3",
+  "curl-cffi>=0.16,<0.17",
+  "beautifulsoup4>=4.12,<5",
+  "uvicorn>=0.52,<1",
+  "python-multipart>=0.0.20,<1",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=9,<10", "httpx>=0.28,<1"]
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+addopts = "-q"
+pythonpath = ["src"]
+markers = ["live: performs live requests against retailer websites"]
