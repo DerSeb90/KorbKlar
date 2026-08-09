@@ -1,5 +1,9 @@
 # Supermarkt-Preisvergleich
 
+<p align="center">
+  <img src="docs/readme-header.svg" alt="Supermarkt-Preisvergleich – Vorschau" width="100%">
+</p>
+
 Ein kleiner selbst gehosteter Docker-Dienst für aktuelle regionale Supermarktangebote in Deutschland.
 
 Nach dem Start öffnet man die Weboberfläche, gibt **nur die Postleitzahl** ein und startet die Suche. Der Dienst ermittelt die verfügbaren Händler und Wochenangebote selbst, vereinheitlicht Mengen und Grundpreise, vergleicht gleiche Angebote, berücksichtigt auf Wunsch Bonusprogramme und öffnet anschließend eine vollständige Ergebnisansicht.
