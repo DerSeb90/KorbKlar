@@ -10,6 +10,14 @@ SRC = ROOT / "src"
 PACKAGE = SRC / "supermarkt"
 
 
+def _release_paths():
+    for path in ROOT.rglob("*"):
+        relative = path.relative_to(ROOT)
+        if relative.parts and relative.parts[0] == ".git":
+            continue
+        yield path
+
+
 def _dependency_names() -> set[str]:
     metadata = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
     result = set()
@@ -71,7 +79,7 @@ def test_legacy_configuration_names_are_gone():
     legacy_names = ("TOOL" + "_API_KEY", "PUBLIC" + "_TOOL_URL")
     texts = "\n".join(
         path.read_text(encoding="utf-8", errors="replace")
-        for path in ROOT.rglob("*")
+        for path in _release_paths()
         if path.is_file() and path.suffix not in {".pyc", ".whl", ".gz", ".zip"}
     )
     assert all(name not in texts for name in legacy_names)
@@ -97,7 +105,7 @@ def test_default_host_port_is_configurable_without_changing_container_port():
 def test_release_contains_no_runtime_state_or_patch_residue():
     forbidden_dirs = {".git", "build", "dist", "data"}
     forbidden_suffixes = {".rej", ".orig", ".bak", ".log", ".sqlite3", ".sqlite3-wal", ".sqlite3-shm"}
-    for path in ROOT.rglob("*"):
+    for path in _release_paths():
         relative = path.relative_to(ROOT)
         assert not any(part in forbidden_dirs for part in relative.parts), relative
         if path.is_file():
@@ -108,7 +116,7 @@ def test_release_contains_no_runtime_state_or_patch_residue():
 def test_release_has_no_development_machine_references():
     text = "\n".join(
         path.read_text(encoding="utf-8", errors="replace")
-        for path in ROOT.rglob("*")
+        for path in _release_paths()
         if path.is_file() and path.suffix in {".py", ".md", ".toml", ".yml", ".yaml", ".example", ".txt"}
     )
     for marker in ("/srv/" + "docker/", "192." + "168.0.", "042" + "09"):
@@ -131,11 +139,10 @@ def test_all_supported_compose_environment_variables_are_documented():
         assert f"{name}=" in env_example, name
 
 
-
 def test_release_has_no_private_or_internal_revision_markers():
     text = "\n".join(
         path.read_text(encoding="utf-8", errors="replace")
-        for path in ROOT.rglob("*")
+        for path in _release_paths()
         if path.is_file() and path.suffix in {".py", ".md", ".toml", ".yml", ".yaml", ".example", ".txt"}
     )
     forbidden = (
