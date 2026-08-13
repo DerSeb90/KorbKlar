@@ -74,6 +74,18 @@ def test_docker_system_dependencies_are_actually_used():
     assert " curl" in dockerfile and '"curl"' in runtime
     assert 'CMD ["uvicorn"' in dockerfile
     assert "USER korbklar" in dockerfile
+    assert "dumb-init" in dockerfile
+    assert 'ENTRYPOINT ["dumb-init", "--"]' in dockerfile
+
+
+def test_standalone_docker_defaults_use_the_persistent_volume():
+    dockerfile = (ROOT / "Dockerfile").read_text(encoding="utf-8")
+    assert "SUPERMARKT_DATA_DIR=/data" in dockerfile
+    assert "SUPERMARKT_CACHE_DB=/data/supermarkt-cache.sqlite3" in dockerfile
+    assert "SUPERMARKT_SIGNING_SECRET_FILE=/data/.signing-secret" in dockerfile
+    assert "SUPERMARKT_IMAGE_CACHE_DIR=/data/supermarkt-images" in dockerfile
+    assert "SUPERMARKT_KAUFLAND_CACHE_DIR=/data/kaufland" in dockerfile
+    assert "SUPERMARKT_REWE_CACHE_DIR=/data/rewe" in dockerfile
 
 
 def test_compose_is_one_self_contained_service():
