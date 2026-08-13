@@ -23,7 +23,15 @@ You need Docker Engine, Docker Compose v2, Git, and internet access from the con
 ```bash
 git clone https://github.com/lesecuritae/KorbKlar.git
 cd KorbKlar
-docker compose up -d --build
+docker pull ghcr.io/lesecuritae/korbklar:latest
+docker compose up -d
+```
+
+To build locally from the existing Dockerfile:
+
+```bash
+docker compose build
+docker compose up -d
 ```
 
 The default port is `8000`. Open:

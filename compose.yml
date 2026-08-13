@@ -2,6 +2,7 @@ name: korbklar
 
 services:
   korbklar:
+    image: ghcr.io/lesecuritae/korbklar:latest
     build: .
     container_name: korbklar
     restart: unless-stopped

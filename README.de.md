@@ -23,7 +23,15 @@ Vorausgesetzt werden **Docker Engine**, **Docker Compose v2**, Git und Internetz
 ```bash
 git clone https://github.com/lesecuritae/KorbKlar.git
 cd KorbKlar
-docker compose up -d --build
+docker pull ghcr.io/lesecuritae/korbklar:latest
+docker compose up -d
+```
+
+Für einen lokalen Build aus dem vorhandenen Dockerfile:
+
+```bash
+docker compose build
+docker compose up -d
 ```
 
 Danach im Browser öffnen:
