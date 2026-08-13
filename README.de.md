@@ -23,15 +23,19 @@ Vorausgesetzt werden **Docker Engine**, **Docker Compose v2**, Git und Internetz
 ```bash
 git clone https://github.com/lesecuritae/KorbKlar.git
 cd KorbKlar
-docker pull ghcr.io/lesecuritae/korbklar:latest
-docker compose up -d
+docker compose pull
+docker compose up -d --no-build
 ```
 
-Für einen lokalen Build aus dem vorhandenen Dockerfile:
+Damit wird das fertig veröffentlichte Image `ghcr.io/lesecuritae/korbklar:latest` aus der GitHub Container Registry verwendet. Für den Standardbetrieb ist keine `.env` erforderlich.
+
+### Lokaler Build aus dem Quellcode
+
+Dieser separate Entwicklerweg baut das Image aus dem ausgecheckten Dockerfile:
 
 ```bash
 docker compose build
-docker compose up -d
+docker compose up -d --no-build
 ```
 
 Danach im Browser öffnen:
@@ -66,7 +70,7 @@ docker compose down
 Wenn Port 8000 auf dem Docker-Host bereits belegt ist, kann ein anderer Host-Port gewählt werden. Der Container selbst bleibt auf Port 8000.
 
 ```bash
-SUPERMARKT_PORT=8080 docker compose up -d --build
+SUPERMARKT_PORT=8080 docker compose up -d --no-build
 ```
 
 Die Oberfläche ist dann unter `http://SERVER-IP:8080` erreichbar. Dauerhaft kann der Wert auch in einer optionalen `.env` stehen.

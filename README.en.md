@@ -23,15 +23,19 @@ You need Docker Engine, Docker Compose v2, Git, and internet access from the con
 ```bash
 git clone https://github.com/lesecuritae/KorbKlar.git
 cd KorbKlar
-docker pull ghcr.io/lesecuritae/korbklar:latest
-docker compose up -d
+docker compose pull
+docker compose up -d --no-build
 ```
 
-To build locally from the existing Dockerfile:
+This uses the prebuilt `ghcr.io/lesecuritae/korbklar:latest` image published through GitHub Container Registry. The default setup does not require a `.env` file.
+
+### Local source build
+
+This separate development path builds the image from the checked-out Dockerfile:
 
 ```bash
 docker compose build
-docker compose up -d
+docker compose up -d --no-build
 ```
 
 The default port is `8000`. Open:
@@ -55,7 +59,7 @@ docker compose down
 `docker compose down` preserves the volume. If host port 8000 is occupied, select another host port with the still-current internal variable `SUPERMARKT_PORT`; the container continues to listen on port 8000:
 
 ```bash
-SUPERMARKT_PORT=8080 docker compose up -d --build
+SUPERMARKT_PORT=8080 docker compose up -d --no-build
 ```
 
 The interface is then available at `http://SERVER-IP:8080`. The value may also be stored in an optional `.env` file.
