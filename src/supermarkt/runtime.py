@@ -12,11 +12,14 @@ from .config import (
 )
 from .images import ImageService
 from .service import SupermarketEngine
+from .jobs import SearchJobStore
 
 _engine: Optional[SupermarketEngine] = None
 _engine_lock = threading.Lock()
 _image_service: Optional[ImageService] = None
 _image_service_lock = threading.Lock()
+_jobs: Optional[SearchJobStore] = None
+_jobs_lock = threading.Lock()
 
 
 def get_engine() -> SupermarketEngine:
@@ -39,3 +42,11 @@ def get_image_service() -> ImageService:
                 timeout_seconds=min(TIMEOUT_SECONDS, 30),
             )
         return _image_service
+
+
+def get_jobs() -> SearchJobStore:
+    global _jobs
+    with _jobs_lock:
+        if _jobs is None:
+            _jobs = SearchJobStore(get_engine())
+        return _jobs

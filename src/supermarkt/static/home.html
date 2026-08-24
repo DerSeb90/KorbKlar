@@ -20,8 +20,13 @@ __ERROR_HTML__
 <input name="postal_code" value="__POSTAL_CODE__" inputmode="numeric" autocomplete="postal-code" pattern="[0-9]{5}" minlength="5" maxlength="5" placeholder="Postleitzahl" aria-label="Postleitzahl" required autofocus>
 <button type="submit" id="submitButton">Angebote suchen</button>
 </form>
+<section class="monitor" id="monitor" aria-live="polite" hidden>
+<div class="monitorHead"><span class="spinner" aria-hidden="true"></span><strong id="statusLabel">Aktiv</strong></div>
+<div class="progressRow"><progress id="statusProgress" max="100" value="0">0%</progress><strong id="statusPercent">0%</strong></div>
+<dl><div><dt>Quelle</dt><dd id="statusSource">KorbKlar</dd></div><div><dt>Händler</dt><dd id="statusRetailer">Alle Händler</dd></div><div><dt>Kategorie</dt><dd id="statusCategory">Alle Kategorien</dd></div><div><dt>Schritt</dt><dd id="statusStep">Suche wird vorbereitet</dd></div><div><dt>Verarbeitet</dt><dd id="statusCount">0 von 6 Quellen · 0 Produkte</dd></div></dl>
+</section>
 <div class="hint">Keine LLM erforderlich. Bonusprogramme, Händlerfilter und Sortierung wählst du anschließend in der Ergebnisansicht.</div>
 </main>
-<script src="/static/home.js" defer></script>
+<script src="/static/home-v2.js" defer></script>
 </body>
 </html>

@@ -44,6 +44,24 @@ def browser_search(postal_code_input: Annotated[str, Form(alias="postal_code")] 
     return RedirectResponse(build_result_path(snapshot["search_id"]), status_code=303)
 
 
+@router.post("/search/jobs", include_in_schema=False)
+def start_search_job(postal_code_input: Annotated[str, Form(alias="postal_code")] = "") -> dict[str, str]:
+    postal_code = validate_postal_code(clean_text(postal_code_input))
+    if postal_code is None:
+        raise HTTPException(status_code=400, detail="Bitte eine gültige fünfstellige deutsche Postleitzahl eingeben.")
+    return {"job_id": runtime.get_jobs().start(postal_code)}
+
+
+@router.get("/search/jobs/{job_id}", include_in_schema=False)
+def search_job(job_id: str) -> dict:
+    job = runtime.get_jobs().get(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Suchauftrag nicht gefunden oder abgelaufen.")
+    if job.get("search_id"):
+        job["result_url"] = build_result_path(job["search_id"])
+    return job
+
+
 @router.get("/results/{search_id}", include_in_schema=False, response_class=HTMLResponse, name="supermarket_results")
 def results_page(search_id: str, token: str = Query(default=""), loyalty: str = Query(default="", max_length=500)) -> HTMLResponse:
     verify_result_token(search_id, token)

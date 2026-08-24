@@ -95,6 +95,7 @@ def offer_for_response(
 
     result = {
         "retailer": offer.retailer,
+        "category": offer.category,
         "product": offer.name,
         "description": offer.description,
         "regular_price": regular,

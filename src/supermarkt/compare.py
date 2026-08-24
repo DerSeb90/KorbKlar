@@ -19,7 +19,7 @@ from .common import (
     parse_number,
 )
 from .loyalty import apply_selected_programs, parse_public_loyalty_prices
-from .models import ComparisonResult, Offer, RetailerContext
+from .models import AGGREGATOR_RETAILERS, ComparisonResult, Offer, RetailerContext
 
 
 class OfferMapper:
@@ -100,6 +100,10 @@ class OfferMapper:
             f"{retailer}:{offer_id}",
         )
         context = retailers[retailer]
+        source_url = context.market_url
+        if retailer in AGGREGATOR_RETAILERS:
+            retailer_slug = {"Lidl": "lidl", "PENNY": "penny", "Netto": "netto-marken-discount", "Globus": "globus"}[retailer]
+            source_url = f"https://www.marktguru.de/r/{retailer_slug}"
 
         return Offer(
             offer_id=offer_id or f"{retailer}:{match_key}:{price}",
@@ -114,7 +118,7 @@ class OfferMapper:
             pack_signature=pack_signature,
             validity_label=validity_label,
             match_key=match_key,
-            source_url=context.market_url,
+            source_url=source_url,
             image_url=extract_image_url(product) or extract_image_url(raw),
             benefits=benefits,
         )

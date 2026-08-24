@@ -76,7 +76,9 @@ class SourceLoader:
             market_url=clean_text(url) or context.market_url,
         )
 
-    def load(self, postal_code: str, aldi_region: str) -> dict[str, Any]:
+    def load(self, postal_code: str, aldi_region: str, progress=None) -> dict[str, Any]:
+        notify = progress or (lambda **_fields: None)
+        notify(status="loading", progress=5, source="Standortdienst", retailer="Alle Händler", category="Region", step="Region und Filialen werden ermittelt")
         contexts = self._contexts()
         request_errors: list[str] = []
         store_warnings: list[str] = []
@@ -85,6 +87,7 @@ class SourceLoader:
         if resolved == "auto":
             resolved = self.aldi_region.detect(postal_code)
         aldi_name = "ALDI Nord" if resolved == "nord" else "ALDI Süd" if resolved == "sued" else ""
+        notify(total_sources=6 if aldi_name else 5)
         if not aldi_name:
             detail = clean_text(self.aldi_region.last_error)
             warning = "ALDI-Region konnte geografisch nicht eindeutig bestimmt werden; ALDI wurde für diesen Abruf ausgelassen."
@@ -108,10 +111,14 @@ class SourceLoader:
             "Kaufland": lambda: self.official_kaufland.load(postal_code),
             "Marktkauf": lambda: self.official_marktkauf.load(postal_code),
         }
+        completed_sources = 0
+        processed_products = 0
         with ThreadPoolExecutor(max_workers=len(official_jobs)) as executor:
             futures = {executor.submit(loader): name for name, loader in official_jobs.items()}
             for future in as_completed(futures):
                 name = futures[future]
+                completed_sources += 1
+                notify(status="processing", progress=10 + completed_sources * 9, source="Offizielle Webseite", retailer=name, category="Wochenangebote", step="Quelle wird ausgewertet", processed_sources=completed_sources, processed_products=processed_products)
                 try:
                     offers = deduplicate_offers(list(future.result()))
                 except Exception as exc:
@@ -130,10 +137,13 @@ class SourceLoader:
                     continue
                 final_by_retailer[name] = offers
                 source_states[name] = "offiziell"
+                processed_products += len(offers)
+                notify(status="processing", progress=10 + completed_sources * 9, source="Offizielle Webseite", retailer=name, category="Wochenangebote", step="Quelle verarbeitet", processed_sources=completed_sources, processed_products=processed_products)
 
         # ALDI is also first-party-first. Only the region determined for the
         # supplied postcode is loaded.
         if aldi_name:
+            notify(status="loading", progress=50, source="Offizielle Webseite", retailer=aldi_name, category="Wochenangebote", step="Angebote werden geladen", processed_sources=completed_sources, processed_products=processed_products)
             try:
                 aldi_result = self.official_aldi.load(aldi_name)
                 request_errors.extend(aldi_result.request_errors)
@@ -144,8 +154,11 @@ class SourceLoader:
             if aldi_offers:
                 final_by_retailer[aldi_name] = aldi_offers
                 source_states[aldi_name] = "offiziell"
+                processed_products += len(aldi_offers)
             else:
                 failed_primary.add(aldi_name)
+            completed_sources += 1
+            notify(status="processing", progress=55, source="Offizielle Webseite", retailer=aldi_name, category="Wochenangebote", step="Quelle verarbeitet", processed_sources=completed_sources, processed_products=processed_products)
 
         # Lidl, PENNY, Netto and GLOBUS currently use Marktguru as their
         # catalogue source. The broad regional term search is supplemented by
@@ -161,8 +174,10 @@ class SourceLoader:
             if name in active_contexts
         }
         marketguru_candidates = aggregator_names | fallback_names
-        marketguru_mapped: list[Offer] = []
+        marktguru_mapped: list[Offer] = []
         if marketguru_candidates:
+            completed_sources += 1
+            notify(status="loading", progress=62, source="Marktguru", retailer="Lidl, PENNY, Netto, Globus", category="Händlerkategorien", step="Regionale Angebote werden geladen", processed_sources=completed_sources, processed_products=processed_products)
             raw: list[dict[str, Any]] = []
             try:
                 broad_raw, errors = self.marktguru.load_offers(postal_code)
@@ -182,11 +197,13 @@ class SourceLoader:
                 request_errors.append(f"Marktguru Händlerergänzung: {type(exc).__name__}: {exc}")
 
             if raw:
-                marketguru_mapped = deduplicate_offers(self.mapper.map_all(raw, active_contexts))
+                marktguru_mapped = deduplicate_offers(self.mapper.map_all(raw, active_contexts))
+                processed_products += len(marktguru_mapped)
+            notify(status="processing", progress=88, source="Marktguru", retailer="Lidl, PENNY, Netto, Globus", category="Händlerkategorien", step="Angebote zugeordnet", processed_sources=completed_sources, processed_products=processed_products)
 
         for name in sorted(aggregator_names, key=str.casefold):
             offers = deduplicate_offers([
-                offer for offer in marketguru_mapped
+                offer for offer in marktguru_mapped
                 if offer.retailer == name
             ])
             if offers:
@@ -200,7 +217,7 @@ class SourceLoader:
             if name in final_by_retailer:
                 continue
             offers = deduplicate_offers([
-                offer for offer in marketguru_mapped
+                offer for offer in marktguru_mapped
                 if offer.retailer == name
             ])
             if not offers:
@@ -239,6 +256,8 @@ class SourceLoader:
         if not offers:
             raise ToolError("Keine Supermarktangebote konnten geladen werden")
 
+        notify(status="processing", progress=96, source="KorbKlar", retailer="Alle Händler", category="Alle Kategorien", step="Angebote werden zusammengeführt", processed_sources=completed_sources, processed_products=len(offers))
+
         return {
             "postal_code": postal_code,
             "resolved_aldi_region": resolved,
@@ -260,18 +279,22 @@ class SupermarketEngine:
     def cache_key(postal_code: str, aldi_region: str) -> str:
         return f"{postal_code}:{normalize_aldi_region(aldi_region)}"
 
-    def snapshot(self, postal_code: str, aldi_region: str, refresh: bool = False) -> tuple[dict[str, Any], bool]:
+    def snapshot(self, postal_code: str, aldi_region: str, refresh: bool = False, progress=None) -> tuple[dict[str, Any], bool]:
         key = self.cache_key(postal_code, aldi_region)
         if not refresh:
             cached = self.store.get_by_key(key)
             if cached is not None:
+                if progress:
+                    progress(status="processing", progress=90, source="Cache", retailer="Alle Händler", category="Alle Kategorien", step="Gespeicherter Vergleich wird geöffnet", processed_sources=1, total_sources=1, processed_products=len(cached.get("offers", [])))
                 return cached, True
         with self._refresh_lock:
             if not refresh:
                 cached = self.store.get_by_key(key)
                 if cached is not None:
+                    if progress:
+                        progress(status="processing", progress=90, source="Cache", retailer="Alle Händler", category="Alle Kategorien", step="Gespeicherter Vergleich wird geöffnet", processed_sources=1, total_sources=1, processed_products=len(cached.get("offers", [])))
                     return cached, True
-            fresh = self.loader.load(postal_code, aldi_region)
+            fresh = self.loader.load(postal_code, aldi_region, progress=progress)
             return self.store.put(key, fresh), False
 
     def by_id(self, search_id: str) -> dict[str, Any]:
@@ -286,6 +309,7 @@ class SupermarketEngine:
         *,
         filter_text: str = "",
         retailer: str = "",
+        category: str = "",
         page: int = 1,
         page_size: int = 100,
         view: str = "best_only",
@@ -310,6 +334,7 @@ class SupermarketEngine:
             if isinstance(name, str) and isinstance(value, dict)
         }
         selected_retailer = resolve_retailer_name(retailer, retailers)
+        selected_category = clean_text(category)
 
         def scope(items: list[Offer]) -> list[Offer]:
             scoped = filter_offers(items, filter_text)
@@ -319,6 +344,8 @@ class SupermarketEngine:
                     for offer in scoped
                     if offer.retailer.casefold() == selected_retailer.casefold()
                 ]
+            if selected_category:
+                scoped = [offer for offer in scoped if offer.category.casefold() == selected_category.casefold()]
             return scoped
 
         all_scoped = scope(all_comparison.offers)
@@ -334,6 +361,10 @@ class SupermarketEngine:
         counts: dict[str, int] = {}
         for offer in count_scope:
             counts[offer.retailer] = counts.get(offer.retailer, 0) + 1
+        category_scope = [offer for offer in count_scope if not selected_retailer or offer.retailer.casefold() == selected_retailer.casefold()]
+        category_counts: dict[str, int] = {}
+        for offer in category_scope:
+            category_counts[offer.category] = category_counts.get(offer.category, 0) + 1
 
         ordered = sorted(filtered, key=lambda offer: offer_sort_key(offer, sort))
         page_size = max(1, min(int(page_size), 100))
@@ -359,6 +390,8 @@ class SupermarketEngine:
             "retailer": selected_retailer,
             "view": normalized_view,
             "retailer_counts": counts,
+            "category": selected_category,
+            "category_counts": category_counts,
             "selected_loyalty_programs": list(selected_programs),
             "available_loyalty_programs": available_programs(source_retailer_counts, offers),
             "loyalty_note": (

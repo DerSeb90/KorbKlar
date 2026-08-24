@@ -113,7 +113,9 @@ def test_monday_switches_to_new_week_normally():
     assert date_is_current(monday, date(2026, 8, 15), monday)
 
 
-def test_marktguru_placeholder_brand_is_not_prefixed_to_product_name():
+def test_marktguru_placeholder_brand_is_not_prefixed_to_product_name(monkeypatch):
+    from datetime import date
+    monkeypatch.setattr("supermarkt.common.today_berlin", lambda: date(2026, 8, 12))
     from supermarkt.compare import OfferMapper
     from supermarkt.models import RetailerContext
 
@@ -141,7 +143,9 @@ def test_marktguru_placeholder_brand_is_not_prefixed_to_product_name():
     assert offer.brand == ""
 
 
-def test_marktguru_numbered_placeholder_brand_is_not_prefixed_to_product_name():
+def test_marktguru_numbered_placeholder_brand_is_not_prefixed_to_product_name(monkeypatch):
+    from datetime import date
+    monkeypatch.setattr("supermarkt.common.today_berlin", lambda: date(2026, 8, 12))
     from supermarkt.compare import OfferMapper
     from supermarkt.models import RetailerContext
 
@@ -166,4 +170,5 @@ def test_marktguru_numbered_placeholder_brand_is_not_prefixed_to_product_name():
     offer = OfferMapper().map_one(raw, contexts)
     assert offer is not None
     assert offer.name == "Lauchzwiebeln"
+    assert offer.source_url == "https://www.marktguru.de/r/lidl"
     assert offer.brand == ""

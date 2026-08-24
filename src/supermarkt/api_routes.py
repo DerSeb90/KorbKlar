@@ -38,6 +38,7 @@ def result_data(
     token: str = Query(default=""),
     q: str = Query(default="", max_length=120),
     retailer: str = Query(default="", max_length=60),
+    category: str = Query(default="", max_length=120),
     page: int = Query(default=1, ge=1, le=10000),
     page_size: int = Query(default=100, ge=1, le=100),
     view: Literal["best_only", "all"] = Query(default="best_only"),
@@ -48,6 +49,6 @@ def result_data(
     try:
         engine = runtime.get_engine()
         snapshot = engine.by_id(search_id)
-        return proxy_page_images(engine.page(snapshot, filter_text=q, retailer=retailer, page=page, page_size=page_size, view=view, loyalty_programs=normalize_program_ids(loyalty.split(",")), sort=sort, include_image_urls=True))
+        return proxy_page_images(engine.page(snapshot, filter_text=q, retailer=retailer, category=category, page=page, page_size=page_size, view=view, loyalty_programs=normalize_program_ids(loyalty.split(",")), sort=sort, include_image_urls=True))
     except ToolError as exc:
         raise HTTPException(status_code=410, detail=str(exc)) from exc
