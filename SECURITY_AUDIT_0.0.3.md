@@ -6,7 +6,7 @@ Stand: 26. August 2026. Finaler lokaler RC-Image-Digest: `sha256:90f945b24ba081f
 
 Das Runtime-Image entsteht aus einem frischen `/opt/venv`; `pip`, `setuptools`, `wheel`, Compiler und Paketcache verbleiben nicht im Laufzeitimage. Ein abschließendes `FROM scratch` übernimmt den aufgebauten RootFS und entkoppelt eine nachweislich veraltete Basisimage-Attestation. Der gepinnte Python-Basisdigest bleibt als OCI-Label nachvollziehbar. Im zusammengeführten Dateisystem sind weder `setuptools`- noch `msgpack`-Metadaten vorhanden.
 
-Trivy 0.67.2 meldete nach `trivy clean --all` für das lokale Image, das gespeicherte Docker-Artefakt und das exportierte RootFS jeweils **0 HIGH / 0 CRITICAL**. Der finale Wiederholungslauf und der Digest-Scan des veröffentlichten GHCR-Images werden vor dem Release ergänzt. Der Kandidat läuft als UID 10001 mit Read-only-Root, `cap-drop ALL`, `no-new-privileges` und eigenem beschreibbaren Datenvolume.
+Trivy 0.67.2 meldete nach `trivy clean --all` für das lokale Image, das gespeicherte Docker-Artefakt und das exportierte RootFS jeweils **0 HIGH / 0 CRITICAL**. Der unveränderliche Digest und das Ergebnis des zusätzlichen Scans des veröffentlichten GHCR-Images werden im GitHub-Release dokumentiert. Der Kandidat läuft als UID 10001 mit Read-only-Root, `cap-drop ALL`, `no-new-privileges` und eigenem beschreibbaren Datenvolume.
 
 ## Browserlokale Einkaufsliste
 
@@ -26,4 +26,4 @@ Der Bildproxy lehnt Loopback, private, Link-local, reservierte, Multicast- und u
 
 ## Verbleibende Releasegates
 
-Vor Tag und Veröffentlichung werden nach dem letzten Code-Diff Tests, Dependency-Audit, Bandit, Gitleaks, alle drei Trivy-Scans, Chrome-Liveprüfung, GHCR-Digest-Scan sowie Produktions-/Tailscale-Smoke-Test wiederholt. Ein rotes verpflichtendes Gate verhindert die Veröffentlichung.
+Das Releaseverfahren verlangt nach dem letzten Code-Diff Tests, Dependency-Audit, Bandit, Gitleaks, alle drei lokalen Trivy-Scans und die Chrome-Liveprüfung. Nach der Veröffentlichung folgen der Scan des unveränderlichen GHCR-Digests sowie der Produktions- und Tailscale-Smoke-Test; ein rotes verpflichtendes Gate stoppt den weiteren Rollout.
