@@ -227,7 +227,9 @@ KITCHENOWL_PUBLIC_URL=https://shopping.example.com
 docker compose --profile proxy up -d
 ```
 
-`KITCHENOWL_JWT_SECRET` is required; KitchenOwl refuses to run with its placeholder. That subdomain also needs a DNS record pointing at the server, otherwise Caddy cannot obtain a certificate.
+Generate the secret on the server with `openssl rand -base64 48`. It is required: KitchenOwl **does not reject a missing value**, it quietly uses a published default, and an empty value yields an empty signing key, which would make its tokens forgeable. The stack therefore checks it before startup and aborts with a message. Once set, leave it alone; a new value invalidates every session and long-lived token.
+
+That subdomain also needs a DNS record pointing at the server, otherwise Caddy cannot obtain a certificate.
 
 On first visit you create the account and household inside KitchenOwl.
 

@@ -141,6 +141,15 @@ def test_the_proxy_never_forwards_a_client_supplied_source_address():
     assert "{$KORBKLAR_ACME_EMAIL}" in caddyfile
 
 
+def test_kitchenowl_cannot_start_without_a_signing_key():
+    compose = (ROOT / "compose.yml").read_text(encoding="utf-8")
+    # KitchenOwl falls back to a published default and accepts an empty key,
+    # so the stack has to refuse before its backend comes up.
+    assert "kitchenowl-secret-check:" in compose
+    assert "condition: service_completed_successfully" in compose
+    assert "KITCHENOWL_JWT_SECRET} -lt 32" in compose
+
+
 def test_uvicorn_does_not_parse_forwarding_headers_itself():
     # With uvicorn's own proxy handling the application would never see the
     # real peer, and SUPERMARKT_TRUSTED_NETWORKS could be bypassed.

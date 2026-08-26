@@ -110,6 +110,30 @@ services:
       retries: 3
       start_period: 10s
 
+  kitchenowl-secret-check:
+    # KitchenOwl does not reject a missing signing key: get_secret falls
+    # back to a published default, and an empty value yields an empty key,
+    # which makes its tokens forgeable. Compose cannot mark the variable
+    # required, because it interpolates every service regardless of the
+    # active profile, so the check runs here and the backend waits for it.
+    image: alpine:3
+    container_name: korbklar-kitchenowl-secret-check
+    profiles: ["proxy"]
+    restart: "no"
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      KITCHENOWL_JWT_SECRET: ${KITCHENOWL_JWT_SECRET:-}
+    command:
+      - sh
+      - -c
+      - |
+        if [ $${#KITCHENOWL_JWT_SECRET} -lt 32 ]; then
+          echo "KitchenOwl nicht gestartet: KITCHENOWL_JWT_SECRET fehlt oder ist kuerzer als 32 Zeichen." >&2
+          echo "Erzeugen mit: openssl rand -base64 48" >&2
+          exit 1
+        fi
+
   kitchenowl-back:
     # Self-hosted grocery list KorbKlar writes offers to. Shares the proxy
     # profile because it is only reachable through the proxy.
@@ -118,10 +142,13 @@ services:
     restart: unless-stopped
     init: true
     profiles: ["proxy"]
+    depends_on:
+      kitchenowl-secret-check:
+        condition: service_completed_successfully
     security_opt:
       - no-new-privileges:true
     environment:
-      # KitchenOwl refuses to run while this still holds its placeholder.
+      # Verified by kitchenowl-secret-check before this container starts.
       JWT_SECRET_KEY: ${KITCHENOWL_JWT_SECRET:-}
       # Lets KitchenOwl build correct absolute links to its own frontend.
       FRONT_URL: ${KITCHENOWL_PUBLIC_URL:-}

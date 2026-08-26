@@ -246,7 +246,9 @@ KITCHENOWL_PUBLIC_URL=https://einkauf.deine-domain.de
 docker compose --profile proxy up -d
 ```
 
-`KITCHENOWL_JWT_SECRET` ist Pflicht; KitchenOwl läuft nicht mit seinem Platzhalterwert. Auch für diese Subdomain muss ein DNS-Record auf den Server zeigen, sonst bekommt Caddy kein Zertifikat.
+Das Secret erzeugst du auf dem Server mit `openssl rand -base64 48`. Es ist Pflicht: KitchenOwl **lehnt einen fehlenden Wert nicht ab**, sondern nutzt still einen veröffentlichten Standard, und ein leerer Wert ergibt einen leeren Signierschlüssel — damit wären seine Tokens fälschbar. Der Stack prüft das deshalb vor dem Start und bricht mit einer Meldung ab. Einmal gesetzt, sollte der Wert nicht mehr geändert werden; ein neuer entwertet alle Sitzungen und Long-lived Tokens.
+
+Auch für diese Subdomain muss ein DNS-Record auf den Server zeigen, sonst bekommt Caddy kein Zertifikat.
 
 Beim ersten Aufruf legst du in KitchenOwl Konto und Haushalt an.
 
