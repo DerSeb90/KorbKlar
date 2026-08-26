@@ -1,4 +1,5 @@
 from datetime import date
+import json
 
 from supermarkt.common import deduplicate_offers
 from supermarkt.http import HttpClient
@@ -126,4 +127,28 @@ def test_offer_crawl_keeps_current_action_days_not_old_or_theme_pages(monkeypatc
         "https://www.aldi-sued.de/angebote/2026-08-24",
         "https://www.aldi-sued.de/angebote/2026-08-27",
         "https://www.aldi-sued.de/angebote/2026-08-28?page=2",
+    ]
+
+
+def test_aldi_north_keeps_product_group_periods(monkeypatch):
+    payload = {
+        "props": {"pageProps": {"apiData": [["OFFER_GET", {"res": {
+            "algoliaDataMap": {
+                "one": {"name": "Wochenmilch 1 l", "promotionPrices": [{"priceValue": 1.29}]},
+                "two": {"name": "Wochenendbutter 250 g", "promotionPrices": [{"priceValue": 1.49}]},
+            },
+            "categories": [
+                {"startDate": "2026-08-24", "endDate": "2026-08-29", "content": [{"title": "Woche", "productIds": ["one"]}]},
+                {"startDate": "2026-08-28", "endDate": "2026-08-29", "content": [{"title": "Wochenende", "productIds": ["two"]}]},
+            ],
+        }}]]}},
+    }
+    page = f'<script id="__NEXT_DATA__">{json.dumps(payload)}</script>'.encode()
+    aldi = source()
+    monkeypatch.setattr(aldi.http, "get_bytes", lambda _url: page)
+    monkeypatch.setattr("supermarkt.sources.aldi.date_is_current", lambda _start, _end: True)
+    offers = aldi._load_north()
+    assert [(offer.name, offer.validity_label) for offer in offers] == [
+        ("Wochenmilch 1 l", "24.08. – 29.08.2026"),
+        ("Wochenendbutter 250 g", "28.08. – 29.08.2026"),
     ]
