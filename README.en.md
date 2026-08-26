@@ -327,6 +327,10 @@ Copyright © 2026 lesecuritae for Tarnkappe.info.
 
 KorbKlar is independent and is not affiliated with any retailer or loyalty program mentioned. Brand, retailer, and product names belong to their respective owners.
 
+## What is new in 0.0.7
+
+Version 0.0.7 adds native Windows setup and portable discovery of Chromium, Chrome, and Edge. An optional control deliberately refreshes offers by bypassing the server-side offer cache for that search only. Leverkusen postcodes are recorded as exact ALDI South evidence while prefix-based guesses remain excluded. HTTPS verification uses a reproducible CA bundle while certificate and hostname verification remain enabled. Explicit euro-denominated REWE Bonus amounts are now reflected in the effective price when REWE Bonus is selected.
+
 ## What is new in 0.0.6
 
 The ALDI resolver now contains additional postcode-exact, versioned evidence from official store regions for Aachen, Düren, Heinsberg and selected Ruhr border areas. It explicitly does not classify the entire `52xxx` prefix; unknown postcodes still use bounded store-location evidence. Users who know their local stores may optionally select ALDI North, ALDI South, or both on the start page. That explicit choice overrides automatic detection and never substitutes the other region.

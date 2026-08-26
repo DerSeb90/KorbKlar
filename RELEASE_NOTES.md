@@ -1,3 +1,15 @@
+# 0.0.7
+
+KorbKlar 0.0.7 integriert die geprüften Änderungen aus dem Fork von Claudia Dietrich:
+
+- Native Windows-Einrichtung mit lokal gebundener Anwendung und automatischer Suche nach Chromium, Chrome oder Edge. Linux- und Docker-Aufrufe verwenden dieselbe portable Browserauflösung.
+- Ein bewusster Schalter auf der Startseite kann den Angebotscache für eine Suche umgehen. Ohne Auswahl bleibt das bisherige Cacheverhalten unverändert.
+- Die exakten Leverkusener PLZ 51371, 51373, 51375, 51377, 51379 und 51381 sind anhand offizieller ALDI-Süd-Filialnachweise ergänzt. Es wird weiterhin keine Präfixschätzung verwendet.
+- HTTPS-Verbindungen behalten Zertifikats- und Hostnamenprüfung bei und verwenden zusätzlich den reproduzierbaren certifi-Vertrauensspeicher; lokale Systemzertifikate werden weiterhin ergänzt.
+- Explizite Euro-Beträge aus REWE-Zusatztexten wie „MIT APP 0,10 € REWE BONUS“ werden bei ausgewähltem REWE Bonus korrekt vom effektiven Preis abgezogen. Prozent-, Punkte- oder unbezifferte Vorteile werden nicht geschätzt.
+
+Die browserlokale Einkaufsliste, Combi/famila Nordwest, die getrennten ALDI-Regionen, Containerhärtung und GHCR-Veröffentlichung bleiben unverändert erhalten.
+
 # 0.0.6
 
 KorbKlar 0.0.6 erweitert den versionierten, PLZ-genauen offiziellen ALDI-Regionsnachweis für Aachen, den Kreis Düren, den nördlichen Kreis Heinsberg, Mülheim an der Ruhr, Duisburg-Walsum und Dorsten. Die Zuordnung verwendet keine pauschale `52xxx`- oder Präfixregel. Unbekannte PLZ bleiben dem begrenzten Standort-Fallback vorbehalten; Gummersbach und Siegen bleiben ausdrücklich als Grenzfälle mit beiden Regionen erhalten. Auf der Startseite kann der Nutzer die automatische Erkennung optional durch „ALDI Nord“, „ALDI Süd“ oder „Nord und Süd“ ersetzen; die Auswahl wird bis in den getrennten regionalen Quellenabruf weitergereicht.

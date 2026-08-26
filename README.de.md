@@ -317,6 +317,10 @@ KorbKlar erfindet keine fehlenden Preise und schätzt keine unbekannten Bonusvor
 
 Für spätere Versionen sind zusätzliche Integrationen denkbar beziehungsweise geplant, darunter Grocy, KitchenOwl und weitere REST-/OpenAPI-Anbindungen für lokale Automationen und Agenten. Diese Integrationen sind keine Voraussetzung für Version 0.1.0.
 
+## Neuerungen in 0.0.7
+
+Version 0.0.7 ergänzt eine native Windows-Einrichtung und erkennt Chromium, Chrome sowie Edge portabel. Ein optionaler Schalter lädt Angebote bewusst neu und umgeht nur für diese Suche den serverseitigen Angebotscache. Leverkusener PLZ sind als exakte ALDI-Süd-Nachweise ergänzt; Präfixschätzungen bleiben ausgeschlossen. Die HTTPS-Prüfung nutzt einen reproduzierbaren CA-Satz bei weiterhin aktiver Zertifikats- und Hostnamenprüfung. Explizit in Euro ausgewiesene REWE-Bonusbeträge werden nun bei ausgewähltem REWE Bonus im effektiven Preis berücksichtigt.
+
 ## Neuerungen in 0.0.6
 
 Der ALDI-Resolver enthält zusätzliche PLZ-genaue, versionierte Nachweise aus den offiziellen Filialgebieten für Aachen, Düren, Heinsberg und ausgewählte Grenzregionen im Ruhrgebiet. Eine allgemeine Zuordnung anhand von `52xxx` findet ausdrücklich nicht statt; unbekannte PLZ werden weiterhin anhand begrenzter Standortdaten geprüft. Wer die örtliche Situation kennt, kann auf der Startseite optional ALDI Nord, ALDI Süd oder beide Regionen vorgeben. Diese bewusste Auswahl hat Vorrang vor der Automatik und lädt niemals die andere Region als Ersatz.

@@ -114,7 +114,7 @@ def test_runtime_version_matches_package_metadata():
     metadata = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
     assert metadata["project"]["version"] == __version__
     assert USER_AGENT == f"korb-klar/{__version__}"
-    assert __version__ == "0.0.6"
+    assert __version__ == "0.0.7"
 
 
 def test_default_host_port_is_configurable_without_changing_container_port():
