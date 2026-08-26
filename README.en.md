@@ -222,7 +222,7 @@ The retailer becomes the category so the list groups by shop; KorbKlar creates t
 
 **Worth knowing:** the category belongs to the article, not to one list entry, so an article moves along as soon as a different retailer offers it more cheaply. To keep your own department ordering, set `SUPERMARKT_KITCHENOWL_RETAILER_CATEGORIES=0` and the retailer stays in the note.
 
-The note carries only what the offer actually has: quantity, the offer name where an article was matched, price, package size and validity. Nothing is estimated.
+The note carries only what the offer actually has: quantity, price, package size and validity. The offer name appears only where the article is named differently, otherwise it would read twice. Nothing is estimated.
 
 ### KitchenOwl in the stack
 

@@ -33,7 +33,9 @@ on the device.
 Every offer carries an **Auf KitchenOwl** button that files it straight into
 the list named in the bar above the results, the same one-tap flow the browser
 uses. The button then reads "in <list>" so a filed offer stays recognisable
-while scrolling. The chosen list is remembered on the device.
+while scrolling. Checking the article off in KitchenOwl clears that mark
+again on the next load, since KitchenOwl removes a checked entry from the
+list. The chosen list is remembered on the device.
 
 The KitchenOwl token stays on the server; the app never sees it.
 

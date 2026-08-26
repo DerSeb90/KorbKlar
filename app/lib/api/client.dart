@@ -267,8 +267,32 @@ class KorbKlarClient {
         return ShoppingListInfo.fromJson(_json(response));
       });
 
+  /// Article names currently on the list.
+  ///
+  /// KitchenOwl removes an entry when it is checked off, so this is what
+  /// tells the app that an offer it filed earlier is no longer pending.
+  Future<Set<String>> listEntries(ResultHandle handle, String entityId) =>
+      _guard(() async {
+        final response = await _http
+            .get(
+              _uri(
+                '/results/${Uri.encodeComponent(handle.searchId)}/shopping-list/entries',
+                {'token': handle.token, 'entity_id': entityId},
+              ),
+              headers: _headers(),
+            )
+            .timeout(_timeout);
+        if (response.statusCode == 404) return <String>{};
+        final payload = _json(response);
+        return {
+          for (final item in payload['items'] as List? ?? [])
+            if (item is String && item.isNotEmpty) item,
+        };
+      });
+
   /// Writes offers to the KitchenOwl list behind the server.
-  Future<int> addToShoppingList(
+  /// Returns the article names KitchenOwl stored.
+  Future<List<String>> addToShoppingList(
     ResultHandle handle, {
     required String entityId,
     required List<Offer> offers,
@@ -298,7 +322,9 @@ class KorbKlarClient {
         )
         .timeout(_timeout);
     final payload = _json(response);
-    final added = payload['added_count'];
-    return added is num ? added.toInt() : 0;
+    return [
+      for (final name in payload['added'] as List? ?? [])
+        if (name is String) name,
+    ];
   });
 }

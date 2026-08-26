@@ -98,6 +98,39 @@ def shopping_list_add(
     return _add_items(request_data)
 
 
+def _entries(entity_id: str) -> dict[str, Any]:
+    service = runtime.get_shopping_list()
+    if not service.configured:
+        return {"configured": False, "items": []}
+    try:
+        return {"configured": True, "items": service.entries(entity_id)}
+    except ShoppingListError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
+
+
+@router.get(
+    "/api/v1/shopping-list/entries",
+    operation_id="einkaufsliste_eintraege",
+    summary="Aktuelle Einträge einer Einkaufsliste",
+    description="Listet, was gerade auf der Liste steht. Abgehakte Artikel entfernt KitchenOwl daraus.",
+)
+def shopping_list_entries(
+    entity_id: str = Query(default="", max_length=140),
+    _: None = Depends(require_api_auth),
+) -> dict[str, Any]:
+    return _entries(entity_id)
+
+
+@router.get("/results/{search_id}/shopping-list/entries", include_in_schema=False)
+def result_shopping_list_entries(
+    search_id: str,
+    token: str = Query(default=""),
+    entity_id: str = Query(default="", max_length=140),
+) -> dict[str, Any]:
+    verify_result_token(search_id, token)
+    return _entries(entity_id)
+
+
 @router.get("/results/{search_id}/shopping-list/targets", include_in_schema=False)
 def result_shopping_list_targets(search_id: str, token: str = Query(default="")) -> dict[str, Any]:
     verify_result_token(search_id, token)

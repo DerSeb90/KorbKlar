@@ -41,4 +41,5 @@ def test_openapi_exposes_only_compare_operation():
         ("post", "/api/v1/compare", "supermarkt_preisvergleich"),
         ("get", "/api/v1/shopping-list/targets", "einkaufsliste_ziele"),
         ("post", "/api/v1/shopping-list/items", "einkaufsliste_ergaenzen"),
+        ("get", "/api/v1/shopping-list/entries", "einkaufsliste_eintraege"),
     ])

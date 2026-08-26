@@ -241,7 +241,7 @@ Der Händler wird zur Kategorie, damit die Liste nach Markt gruppiert; fehlende 
 
 **Zu bedenken:** Die Kategorie hängt am Artikel, nicht am Listeneintrag. Ein Artikel wandert also mit, sobald ein anderer Markt ihn günstiger anbietet. Wer lieber nach Abteilungen sortiert, setzt `SUPERMARKT_KITCHENOWL_RETAILER_CATEGORIES=0`; dann bleibt der Händler in der Notiz.
 
-In die Notiz kommt nur, was das Angebot wirklich hergibt: Menge, Angebotsname bei Treffer, Preis, Packungsgröße und Gültigkeit. Nichts wird geschätzt.
+In die Notiz kommt nur, was das Angebot wirklich hergibt: Menge, Preis, Packungsgröße und Gültigkeit. Der Angebotsname steht dort nur, wenn der Artikel anders heißt — sonst stünde er doppelt. Nichts wird geschätzt.
 
 ### KitchenOwl im Stack
 

@@ -28,6 +28,7 @@ class FakeKitchenOwl(KitchenOwlShoppingList):
         self.catalogue_items = catalogue if catalogue is not None else []
         self.stored_categories = []
         self.next_item_id = 100
+        self.pending = []
         self.households = households if households is not None else [
             {"id": 1, "name": "Zuhause"},
         ]
@@ -49,6 +50,8 @@ class FakeKitchenOwl(KitchenOwlShoppingList):
             created = {"id": 500 + len(self.stored_categories), "name": payload["name"]}
             self.stored_categories.append(created)
             return created
+        if path.endswith("/items"):
+            return list(self.pending)
         if path.endswith("add-item-by-name"):
             self.next_item_id += 1
             return {"id": self.next_item_id, "name": payload["name"]}
@@ -356,3 +359,44 @@ def test_a_failing_category_still_leaves_the_article_on_the_list(fake_list, monk
     monkeypatch.setattr(fake_list, "_call", flaky)
     result = fake_list.add_items("4", [{"product": "Butter", "retailer": "Combi"}])
     assert result["added_count"] == 1
+
+
+def test_a_matched_article_is_not_repeated_in_its_own_note(fake_list):
+    # A previous send may have created the article under this very name;
+    # matching it then would print it twice.
+    fake_list.catalogue_items = ["Ehrmann Almighurt"]
+    fake_list.add_items("4", [{"product": "Ehrmann Almighurt", "retailer": "EDEKA", "price_text": "0,39 €"}])
+    assert fake_list.written() == [("Ehrmann Almighurt", "0,39 €")]
+
+
+def test_a_differently_named_article_still_shows_the_offer(fake_list):
+    fake_list.catalogue_items = ["Brötchen"]
+    fake_list.add_items("4", [{"product": "GUT&GÜNSTIG Weizenbrötchen", "retailer": "EDEKA", "price_text": "0,11 €"}])
+    assert fake_list.written() == [("Brötchen", "GUT&GÜNSTIG Weizenbrötchen · 0,11 €")]
+
+
+def test_entries_report_what_is_currently_on_the_list(fake_list):
+    fake_list.pending = [{"name": "Brötchen"}, {"name": "Milch"}]
+    assert fake_list.entries("4") == ["Brötchen", "Milch"]
+
+
+def test_entries_read_a_nested_item_name(fake_list):
+    # The endpoint returns list entries, whose article may be nested.
+    fake_list.pending = [{"item": {"name": "Butter"}}]
+    assert fake_list.entries("4") == ["Butter"]
+
+
+def test_a_checked_off_article_disappears_from_entries(fake_list):
+    fake_list.pending = [{"name": "Brötchen"}]
+    assert fake_list.entries("4") == ["Brötchen"]
+    fake_list.pending = []
+    assert fake_list.entries("4") == []
+
+
+def test_the_entries_route_answers_for_the_browser(fake_list, client):
+    fake_list.pending = [{"name": "Brötchen"}]
+    response = client.get(
+        f"/results/{SEARCH_ID}/shopping-list/entries?token={_token()}&entity_id=4"
+    )
+    assert response.status_code == 200
+    assert response.json() == {"configured": True, "items": ["Brötchen"]}

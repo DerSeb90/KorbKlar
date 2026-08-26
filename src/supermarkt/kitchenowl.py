@@ -358,6 +358,22 @@ class KitchenOwlShoppingList:
             status_code=400,
         )
 
+    def entries(self, entity_id: str) -> list[str]:
+        """Article names currently on the list.
+
+        KitchenOwl removes an entry when it is checked off, so this is what
+        tells a client that an offer it filed earlier is no longer pending.
+        """
+        target = self.resolve_entity(entity_id)
+        names = []
+        for entry in self._entries(self._call(f"/api/shoppinglist/{target}/items")):
+            name = clean_text(entry.get("name"))
+            if not name and isinstance(entry.get("item"), dict):
+                name = clean_text(entry["item"].get("name"))
+            if name:
+                names.append(name)
+        return names
+
     def add_items(self, entity_id: str, items: Iterable[dict[str, str]]) -> dict[str, Any]:
         """Add offers to one shopping list and report per-item success."""
         target = self.resolve_entity(entity_id)
@@ -395,13 +411,17 @@ class KitchenOwlShoppingList:
                 quantity = 1
 
             use_category = self.retailer_categories and bool(household_id)
+            # Only worth repeating when the article is named differently: a
+            # previous send may have created the article under this very name,
+            # and matching it then would print it twice.
+            offer_name = product if clean_text(product) != clean_text(name) else ""
             description = build_item_description(
                 "" if use_category else retailer,
                 item.get("price_text", ""),
                 item.get("validity", ""),
                 item.get("pack", ""),
                 quantity,
-                product if matched else "",
+                offer_name,
             )
             payload: dict[str, Any] = {"name": name}
             if description:

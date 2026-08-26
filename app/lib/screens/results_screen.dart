@@ -42,7 +42,7 @@ class _ResultsScreenState extends State<ResultsScreen> {
   final _offers = <Offer>[];
 
   ResultPage? _page;
-  /// Offers already filed, by key, with the list they went to.
+  /// Offers filed in this session: offer key to article name.
   final _filed = <String, String>{};
   final _sending = <String>{};
   String _listId = '';
@@ -98,6 +98,7 @@ class _ResultsScreenState extends State<ResultsScreen> {
             ? info.defaultEntity
             : (info.targets.isNotEmpty ? info.targets.first.entityId : '');
       });
+      await _reconcileFiled();
     } on KorbKlarException {
       // A server without the integration is normal; the app just hides it.
     }
@@ -167,7 +168,25 @@ class _ResultsScreenState extends State<ResultsScreen> {
     if (_refreshing) return;
     setState(() => _refreshing = true);
     _reload();
+    await _reconcileFiled();
     if (mounted) setState(() => _refreshing = false);
+  }
+
+  /// Drops offers whose article was checked off in KitchenOwl meanwhile.
+  ///
+  /// Checking an entry off removes it there, so the app must not keep
+  /// claiming it is still on the list.
+  Future<void> _reconcileFiled() async {
+    if (_listId.isEmpty) return;
+    try {
+      final pending = await widget.client.listEntries(widget.handle, _listId);
+      if (!mounted) return;
+      setState(() {
+        _filed.removeWhere((_, article) => !pending.contains(article));
+      });
+    } on KorbKlarException {
+      // Leaving the marks as they are beats guessing they are gone.
+    }
   }
 
   void _onSearchChanged(String _) {
@@ -199,14 +218,17 @@ class _ResultsScreenState extends State<ResultsScreen> {
         .label;
     setState(() => _sending.add(offer.key));
     try {
-      await widget.client.addToShoppingList(
+      final added = await widget.client.addToShoppingList(
         widget.handle,
         entityId: entity,
         offers: [offer],
       );
       if (!mounted) return;
-      setState(() => _filed[offer.key] = listName);
-      _toast('„${offer.product}" liegt in „$listName".');
+      final article = added.isNotEmpty ? added.first : offer.product;
+      setState(() {
+        _filed[offer.key] = article;
+      });
+      _toast('„$article" liegt in „$listName".');
     } on KorbKlarException catch (exception) {
       _toast(exception.message);
     } finally {
