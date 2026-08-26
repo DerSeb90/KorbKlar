@@ -15,7 +15,6 @@ class Settings {
   static const _loyalty = 'loyalty_programs';
   static const _listEntity = 'shopping_list_entity';
   static const _apiKey = 'api_key';
-  static const _basket = 'collected_offers';
 
   String get serverUrl => _prefs.getString(_serverUrl) ?? '';
   Future<void> setServerUrl(String value) => _prefs.setString(_serverUrl, value);
@@ -32,14 +31,6 @@ class Settings {
   List<String> get loyaltyPrograms => _prefs.getStringList(_loyalty) ?? const [];
   Future<void> setLoyaltyPrograms(List<String> value) =>
       _prefs.setStringList(_loyalty, value);
-
-  /// Offers the user collected but has not sent anywhere yet, as JSON.
-  ///
-  /// Persisted so a reload of the results, or closing the app, does not throw
-  /// the collection away.
-  List<String> get collectedOffers => _prefs.getStringList(_basket) ?? const [];
-  Future<void> setCollectedOffers(List<String> value) =>
-      _prefs.setStringList(_basket, value);
 
   String get shoppingListEntity => _prefs.getString(_listEntity) ?? '';
   Future<void> setShoppingListEntity(String value) =>

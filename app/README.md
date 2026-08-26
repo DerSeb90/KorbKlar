@@ -30,12 +30,15 @@ on the device.
 
 ## Shopping list
 
-Collected offers go to the KitchenOwl list behind the KorbKlar server, which
-stores a proper article plus a note holding retailer, price, package size and
-validity. The app never sees the KitchenOwl token; the server holds it.
+Every offer carries an **Auf KitchenOwl** button that files it straight into
+the list named in the bar above the results, the same one-tap flow the browser
+uses. The button then reads "in <list>" so a filed offer stays recognisable
+while scrolling. The chosen list is remembered on the device.
 
-Where no list is configured the collection is copied to the clipboard instead,
-one line per offer, so collecting is never a dead end.
+The KitchenOwl token stays on the server; the app never sees it.
+
+Where no list is configured the offer is copied to the clipboard instead, so
+the button is never a dead end.
 
 ## Running it
 

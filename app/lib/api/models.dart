@@ -131,19 +131,6 @@ class Offer {
   /// Stable identity for selection. The API exposes no offer id, so this
   /// mirrors the key the web interface builds for its shopping-list picker.
   String get key => '$retailer|$product|$regularPriceText';
-
-  /// The fields a collected offer needs to survive storage and to be written
-  /// to a shopping list. The rest is display detail that can be dropped.
-  Map<String, dynamic> toCollectedJson() => {
-    'retailer': retailer,
-    'retailers': retailers,
-    'retailer_label': retailerLabel,
-    'product': product,
-    'pack': pack,
-    'validity': validity,
-    'regular_price_text': regularPriceText,
-    'effective_price_text': effectivePriceText,
-  };
 }
 
 /// A loyalty program offered for the current result set.

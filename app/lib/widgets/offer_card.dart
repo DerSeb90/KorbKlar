@@ -14,9 +14,8 @@ class OfferCard extends StatelessWidget {
     required this.imageUrl,
     required this.imageHeaders,
     required this.showRetailer,
-    required this.selected,
-    required this.selectable,
-    required this.onToggleSelected,
+    required this.filedIn,
+    required this.sending,
     required this.onAddToList,
     required this.onOpenSource,
   });
@@ -31,9 +30,10 @@ class OfferCard extends StatelessWidget {
   /// Hidden when the list is already filtered to a single retailer, matching
   /// the web interface's `single-retailer` rule.
   final bool showRetailer;
-  final bool selected;
-  final bool selectable;
-  final VoidCallback onToggleSelected;
+
+  /// The list this offer was already filed in, or null while it has not been.
+  final String? filedIn;
+  final bool sending;
   final VoidCallback onAddToList;
   final VoidCallback onOpenSource;
 
@@ -48,8 +48,8 @@ class OfferCard extends StatelessWidget {
         color: colors.panel,
         borderRadius: BorderRadius.circular(14),
         border: Border.all(
-          color: selected ? colors.accent : colors.line,
-          width: selected ? 2 : 1,
+          color: filedIn != null ? colors.good : colors.line,
+          width: filedIn != null ? 2 : 1,
         ),
       ),
       padding: const EdgeInsets.all(12),
@@ -173,38 +173,25 @@ class OfferCard extends StatelessWidget {
           const SizedBox(height: 6),
           Row(
             children: [
-              if (selectable)
-                InkWell(
-                  onTap: onToggleSelected,
-                  borderRadius: BorderRadius.circular(8),
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(0, 4, 8, 4),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          selected
-                              ? Icons.check_box
-                              : Icons.check_box_outline_blank,
-                          size: 20,
-                          color: selected ? colors.accent : colors.muted,
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          'merken',
-                          style: TextStyle(color: colors.muted, fontSize: 13),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
               const Spacer(),
               TextButton.icon(
-                onPressed: onAddToList,
-                icon: const Icon(Icons.add_shopping_cart, size: 18),
-                label: const Text('Auf die Liste'),
+                onPressed: sending || filedIn != null ? null : onAddToList,
+                icon: sending
+                    ? const SizedBox(
+                        height: 16,
+                        width: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : Icon(
+                        filedIn != null ? Icons.check : Icons.add_shopping_cart,
+                        size: 18,
+                      ),
+                label: Text(filedIn != null ? 'in $filedIn' : 'Auf KitchenOwl'),
                 style: TextButton.styleFrom(
-                  foregroundColor: colors.accent,
+                  foregroundColor: filedIn != null ? colors.good : colors.accent,
+                  disabledForegroundColor: filedIn != null
+                      ? colors.good
+                      : colors.muted,
                   visualDensity: VisualDensity.compact,
                 ),
               ),

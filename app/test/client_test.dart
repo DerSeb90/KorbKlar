@@ -168,31 +168,7 @@ void main() {
     });
   });
 
-  group('collecting offers', () {
-    test('a collected offer survives a round trip through storage', () {
-      final original = Offer.fromJson({
-        'retailer': 'Combi',
-        'retailers': ['Combi', 'famila Nordwest'],
-        'retailer_label': 'Combi · famila Nordwest',
-        'product': 'Kerrygold Butter',
-        'pack': '250 g',
-        'validity': 'bis 29.08.',
-        'regular_price_text': '2,29 €',
-        'effective_price_text': '1,59 €',
-      });
-
-      final restored = Offer.fromJson(
-        jsonDecode(jsonEncode(original.toCollectedJson()))
-            as Map<String, dynamic>,
-      );
-
-      expect(restored.key, original.key);
-      expect(restored.product, 'Kerrygold Butter');
-      expect(restored.retailers, ['Combi', 'famila Nordwest']);
-      expect(restored.effectivePriceText, '1,59 €');
-      expect(ShoppingListText.lineFor(restored), ShoppingListText.lineFor(original));
-    });
-
+  group('shopping list payload', () {
     test('several offers become one line each', () {
       final offers = [
         Offer.fromJson({'product': 'Butter', 'effective_price_text': '1,59 €'}),

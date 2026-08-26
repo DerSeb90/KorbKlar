@@ -215,7 +215,7 @@ class _StubClient extends http.BaseClient {
   @override
   Future<http.StreamedResponse> send(http.BaseRequest request) async {
     final body = request.url.path.contains('shopping-list')
-        ? {'configured': false, 'targets': [], 'default_entity': ''}
+        ? {'configured': true, 'targets': [{'entity_id': '4', 'label': 'Einkauf'}], 'default_entity': '4'}
         : page;
     return http.StreamedResponse(
       Stream.value(utf8.encode(jsonEncode(body))),

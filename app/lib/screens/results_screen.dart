@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -41,9 +40,12 @@ class _ResultsScreenState extends State<ResultsScreen> {
   final _scroll = ScrollController();
   final _search = TextEditingController();
   final _offers = <Offer>[];
-  final _picked = <String, Offer>{};
 
   ResultPage? _page;
+  /// Offers already filed, by key, with the list they went to.
+  final _filed = <String, String>{};
+  final _sending = <String>{};
+  String _listId = '';
   ShoppingListInfo _shoppingList = ShoppingListInfo.disabled;
 
   String _retailer = '';
@@ -70,7 +72,6 @@ class _ResultsScreenState extends State<ResultsScreen> {
   void initState() {
     super.initState();
     _scroll.addListener(_onScroll);
-    _restoreCollection();
     _reload();
     _loadShoppingList();
   }
@@ -83,30 +84,20 @@ class _ResultsScreenState extends State<ResultsScreen> {
     super.dispose();
   }
 
-  /// Collected offers survive a reload of the results and a restart, so a
-  /// list built over several searches is not lost.
-  void _restoreCollection() {
-    for (final raw in widget.settings.collectedOffers) {
-      try {
-        final decoded = jsonDecode(raw);
-        if (decoded is! Map<String, dynamic>) continue;
-        final offer = Offer.fromJson(decoded);
-        _picked[offer.key] = offer;
-      } on FormatException {
-        // A stored entry from an older layout is simply dropped.
-      }
-    }
-    if (_picked.isNotEmpty) setState(() {});
-  }
-
-  Future<void> _saveCollection() => widget.settings.setCollectedOffers([
-    for (final offer in _picked.values) jsonEncode(offer.toCollectedJson()),
-  ]);
-
   Future<void> _loadShoppingList() async {
     try {
       final info = await widget.client.shoppingListTargets(widget.handle);
-      if (mounted) setState(() => _shoppingList = info);
+      if (!mounted) return;
+      final known = info.targets.map((target) => target.entityId).toSet();
+      final remembered = widget.settings.shoppingListEntity;
+      setState(() {
+        _shoppingList = info;
+        _listId = known.contains(remembered)
+            ? remembered
+            : known.contains(info.defaultEntity)
+            ? info.defaultEntity
+            : (info.targets.isNotEmpty ? info.targets.first.entityId : '');
+      });
     } on KorbKlarException {
       // A server without the integration is normal; the app just hides it.
     }
@@ -184,47 +175,42 @@ class _ResultsScreenState extends State<ResultsScreen> {
     _debounce = Timer(const Duration(milliseconds: 350), _reload);
   }
 
-  void _toggle(Offer offer) {
-    setState(() {
-      if (_picked.remove(offer.key) == null) _picked[offer.key] = offer;
-    });
-    _saveCollection();
-  }
-
-  void _clearCollection() {
-    setState(_picked.clear);
-    _saveCollection();
-  }
-
   // -------------------------------------------------------- Einkaufsliste
 
-  Future<void> _addToList(List<Offer> offers) async {
-    if (offers.isEmpty) return;
-    const text = ShoppingListText();
-
-    // Without a configured KitchenOwl list the clipboard is still a way out,
-    // so collecting is never a dead end.
+  /// Files one offer in the selected list, the way the browser does.
+  ///
+  /// No collecting step: a tap is the whole interaction. Where no list is
+  /// configured the offer goes to the clipboard instead, so the button is
+  /// never a dead end.
+  Future<void> _addToList(Offer offer) async {
     if (!_shoppingList.configured || _shoppingList.targets.isEmpty) {
-      await text.copy(offers);
-      if (!mounted) return;
-      _clearCollection();
-      _toast('In die Zwischenablage kopiert.');
+      await const ShoppingListText().copy([offer]);
+      if (mounted) _toast('In die Zwischenablage kopiert.');
       return;
     }
 
-    final entity = await _resolveEntity();
-    if (entity == null) return;
+    final entity = _listId.isNotEmpty ? _listId : await _resolveEntity();
+    if (entity == null || entity.isEmpty) return;
+    final listName = _shoppingList.targets
+        .firstWhere(
+          (target) => target.entityId == entity,
+          orElse: () => const ShoppingListTarget(entityId: '', label: 'KitchenOwl'),
+        )
+        .label;
+    setState(() => _sending.add(offer.key));
     try {
-      final added = await widget.client.addToShoppingList(
+      await widget.client.addToShoppingList(
         widget.handle,
         entityId: entity,
-        offers: offers,
+        offers: [offer],
       );
       if (!mounted) return;
-      _clearCollection();
-      _toast('$added Angebote übernommen.');
+      setState(() => _filed[offer.key] = listName);
+      _toast('„${offer.product}" liegt in „$listName".');
     } on KorbKlarException catch (exception) {
       _toast(exception.message);
+    } finally {
+      if (mounted) setState(() => _sending.remove(offer.key));
     }
   }
 
@@ -424,14 +410,57 @@ class _ResultsScreenState extends State<ResultsScreen> {
       body: Column(
         children: [
           _controls(colors),
+          if (_shoppingList.configured && _shoppingList.targets.isNotEmpty)
+            _listBar(colors),
           if (page != null) _chips(page, colors),
           const Divider(height: 1),
           Expanded(child: _list(colors)),
         ],
       ),
-      bottomNavigationBar: _picked.isEmpty ? null : _selectionBar(colors),
     );
   }
+
+  /// Names the list every tap files into, so the destination is visible
+  /// before anything is sent.
+  Widget _listBar(KorbColors colors) => Padding(
+    padding: const EdgeInsets.fromLTRB(12, 0, 12, 6),
+    child: Row(
+      children: [
+        Text(
+          'KitchenOwl',
+          style: TextStyle(
+            color: colors.accent,
+            fontWeight: FontWeight.w700,
+            fontSize: 12,
+            letterSpacing: 0.4,
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: DropdownButtonFormField<String>(
+            initialValue: _listId.isEmpty ? null : _listId,
+            isExpanded: true,
+            decoration: const InputDecoration(
+              isDense: true,
+              contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            ),
+            items: [
+              for (final target in _shoppingList.targets)
+                DropdownMenuItem(
+                  value: target.entityId,
+                  child: Text(target.label, overflow: TextOverflow.ellipsis),
+                ),
+            ],
+            onChanged: (value) {
+              if (value == null) return;
+              setState(() => _listId = value);
+              widget.settings.setShoppingListEntity(value);
+            },
+          ),
+        ),
+      ],
+    ),
+  );
 
   Widget _controls(KorbColors colors) => Padding(
     padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
@@ -576,10 +605,9 @@ class _ResultsScreenState extends State<ResultsScreen> {
           imageUrl: widget.client.imageUrl(offer.imageUrl),
           imageHeaders: widget.client.imageHeaders,
           showRetailer: _retailer.isEmpty,
-          selectable: true,
-          selected: _picked.containsKey(offer.key),
-          onToggleSelected: () => _toggle(offer),
-          onAddToList: () => _addToList([offer]),
+          filedIn: _filed[offer.key],
+          sending: _sending.contains(offer.key),
+          onAddToList: () => _addToList(offer),
           onOpenSource: () => launchUrl(
             Uri.parse(offer.sourceUrl),
             mode: LaunchMode.externalApplication,
@@ -618,35 +646,6 @@ class _ResultsScreenState extends State<ResultsScreen> {
     );
   }
 
-  Widget _selectionBar(KorbColors colors) => SafeArea(
-    child: Container(
-      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
-      decoration: BoxDecoration(
-        color: colors.panel,
-        border: Border(top: BorderSide(color: colors.line)),
-      ),
-      child: Row(
-        children: [
-          IconButton(
-            tooltip: 'Auswahl leeren',
-            onPressed: _clearCollection,
-            icon: const Icon(Icons.close),
-          ),
-          Expanded(
-            child: Text(
-              '${_picked.length} ausgewählt',
-              style: const TextStyle(fontWeight: FontWeight.w600),
-            ),
-          ),
-          FilledButton.icon(
-            onPressed: () => _addToList(_picked.values.toList()),
-            icon: const Icon(Icons.add_shopping_cart, size: 18),
-            label: const Text('Übernehmen'),
-          ),
-        ],
-      ),
-    ),
-  );
 }
 
 class _Chip extends StatelessWidget {
