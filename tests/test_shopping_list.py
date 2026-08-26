@@ -71,11 +71,20 @@ def test_import_limits_and_future_schema_are_rejected():
     assert js("(()=>{try{m.validateDocument({schema_version:99,items:[]});return false}catch{return true}})()") is True
 
 
-def test_shopping_frontend_is_local_only():
+def test_shopping_frontend_keeps_the_list_local():
     shopping = (ROOT / "src/supermarkt/static/shopping.js").read_text(encoding="utf-8")
     assert "indexedDB.open" in shopping
-    assert "fetch(" not in shopping
     assert "XMLHttpRequest" not in shopping
     assert "localStorage" not in shopping
     assert "document.cookie" not in shopping
     assert "navigator.share" in shopping
+
+
+def test_the_list_only_leaves_the_browser_when_the_user_sends_it():
+    shopping = (ROOT / "src/supermarkt/static/shopping.js").read_text(encoding="utf-8")
+    # The basket stays local. The only exceptions are reading the available
+    # KitchenOwl lists, which carries no list content, and the send the user
+    # asks for by clicking.
+    calls = [line for line in shopping.splitlines() if "fetch(" in line]
+    assert calls and all("koResultPath(" in line for line in calls), calls
+    assert '$("kitchenowlSend").onclick=koSend' in shopping

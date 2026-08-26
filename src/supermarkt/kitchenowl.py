@@ -69,13 +69,22 @@ def build_item_text(product: str, retailer: str) -> str:
     return _truncate(f"Angebot {fallback}" if fallback else "Angebot", MAX_ITEM_LENGTH)
 
 
-def build_item_description(retailer: str, price_text: str, validity: str, pack: str) -> str:
+def build_item_description(
+    retailer: str,
+    price_text: str,
+    validity: str,
+    pack: str,
+    quantity: int = 1,
+) -> str:
     """Return the note shown underneath the article.
 
     Only values the offer actually carries are included. Nothing is estimated,
-    matching how this service treats loyalty benefits.
+    matching how this service treats loyalty benefits. A quantity leads,
+    because KitchenOwl has no separate amount field and shows this note next
+    to the article.
     """
     parts = [
+        f"{quantity}×" if quantity > 1 else "",
         clean_text(retailer),
         clean_text(price_text),
         clean_text(pack),
@@ -253,11 +262,16 @@ class KitchenOwlShoppingList:
         for item in pending:
             name = build_item_text(item.get("product", ""), item.get("retailer", ""))
             payload: dict[str, Any] = {"name": name}
+            try:
+                quantity = max(1, int(item.get("quantity") or 1))
+            except (TypeError, ValueError):
+                quantity = 1
             description = build_item_description(
                 item.get("retailer", ""),
                 item.get("price_text", ""),
                 item.get("validity", ""),
                 item.get("pack", ""),
+                quantity,
             )
             if description:
                 payload["description"] = description

@@ -29,6 +29,7 @@ class ShoppingListItem(BaseModel):
     price_text: str = Field(default="", max_length=40, description="Angebotspreis, erscheint in der Notiz")
     validity: str = Field(default="", max_length=120, description="Gültigkeit, erscheint in der Notiz")
     pack: str = Field(default="", max_length=80, description="Packungsgröße, erscheint in der Notiz")
+    quantity: int = Field(default=1, ge=1, le=999, description="Menge, führt die Notiz an")
 
 
 class ShoppingListRequest(BaseModel):

@@ -100,6 +100,16 @@ def test_item_uses_product_as_name_and_offer_details_as_note():
     )
 
 
+def test_a_quantity_leads_the_note():
+    # KitchenOwl has no amount field; the note is what it shows beside the
+    # article, so more than one has to be visible there.
+    assert build_item_description("Combi", "1,59 €", "", "", 3) == "3× · Combi · 1,59 €"
+
+
+def test_a_single_unit_adds_no_quantity():
+    assert build_item_description("Combi", "1,59 €", "", "", 1) == "Combi · 1,59 €"
+
+
 def test_note_omits_details_the_offer_does_not_carry():
     assert build_item_description("Combi", "1,59 €", "", "") == "Combi · 1,59 €"
 
@@ -133,6 +143,22 @@ def test_a_non_numeric_list_id_is_rejected(fake_list):
 def test_configured_default_list_is_used_when_none_is_requested(fake_list):
     fake_list.default_list_id = "7"
     assert fake_list.add_items("", [{"product": "Butter"}])["entity_id"] == "7"
+
+
+def test_quantity_reaches_the_written_note(fake_list):
+    fake_list.add_items("4", [{"product": "Butter", "retailer": "Combi", "quantity": 2}])
+    assert ("/api/shoppinglist/4/add-item-by-name", {
+        "name": "Butter",
+        "description": "2× · Combi",
+    }) in fake_list.calls
+
+
+def test_a_broken_quantity_falls_back_to_one(fake_list):
+    fake_list.add_items("4", [{"product": "Butter", "retailer": "Combi", "quantity": "viele"}])
+    assert ("/api/shoppinglist/4/add-item-by-name", {
+        "name": "Butter",
+        "description": "Combi",
+    }) in fake_list.calls
 
 
 def test_batch_size_is_capped(fake_list):
