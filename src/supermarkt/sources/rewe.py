@@ -12,7 +12,7 @@ import uuid
 from typing import Any, Optional
 from urllib.parse import urljoin, urlsplit
 
-from ..common import build_match_key, clean_text, deduplicate_offers, normalize_pack, offer_reference_date, parse_base_price_text, parse_number, today_berlin
+from ..common import build_match_key, clean_text, deduplicate_offers, normalize_pack, offer_reference_date, parse_base_price_text, parse_deposit_text, parse_number, today_berlin
 from ..http import PostalCodeLocator
 from ..models import LoyaltyBenefit, Offer, ToolError
 
@@ -507,6 +507,7 @@ class OfficialReweSource:
             product_url=product_url or market_url,
             retailer_url=market_url,
             image_url=image_url,
+            deposit=parse_deposit_text(description),
             benefits=(LoyaltyBenefit("rewe_bonus", "cashback", float(bonus), "REWE Bonus"),)
             if bonus is not None and bonus > 0
             else (),

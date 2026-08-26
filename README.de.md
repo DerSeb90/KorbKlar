@@ -301,6 +301,10 @@ KorbKlar erfindet keine fehlenden Preise und schätzt keine unbekannten Bonusvor
 
 Für spätere Versionen sind zusätzliche Integrationen denkbar beziehungsweise geplant, darunter Grocy, KitchenOwl und weitere REST-/OpenAPI-Anbindungen für lokale Automationen und Agenten. Diese Integrationen sind keine Voraussetzung für Version 0.1.0.
 
+## Neuerungen in 0.0.5
+
+Produktbilder aus Angeboten bleiben über das lokale, abgesicherte Bildproxy-Ziel in der browserlokalen Einkaufsliste sichtbar – auch nach einem Reload. Explizit veröffentlichte Pfandbeträge von ALDI, REWE und Marktguru werden getrennt gespeichert und mengenabhängig berechnet. KorbKlar erfindet weiterhin kein Pfand anhand einer Verpackungsart.
+
 ## Neuerungen in 0.0.4
 
 Revision: Zenq & Enzo

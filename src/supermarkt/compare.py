@@ -18,6 +18,7 @@ from .common import (
     identify_retailer,
     normalize_pack,
     offer_validity,
+    parse_deposit_text,
     parse_number,
 )
 from .loyalty import apply_selected_programs, parse_public_loyalty_prices
@@ -156,6 +157,7 @@ class OfferMapper:
             product_url=product_url,
             retailer_url=context.market_url,
             image_url=extract_image_url(product) or extract_image_url(raw),
+            deposit=parse_deposit_text(description),
             benefits=benefits,
         )
 

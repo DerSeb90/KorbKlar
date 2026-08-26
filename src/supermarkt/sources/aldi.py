@@ -25,6 +25,7 @@ from ..common import (
     normalize_pack,
     offer_reference_date,
     parse_base_price_text,
+    parse_deposit_text,
     parse_iso_date,
     parse_number,
     strip_html,
@@ -321,6 +322,7 @@ class OfficialAldiSource:
                     match_key=build_match_key(brand, name, pack, f"aldi-nord:{product_id}"),
                     source_url=self.NORTH_URL,
                     image_url=extract_image_url(product, base_url=self.NORTH_URL),
+                    deposit=parse_deposit_text(description),
                 )
             )
         if not offers:
@@ -450,6 +452,7 @@ class OfficialAldiSource:
             validity_label=format_validity(start, end) if start or end else "Aktuelle Angebotsseite",
             match_key=build_match_key(brand, name, pack, f"aldi-sued:{identifier}"),
             source_url=source_url, image_url=extract_image_url(node, base_url=source_url),
+            deposit=parse_deposit_text(description),
             valid_from=start.isoformat() if start else None,
             valid_until=end.isoformat() if end else None,
         )
@@ -507,6 +510,7 @@ class OfficialAldiSource:
             pack_signature=pack, validity_label=validity_label,
             match_key=build_match_key("", name, pack, f"aldi-sued:{identifier}"),
             source_url=product_url, image_url=image_url,
+            deposit=parse_deposit_text(text),
             valid_from=resolved_start.isoformat() if resolved_start else None,
             valid_until=resolved_end.isoformat() if resolved_end else None,
         )

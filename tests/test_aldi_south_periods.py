@@ -67,6 +67,17 @@ def test_loose_produce_price_with_base_unit_is_not_dropped(monkeypatch):
     assert offer.price == 1.39
 
 
+def test_aldi_south_keeps_only_explicit_deposit(monkeypatch):
+    monkeypatch.setattr("supermarkt.sources.aldi.offer_reference_date", lambda: date(2026, 8, 26))
+    explicit = card("Energy Drink 0,33 l zzgl. 0,25 € Pfand")
+    offer = source()._south_card_to_offer(explicit, date(2026, 8, 24), date(2026, 8, 29), 1)
+    assert offer is not None and offer.deposit == 0.25
+
+    implicit = card("Energy Drink 0,33-l-Dose", identifier="000000000000123457")
+    offer = source()._south_card_to_offer(implicit, date(2026, 8, 24), date(2026, 8, 29), 2)
+    assert offer is not None and offer.deposit is None
+
+
 def make_offer(label: str, start: str | None, end: str | None, *, price: float = 1.29, pack: str = "1kg") -> Offer:
     return Offer(
         offer_id="aldi-sued:123456", retailer="ALDI Süd", category="Weitere Angebote",

@@ -3,6 +3,28 @@ from bs4 import BeautifulSoup
 from supermarkt.sources.rewe import OfficialReweSource
 
 
+def test_rewe_card_keeps_explicit_deposit():
+    card = BeautifulSoup(
+        '''
+        <article>
+          <h3 class="cor-offer-information__title">Energy Drink</h3>
+          <span class="cor-offer-price__tag-price">0,79 €</span>
+          <div class="cor-offer-information__additional">0,5-l-Dose zzgl. 0,25 € Pfand</div>
+        </article>
+        ''',
+        "html.parser",
+    ).article
+    offer, bonus_only = OfficialReweSource(object())._parse_card(
+        card,
+        nan="123",
+        category="Getränke",
+        market_id="456",
+        market_url="https://www.rewe.de/angebote/test/456/rewe-markt-test/",
+    )
+    assert bonus_only is False
+    assert offer is not None and offer.deposit == 0.25
+
+
 def test_rewe_current_container_accepts_current_class_layout():
     soup = BeautifulSoup(
         """

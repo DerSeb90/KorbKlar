@@ -327,6 +327,10 @@ Copyright © 2026 lesecuritae for Tarnkappe.info.
 
 KorbKlar is independent and is not affiliated with any retailer or loyalty program mentioned. Brand, retailer, and product names belong to their respective owners.
 
+## What is new in 0.0.5
+
+Offer images remain visible in the browser-local shopping list through the secured local image proxy, including after reload. Explicitly published deposits from ALDI, REWE and Marktguru are stored separately and calculated by quantity. KorbKlar never guesses a deposit from packaging alone.
+
 ## What is new in 0.0.4
 
 Revision: Zenq & Enzo
