@@ -77,7 +77,9 @@ void main() {
     'warnings': ['Kaufland offiziell: keine Filialseite'],
     'offers': [
       {
-        'retailer': 'famila Nordwest',
+        'retailer': 'Combi',
+        'retailers': ['Combi', 'famila Nordwest'],
+        'retailer_label': 'Combi · famila Nordwest',
         'category': 'Molkereiprodukte',
         'product': 'Kerrygold Original Irische Butter',
         'description': 'mild gesalzen oder original',
@@ -102,6 +104,8 @@ void main() {
       },
       {
         'retailer': 'Combi',
+        'retailers': ['Combi'],
+        'retailer_label': 'Combi',
         'category': 'Obst & Gemüse',
         'product': 'Deutsche Erdbeeren',
         'description': 'Klasse I, Schale',

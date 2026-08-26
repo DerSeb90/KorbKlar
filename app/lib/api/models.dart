@@ -32,6 +32,8 @@ Map<String, int> _counts(Object? value) {
 class Offer {
   Offer({
     required this.retailer,
+    required this.retailers,
+    required this.retailerLabel,
     required this.category,
     required this.product,
     required this.description,
@@ -57,6 +59,11 @@ class Offer {
 
   factory Offer.fromJson(Map<String, dynamic> json) => Offer(
     retailer: _str(json['retailer']),
+    retailers: (json['retailers'] as List? ?? [])
+        .map(_str)
+        .where((item) => item.isNotEmpty)
+        .toList(),
+    retailerLabel: _str(json['retailer_label']),
     category: _str(json['category']),
     product: _str(json['product']),
     description: _str(json['description']),
@@ -81,6 +88,14 @@ class Offer {
   );
 
   final String retailer;
+
+  /// Every retailer this row stands for. More than one when identical offers
+  /// at the same price were folded together by the server.
+  final List<String> retailers;
+
+  /// The retailers as one display string, already joined by the server.
+  final String retailerLabel;
+
   final String category;
   final String product;
   final String description;
@@ -105,6 +120,13 @@ class Offer {
 
   /// The web interface treats anything above half a cent as a real saving.
   bool get hasSaving => loyaltySavings > 0.004;
+
+  /// True when this row represents the same offer at several retailers.
+  bool get isMerged => retailers.length > 1;
+
+  /// What to print in the retailer slot, whether or not the row was merged.
+  String get retailerText =>
+      retailerLabel.isNotEmpty ? retailerLabel : retailer;
 
   /// Stable identity for selection. The API exposes no offer id, so this
   /// mirrors the key the web interface builds for its shopping-list picker.

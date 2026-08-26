@@ -24,7 +24,7 @@ from .config import (
 )
 from .http import HttpClient, PostalCodeLocator
 from .loyalty import available_programs, normalize_program_ids
-from .models import AGGREGATOR_RETAILERS, RETAILER_SPECS, Offer, RetailerContext, ToolError, offer_from_dict, offer_to_dict
+from .models import AGGREGATOR_RETAILERS, RETAILER_SPECS, Offer, RetailerContext, ToolError, offer_from_dict, offer_retailers, offer_to_dict
 from .presentation import offer_for_response, offer_sort_key, resolve_retailer_name
 from .region import AldiRegionResolver
 from .sources import MarktguruClient, OfficialAldiSource, OfficialEdekaSource, OfficialKauflandSource, OfficialMarktkaufSource, OfficialReweSource
@@ -339,10 +339,16 @@ class SupermarketEngine:
         def scope(items: list[Offer]) -> list[Offer]:
             scoped = filter_offers(items, filter_text)
             if selected_retailer:
+                # A merged row stands for several retailers and must survive
+                # the filter for each of them.
+                wanted = selected_retailer.casefold()
                 scoped = [
                     offer
                     for offer in scoped
-                    if offer.retailer.casefold() == selected_retailer.casefold()
+                    if any(
+                        name.casefold() == wanted
+                        for name in offer_retailers(offer)
+                    )
                 ]
             if selected_category:
                 scoped = [offer for offer in scoped if offer.category.casefold() == selected_category.casefold()]
@@ -360,8 +366,19 @@ class SupermarketEngine:
         count_scope = filter_offers(comparison_for_counts.offers, filter_text)
         counts: dict[str, int] = {}
         for offer in count_scope:
-            counts[offer.retailer] = counts.get(offer.retailer, 0) + 1
-        category_scope = [offer for offer in count_scope if not selected_retailer or offer.retailer.casefold() == selected_retailer.casefold()]
+            # A merged row counts once for every retailer it represents, so a
+            # chip still reflects what that retailer actually offers.
+            for name in offer_retailers(offer):
+                counts[name] = counts.get(name, 0) + 1
+        category_scope = [
+            offer
+            for offer in count_scope
+            if not selected_retailer
+            or any(
+                name.casefold() == selected_retailer.casefold()
+                for name in offer_retailers(offer)
+            )
+        ]
         category_counts: dict[str, int] = {}
         for offer in category_scope:
             category_counts[offer.category] = category_counts.get(offer.category, 0) + 1

@@ -114,6 +114,7 @@ The interface includes:
 - regular price and unit-price comparisons
 - a view containing only the cheapest safe comparison matches
 - an all-results view including more expensive duplicates
+- one row for an identical offer sold at several retailers for the same price
 - product images through the local image proxy
 - loyalty prices and specifically quantified euro benefits
 - selection of multiple loyalty programs
@@ -122,6 +123,14 @@ The interface includes:
 - adding offers to a Home Assistant shopping list such as Bring, individually or as a selection
 
 When exactly one retailer is selected, the redundant retailer column is hidden.
+
+## Identical offers at several retailers
+
+Retail groups run one campaign across their brands, so famila Nordwest and Combi advertise the same product at the same price in the same week, and unrelated retailers sometimes carry the same manufacturer promotion. Those rows say the same thing.
+
+When offers are already proven comparable and their price matches to within half a cent, they are shown as a single row listing every retailer that sells it. Nothing about the price changes, retailer filters still find the row under each of its retailers, and the retailer chips still count it for each of them.
+
+Offers that were never matched to one another are left alone, even when their prices happen to be equal. A postal code returning `Orangen` for `2,49 €` as a 1500 g pack at one retailer and a 300 g pack at another describes two different deals, and merging them would hide that.
 
 ## Package sizes and data cleaning
 

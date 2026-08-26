@@ -60,14 +60,19 @@ class OfferCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    if (showRetailer)
+                    if (showRetailer || offer.isMerged)
                       Text(
-                        offer.retailer,
+                        offer.retailerText,
                         style: TextStyle(
                           fontWeight: FontWeight.w700,
                           fontSize: 13,
                           color: colors.accent,
                         ),
+                      ),
+                    if (offer.isMerged)
+                      Text(
+                        'gleiches Angebot',
+                        style: TextStyle(color: colors.muted, fontSize: 11),
                       ),
                     InkWell(
                       onTap: offer.sourceUrl.isEmpty ? null : onOpenSource,

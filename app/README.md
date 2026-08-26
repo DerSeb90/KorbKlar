@@ -14,6 +14,7 @@ price; it renders the values the comparison engine returns.
 - result list with product and brand filter, retailer chips, sorting, and the
   cheapest-only / include-duplicates views
 - unit prices, package sizes, validity and source links
+- one row for an identical offer sold at several retailers for the same price
 - loyalty program selection, with the server's benefit note
 - product images through the server's signed image proxy
 - warnings for failed or incomplete sources

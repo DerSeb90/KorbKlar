@@ -102,6 +102,10 @@ class Offer:
     regular_comparison_state: str = "none"
     selected_comparison_note: str = ""
     selected_comparison_state: str = "none"
+    # Every retailer selling this exact offer at the same price. Empty unless
+    # several were folded into one row; the first entry is this offer's own
+    # retailer.
+    merged_retailers: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -122,6 +126,11 @@ class ToolError(RuntimeError):
 
 def offer_to_dict(offer: Offer) -> dict[str, Any]:
     return asdict(offer)
+
+
+def offer_retailers(offer: Offer) -> tuple[str, ...]:
+    """All retailers a row stands for, whether or not it was merged."""
+    return offer.merged_retailers or (offer.retailer,)
 
 
 def _benefits_from_dict(value: Any) -> tuple[LoyaltyBenefit, ...]:

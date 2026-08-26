@@ -193,10 +193,10 @@ class OfferComparator:
                     )
                 ]
                 if winners:
-                    visible.extend(winners)
                     hidden_count += len(group) - len(winners)
+                    visible.extend(self._merge_equal_prices(winners))
                     continue
-            visible.extend(group)
+            visible.extend(self._merge_equal_prices(group))
 
         visible.sort(
             key=lambda offer: (
@@ -209,6 +209,44 @@ class OfferComparator:
             )
         )
         return ComparisonResult(offers=visible, hidden_count=hidden_count)
+
+    @staticmethod
+    def _merge_equal_prices(group: list[Offer]) -> list[Offer]:
+        """Fold offers that are identical in product and price into one row.
+
+        Retail groups that run one campaign across their brands, and unrelated
+        retailers advertising the same manufacturer promotion, otherwise fill
+        the list with rows that say the same thing. Only offers already proven
+        comparable are folded, so this never merges across different products.
+
+        The surviving row keeps its own retailer as the primary one and lists
+        the others in ``merged_retailers``; nothing about the price changes.
+        """
+        if len(group) < 2:
+            return group
+
+        by_price: dict[Any, list[Offer]] = defaultdict(list)
+        for offer in group:
+            price = offer.effective_price
+            if price is None:
+                # Without a price there is nothing to prove equality with.
+                by_price[("none", id(offer))].append(offer)
+                continue
+            # Half a cent, the same tolerance the winner comparison uses.
+            by_price[round(float(price) * 200)].append(offer)
+
+        merged: list[Offer] = []
+        for bucket in by_price.values():
+            retailers = list(dict.fromkeys(offer.retailer for offer in bucket))
+            if len(bucket) < 2 or len(retailers) < 2:
+                merged.extend(bucket)
+                continue
+            primary = min(bucket, key=lambda offer: offer.retailer.casefold())
+            primary.merged_retailers = tuple(
+                sorted(retailers, key=str.casefold)
+            )
+            merged.append(primary)
+        return merged
 
     def _compare_group(
         self,

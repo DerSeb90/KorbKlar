@@ -141,12 +141,21 @@ Die Ergebnisansicht bietet unter anderem:
 - normale Preise und Preise mit ausgewählten Bonusprogrammen
 - Mehrfachauswahl der Bonusprogramme
 - Hinweise zu ausgefallenen oder unvollständigen Quellen
+- eine Zeile für ein identisches Angebot, das mehrere Händler zum selben Preis führen
 - automatisches Nachladen beim Scrollen
 - Angebote einzeln oder als Auswahl auf eine Einkaufsliste in Home Assistant setzen, zum Beispiel Bring
 
 Packungsgröße und Referenzmenge des Grundpreises werden getrennt behandelt. Aus einer 0,33-l-Dose mit einem Grundpreis pro Liter wird deshalb beispielsweise `330 ml` als Packungsgröße und der Literpreis separat dargestellt. Alternative Größen wie `85 g oder 100 g` werden nicht zu `185 g` addiert.
 
 Quellen-Platzhalter wie `This is no brand` werden als fehlende Marke behandelt und nicht vor den Produktnamen gesetzt. Bei Auswahl genau eines Händlers blendet die Oberfläche die dann redundante Händlerspalte aus.
+
+## Gleiche Angebote bei mehreren Händlern
+
+Handelsgruppen fahren eine Aktion über mehrere Marken, deshalb bewerben famila Nordwest und Combi in derselben Woche dasselbe Produkt zum selben Preis. Auch voneinander unabhängige Händler übernehmen gelegentlich dieselbe Herstelleraktion. Solche Zeilen sagen dasselbe.
+
+Sind Angebote bereits als vergleichbar erkannt und stimmt der Preis auf einen halben Cent überein, erscheinen sie als **eine** Zeile, die alle Händler nennt. Am Preis ändert sich nichts, Händlerfilter finden die Zeile unter jedem ihrer Händler, und die Händler-Chips zählen sie für jeden mit.
+
+Angebote, die nie einander zugeordnet wurden, bleiben getrennt, selbst wenn der Preis zufällig gleich ist. Wenn `Orangen` für `2,49 €` bei einem Händler 1500 g und beim anderen 300 g sind, sind das zwei verschiedene Angebote; sie zusammenzufassen würde das verdecken.
 
 ## Bonusprogramme
 
