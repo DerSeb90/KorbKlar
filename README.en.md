@@ -238,11 +238,11 @@ On first visit you create the account and household inside KitchenOwl.
 Create the token in KitchenOwl under profile, sessions, long-lived tokens, then set:
 
 ```bash
-SUPERMARKT_KITCHENOWL_URL=http://kitchenowl-back:5000
+SUPERMARKT_KITCHENOWL_URL=http://kitchenowl-web
 SUPERMARKT_KITCHENOWL_TOKEN=your-long-lived-token
 ```
 
-In the bundled stack KorbKlar reaches the backend directly on the Compose network, so those requests never leave the server. Point it elsewhere if KitchenOwl runs somewhere else.
+In the bundled stack KorbKlar talks to the web container on the Compose network rather than the backend, which listens on a uwsgi socket instead of HTTP. Those requests never leave the server. Point it at the web interface's address if KitchenOwl runs somewhere else.
 
 `SUPERMARKT_KITCHENOWL_LIST_ID` only preselects a list. KorbKlar reads the lists of every reachable household from KitchenOwl and offers them in the results interface. A list that does not exist is rejected before anything is written. The token stays on the server and is not exposed through `/health` either.
 

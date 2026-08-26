@@ -31,7 +31,7 @@ services:
       SUPERMARKT_IMAGE_CACHE_TTL_SECONDS: ${SUPERMARKT_IMAGE_CACHE_TTL_SECONDS:-604800}
       SUPERMARKT_IMAGE_CACHE_MAX_BYTES: ${SUPERMARKT_IMAGE_CACHE_MAX_BYTES:-536870912}
       SUPERMARKT_IMAGE_MAX_FILE_BYTES: ${SUPERMARKT_IMAGE_MAX_FILE_BYTES:-4194304}
-      SUPERMARKT_KITCHENOWL_URL: ${SUPERMARKT_KITCHENOWL_URL:-http://kitchenowl-back:5000}
+      SUPERMARKT_KITCHENOWL_URL: ${SUPERMARKT_KITCHENOWL_URL:-http://kitchenowl-web}
       SUPERMARKT_KITCHENOWL_TOKEN: ${SUPERMARKT_KITCHENOWL_TOKEN:-}
       SUPERMARKT_KITCHENOWL_LIST_ID: ${SUPERMARKT_KITCHENOWL_LIST_ID:-}
       SUPERMARKT_KITCHENOWL_VERIFY_TLS: ${SUPERMARKT_KITCHENOWL_VERIFY_TLS:-1}
@@ -165,6 +165,11 @@ services:
     profiles: ["proxy"]
     security_opt:
       - no-new-privileges:true
+    environment:
+      # The image defaults this to "back:5000", the service name from its own
+      # compose example. Ours is named differently, and nginx refuses to start
+      # when the upstream host does not resolve.
+      BACK_URL: kitchenowl-back:5000
     depends_on:
       - kitchenowl-back
     networks:

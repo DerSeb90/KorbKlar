@@ -257,11 +257,11 @@ Beim ersten Aufruf legst du in KitchenOwl Konto und Haushalt an.
 Den Token erzeugst du in KitchenOwl unter Profil, Sitzungen, Long-lived Tokens. Danach in `.env`:
 
 ```bash
-SUPERMARKT_KITCHENOWL_URL=http://kitchenowl-back:5000
+SUPERMARKT_KITCHENOWL_URL=http://kitchenowl-web
 SUPERMARKT_KITCHENOWL_TOKEN=dein-long-lived-token
 ```
 
-Im mitgelieferten Stack erreicht KorbKlar das Backend direkt im Compose-Netz; die Anfragen verlassen den Server nicht. Läuft KitchenOwl woanders, trägst du dort seine erreichbare Adresse ein.
+Im mitgelieferten Stack spricht KorbKlar den Web-Container im Compose-Netz an, nicht das Backend: dieses lauscht auf einem uwsgi-Socket und nicht auf HTTP. Die Anfragen verlassen den Server dabei nicht. Läuft KitchenOwl woanders, trägst du dort die Adresse seiner Weboberfläche ein.
 
 `SUPERMARKT_KITCHENOWL_LIST_ID` wählt eine Liste nur vor. KorbKlar liest die Listen aller erreichbaren Haushalte aus KitchenOwl und bietet sie in der Ergebnisliste zur Auswahl an. Nicht vorhandene Listen werden abgelehnt, bevor etwas geschrieben wird. Der Token bleibt auf dem Server und erscheint auch in `/health` nicht.
 

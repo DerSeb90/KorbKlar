@@ -150,6 +150,16 @@ def test_kitchenowl_cannot_start_without_a_signing_key():
     assert "KITCHENOWL_JWT_SECRET} -lt 32" in compose
 
 
+def test_the_kitchenowl_frontend_points_at_our_backend_service():
+    compose = (ROOT / "compose.yml").read_text(encoding="utf-8")
+    # The image defaults its upstream to the service name from its own compose
+    # example; nginx refuses to start when that host does not resolve.
+    assert "BACK_URL: kitchenowl-back:5000" in compose
+    # The backend speaks uwsgi rather than HTTP, so KorbKlar goes through the
+    # web container, which proxies /api/.
+    assert "SUPERMARKT_KITCHENOWL_URL:-http://kitchenowl-web}" in compose
+
+
 def test_uvicorn_does_not_parse_forwarding_headers_itself():
     # With uvicorn's own proxy handling the application would never see the
     # real peer, and SUPERMARKT_TRUSTED_NETWORKS could be bypassed.
