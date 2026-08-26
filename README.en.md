@@ -254,7 +254,9 @@ In the bundled stack KorbKlar talks to the web container on the Compose network 
 
 `SUPERMARKT_KITCHENOWL_LIST_ID` only preselects a list. KorbKlar reads the lists of every reachable household from KitchenOwl and offers them in the results interface. A list that does not exist is rejected before anything is written. The token stays on the server and is not exposed through `/health` either.
 
-You collect in the **Einkauf** tab. That list is labelled „Eigene Liste" and stays in the browser profile; it handles quantities, deposits and per-retailer totals, which KitchenOwl does not. Beside it sits a separated **KitchenOwl** area with the target list and a „Kopie senden" button. Sending copies: the local list is untouched, checked items are skipped, and the result names the count, the target list and what was skipped.
+Every offer in the results list carries a **→ KitchenOwl** button. One click files it in the list picked once in the bar above, and the button confirms with `✓ in <list>`. No intermediate step is involved.
+
+Alongside that the **Einkauf** tab remains. That list is labelled „Eigene Liste" and stays in the browser profile; it handles quantities, deposits and per-retailer totals, which KitchenOwl does not. Beside it sits a separated **KitchenOwl** area with the target list and a „Kopie senden" button. Sending copies: the local list is untouched, checked items are skipped, and the result names the count, the target list and what was skipped.
 
 The quantity leads the note, because KitchenOwl has no amount field of its own.
 

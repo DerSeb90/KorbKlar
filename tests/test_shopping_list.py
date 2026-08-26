@@ -88,3 +88,11 @@ def test_the_list_only_leaves_the_browser_when_the_user_sends_it():
     calls = [line for line in shopping.splitlines() if "fetch(" in line]
     assert calls and all("koResultPath(" in line for line in calls), calls
     assert '$("kitchenowlSend").onclick=koSend' in shopping
+
+
+def test_an_offer_reaches_kitchenowl_without_the_local_basket():
+    results = (ROOT / "src/supermarkt/static/results-v2.js").read_text(encoding="utf-8")
+    # One click from the offer, not a detour through the browser-local list.
+    assert 'class="koSend"' in results
+    assert "shoppingAdd" not in results
+    assert 'koPath("items")' in results

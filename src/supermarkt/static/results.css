@@ -29,3 +29,9 @@ body{background:linear-gradient(var(--overlay),var(--overlay)),url('/static/korb
 .kitchenowlBox{display:inline-flex;gap:6px;align-items:center;padding-left:10px;margin-left:4px;border-left:1px solid var(--line)}
 .kitchenowlLabel{font-size:12px;font-weight:700;color:var(--accent);text-transform:uppercase;letter-spacing:.04em}
 #kitchenowlStatus{margin-left:8px}
+.koBar{display:flex;align-items:center;flex-wrap:wrap;gap:10px;margin:10px 0;padding:10px 12px;background:var(--panel);border:1px solid var(--line);border-radius:12px}
+.koBar select{max-width:240px}
+#koStatus.error{color:var(--bad,#c0392b)} #koStatus.done{color:var(--good)}
+.koSend{padding:5px 10px;font-size:12px;border-radius:999px;min-height:32px;border-color:var(--accent);color:var(--accent)}
+.koSend[data-state="done"]{border-color:var(--good);color:var(--good);font-weight:650}
+.koSend[data-state="error"]{border-color:var(--bad,#c0392b);color:var(--bad,#c0392b)}

@@ -273,7 +273,9 @@ Im mitgelieferten Stack spricht KorbKlar den Web-Container im Compose-Netz an, n
 
 `SUPERMARKT_KITCHENOWL_LIST_ID` wählt eine Liste nur vor. KorbKlar liest die Listen aller erreichbaren Haushalte aus KitchenOwl und bietet sie in der Ergebnisliste zur Auswahl an. Nicht vorhandene Listen werden abgelehnt, bevor etwas geschrieben wird. Der Token bleibt auf dem Server und erscheint auch in `/health` nicht.
 
-In der Oberfläche sammelst du im Tab **Einkauf**. Diese Liste heißt dort „Eigene Liste" und bleibt im Browserprofil — sie kann Mengen, Pfand und Summen je Händler, was KitchenOwl nicht kennt. Rechts daneben steht der abgesetzte Bereich **KitchenOwl** mit Ziel-Liste und dem Knopf „Kopie senden". Gesendet wird eine Kopie: die eigene Liste bleibt unverändert, abgehakte Artikel werden übersprungen, und die Rückmeldung nennt Anzahl, Ziel-Liste und übersprungene Artikel.
+In der Ergebnisliste hat jedes Angebot einen Knopf **→ KitchenOwl**. Ein Klick legt es in der Liste ab, die du oben in der Leiste einmal auswählst; der Knopf bestätigt mit `✓ in <Liste>`. Ein Zwischenschritt ist nicht nötig.
+
+Daneben gibt es weiterhin den Tab **Einkauf**. Diese Liste heißt dort „Eigene Liste" und bleibt im Browserprofil — sie kann Mengen, Pfand und Summen je Händler, was KitchenOwl nicht kennt. Rechts daneben steht der abgesetzte Bereich **KitchenOwl** mit Ziel-Liste und dem Knopf „Kopie senden". Gesendet wird eine Kopie: die eigene Liste bleibt unverändert, abgehakte Artikel werden übersprungen, und die Rückmeldung nennt Anzahl, Ziel-Liste und übersprungene Artikel.
 
 Die Menge führt die Notiz an, weil KitchenOwl kein eigenes Mengenfeld hat.
 
