@@ -192,6 +192,46 @@ void main() {
     });
   });
 
+  group('watchSearch', () {
+    test('a dropped poll does not end a search the server is still running', () async {
+      var calls = 0;
+      final client = KorbKlarClient(
+        baseUrl: 'http://korb.example',
+        httpClient: MockClient((_) {
+          calls++;
+          // Two failures in the middle, as a phone changing network produces.
+          if (calls == 2 || calls == 3) return http.Response('down', 502);
+          return http.Response(
+            jsonEncode({
+              'job_id': 'j',
+              'status': calls < 5 ? 'processing' : 'completed',
+              'result_url': '/results/abc?token=deadbeef',
+            }),
+            200,
+          );
+        }),
+      );
+      final seen = await client
+          .watchSearch('j', interval: Duration.zero)
+          .toList();
+      expect(seen.last.isDone, isTrue);
+      expect(seen.any((progress) => progress.isFailed), isFalse);
+    });
+
+    test('gives up once the server stays unreachable', () async {
+      final client = KorbKlarClient(
+        baseUrl: 'http://korb.example',
+        httpClient: MockClient((_) => http.Response('down', 502)),
+      );
+      expect(
+        client
+            .watchSearch('j', interval: Duration.zero, pollFailureLimit: 3)
+            .toList(),
+        throwsA(isA<KorbKlarException>()),
+      );
+    });
+  });
+
   group('error handling', () {
     test('reports the server detail message', () async {
       final client = KorbKlarClient(

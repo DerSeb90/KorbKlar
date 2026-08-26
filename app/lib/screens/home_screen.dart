@@ -20,7 +20,7 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
+class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   late final TextEditingController _postalCode = TextEditingController(
     text: widget.settings.postalCode,
   );
@@ -36,13 +36,35 @@ class _HomeScreenState extends State<HomeScreen> {
   String _error = '';
   bool _busy = false;
 
+  /// The search running on the server, kept so a lost connection can be
+  /// picked back up instead of starting the whole comparison again.
+  KorbKlarClient? _client;
+  String _jobId = '';
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _watch?.cancel();
+    _client?.close();
     _postalCode.dispose();
     _server.dispose();
     _apiKey.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Android suspends the app's timers and sockets while it is in the
+    // background, which ends the poll even though the server keeps working.
+    if (state == AppLifecycleState.resumed && !_busy && _jobId.isNotEmpty) {
+      _watchJob();
+    }
   }
 
   bool get _serverConfigured => widget.settings.serverUrl.isNotEmpty;
@@ -95,66 +117,25 @@ class _HomeScreenState extends State<HomeScreen> {
     FocusScope.of(context).unfocus();
     await widget.settings.setPostalCode(postalCode);
 
+    await _watch?.cancel();
+    _client?.close();
     final client = KorbKlarClient(
       baseUrl: widget.settings.serverUrl,
       apiKey: widget.settings.apiKey,
     );
+    _client = client;
     setState(() {
       _busy = true;
       _error = '';
       _progress = null;
+      _jobId = '';
     });
 
     try {
-      final jobId = await client.startSearch(postalCode);
-      _watch = client.watchSearch(jobId).listen(
-        (progress) async {
-          if (!mounted) return;
-          setState(() => _progress = progress);
-          if (progress.isFailed) {
-            setState(() {
-              _busy = false;
-              _error = progress.error.isNotEmpty
-                  ? progress.error
-                  : 'Die Suche ist fehlgeschlagen.';
-            });
-            client.close();
-            return;
-          }
-          if (!progress.isDone) return;
-
-          final handle = ResultHandle.parse(progress.resultPath);
-          if (handle == null) {
-            setState(() {
-              _busy = false;
-              _error = 'Der Server lieferte keinen gültigen Ergebnislink.';
-            });
-            client.close();
-            return;
-          }
-          setState(() => _busy = false);
-          await Navigator.of(context).push(
-            MaterialPageRoute<void>(
-              builder: (_) => ResultsScreen(
-                client: client,
-                handle: handle,
-                settings: widget.settings,
-              ),
-            ),
-          );
-          client.close();
-        },
-        onError: (Object error) {
-          if (!mounted) return;
-          setState(() {
-            _busy = false;
-            _error = '$error';
-          });
-          client.close();
-        },
-      );
+      _jobId = await client.startSearch(postalCode);
+      _watchJob();
     } on KorbKlarException catch (exception) {
-      client.close();
+      _finish();
       if (mounted) {
         setState(() {
           _busy = false;
@@ -162,6 +143,77 @@ class _HomeScreenState extends State<HomeScreen> {
         });
       }
     }
+  }
+
+  /// Follows the search identified by [_jobId], from the start or again.
+  ///
+  /// Re-attaching costs one request; restarting the search would re-query
+  /// every retailer and take minutes, so a lost connection must not do that.
+  void _watchJob() {
+    final client = _client;
+    if (client == null || _jobId.isEmpty) return;
+    _watch?.cancel();
+    setState(() {
+      _busy = true;
+      _error = '';
+    });
+    _watch = client.watchSearch(_jobId).listen(
+      (progress) async {
+        if (!mounted) return;
+        setState(() => _progress = progress);
+        if (progress.isFailed) {
+          setState(() {
+            _busy = false;
+            _error = progress.error.isNotEmpty
+                ? progress.error
+                : 'Die Suche ist fehlgeschlagen.';
+          });
+          _finish();
+          return;
+        }
+        if (!progress.isDone) return;
+
+        final handle = ResultHandle.parse(progress.resultPath);
+        if (handle == null) {
+          setState(() {
+            _busy = false;
+            _error = 'Der Server lieferte keinen gültigen Ergebnislink.';
+          });
+          _finish();
+          return;
+        }
+        setState(() {
+          _busy = false;
+          _jobId = '';
+        });
+        await Navigator.of(context).push(
+          MaterialPageRoute<void>(
+            builder: (_) => ResultsScreen(
+              client: client,
+              handle: handle,
+              settings: widget.settings,
+            ),
+          ),
+        );
+        _finish();
+      },
+      onError: (Object error) {
+        if (!mounted) return;
+        // The job id is kept: the comparison is still running on the server,
+        // so this is recoverable and the user is offered the way back in.
+        setState(() {
+          _busy = false;
+          _error = error is KorbKlarException ? error.message : '$error';
+        });
+      },
+    );
+  }
+
+  /// Drops the running search and its connection.
+  void _finish() {
+    _jobId = '';
+    _client?.close();
+    _client = null;
   }
 
   @override
@@ -192,6 +244,15 @@ class _HomeScreenState extends State<HomeScreen> {
                   if (_error.isNotEmpty) ...[
                     const SizedBox(height: 16),
                     _ErrorBox(message: _error),
+                    // The comparison itself is still running on the server.
+                    if (_jobId.isNotEmpty) ...[
+                      const SizedBox(height: 8),
+                      OutlinedButton.icon(
+                        onPressed: _watchJob,
+                        icon: const Icon(Icons.refresh, size: 18),
+                        label: const Text('Suche weiter verfolgen'),
+                      ),
+                    ],
                   ],
                 ],
               ),

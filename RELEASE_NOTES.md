@@ -1,3 +1,16 @@
+# 0.1.3
+
+## Behoben
+
+- Die Suche in der App brach ab, sobald ein einziger Fortschrittsabruf fehlschlug. Ein Vergleich läuft minutenlang, und in der Zeit wechselt ein Telefon das Netz, sperrt den Bildschirm oder schläft sein Funkmodul ein — die Suche selbst lief auf dem Server weiter, die App war aber wieder auf der Startseite. Fehlgeschlagene Abrufe werden jetzt mehrfach wiederholt, beim Zurückkehren in die App wird der laufende Auftrag von selbst weiterverfolgt, und ein Knopf „Suche weiter verfolgen“ steigt wieder ein, ohne den Vergleich neu zu starten.
+
+## Geändert
+
+- Einkaufsliste und Reverse Proxy liegen in eigenen Compose-Dateien statt in einem Profil. Wer beides nicht braucht, startet weiter mit `docker compose up -d` und muss deren Einstellungen weder lesen noch setzen.
+- Deployment, Zugriffskontrolle und Einkaufsliste sind nach `docs/` gezogen, zweisprachig.
+
+---
+
 # 0.1.2
 
 Enthält alle Korrekturen aus KorbKlar 0.0.4, insbesondere die ALDI-Süd-Gültigkeiten.

@@ -189,12 +189,31 @@ class KorbKlarClient {
   });
 
   /// Polls a running search until it finishes, reporting progress as it goes.
+  ///
+  /// A search runs for minutes, and a phone drops connections in that time:
+  /// the network changes, the screen locks, the radio sleeps. The search
+  /// itself keeps running on the server, so a failed poll is not a failed
+  /// search and must not end one. Only [pollFailureLimit] failures in a row
+  /// count as the server being gone.
   Stream<SearchProgress> watchSearch(
     String jobId, {
     Duration interval = const Duration(milliseconds: 700),
+    int pollFailureLimit = 8,
   }) async* {
+    var failures = 0;
     while (true) {
-      final progress = await searchProgress(jobId);
+      SearchProgress progress;
+      try {
+        progress = await searchProgress(jobId);
+        failures = 0;
+      } on KorbKlarException {
+        failures++;
+        if (failures >= pollFailureLimit) rethrow;
+        // Back off further with each failure, so a sleeping radio gets time
+        // to come back without the poll hammering it.
+        await Future<void>.delayed(interval * failures);
+        continue;
+      }
       yield progress;
       if (progress.isDone || progress.isFailed) return;
       await Future<void>.delayed(interval);
