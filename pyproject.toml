@@ -14,6 +14,9 @@ dependencies = [
   "fastapi>=0.141,<1",
   "pydantic>=2.13,<3",
   "curl-cffi>=0.16,<0.17",
+  # Verlässliche Wurzelzertifikate; Windows-Python erreicht den
+  # Systemspeicher oft nicht. Kommt ohnehin mit curl-cffi.
+  "certifi>=2024.7.4",
   "beautifulsoup4>=4.12,<5",
   "uvicorn>=0.52,<1",
   "python-multipart>=0.0.20,<1",

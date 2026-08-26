@@ -1,15 +1,38 @@
 from __future__ import annotations
 
 import json
+import ssl
 import threading
+from functools import lru_cache
 from typing import Any, Optional
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode, urlsplit
 from urllib.request import Request, urlopen
 
+import certifi
+
 from .common import clean_text
 from .config import USER_AGENT
 from .models import ToolError
+
+
+@lru_cache(maxsize=1)
+def trusted_ssl_context() -> ssl.SSLContext:
+    """Verify certificates against certifi plus whatever the host trusts.
+
+    Python on Windows frequently cannot reach the system certificate store,
+    which makes every HTTPS source fail with CERTIFICATE_VERIFY_FAILED. certifi
+    already ships with curl-cffi and gives every platform the same roots. The
+    system store is loaded on top so company or antivirus roots keep working.
+    Verification itself stays fully enabled.
+    """
+    context = ssl.create_default_context(cafile=certifi.where())
+    try:
+        context.load_default_certs()
+    except OSError:
+        pass
+    return context
+
 
 class HttpClient:
     def __init__(self, timeout_seconds: int) -> None:
@@ -27,7 +50,7 @@ class HttpClient:
         request_headers.update(headers or {})
         request = Request(url, headers=request_headers)
         try:
-            with urlopen(request, timeout=self.timeout_seconds) as response:  # nosec B310: scheme and host validated above
+            with urlopen(request, timeout=self.timeout_seconds, context=trusted_ssl_context()) as response:  # nosec B310: scheme and host validated above
                 data = response.read(10 * 1024 * 1024 + 1)
                 if len(data) > 10 * 1024 * 1024:
                     raise ToolError("Quellantwort überschreitet das Größenlimit")

@@ -60,11 +60,11 @@ def test_source_root_contains_only_the_package():
 
 
 def test_declared_runtime_dependencies_are_intentional_and_small():
-    assert _dependency_names() == {"fastapi", "pydantic", "curl-cffi", "beautifulsoup4", "uvicorn", "python-multipart", "tzdata"}
+    assert _dependency_names() == {"fastapi", "pydantic", "curl-cffi", "beautifulsoup4", "uvicorn", "python-multipart", "tzdata", "certifi"}
 
 
 def test_external_python_imports_match_declared_runtime_components():
-    assert _external_imports() == {"fastapi", "pydantic", "curl_cffi", "bs4"}
+    assert _external_imports() == {"fastapi", "pydantic", "curl_cffi", "bs4", "certifi"}
 
 
 def test_docker_system_dependencies_are_actually_used():
