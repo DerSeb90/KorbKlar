@@ -27,6 +27,9 @@ class _HomeScreenState extends State<HomeScreen> {
   late final TextEditingController _server = TextEditingController(
     text: widget.settings.serverUrl,
   );
+  late final TextEditingController _apiKey = TextEditingController(
+    text: widget.settings.apiKey,
+  );
 
   StreamSubscription<SearchProgress>? _watch;
   SearchProgress? _progress;
@@ -38,6 +41,7 @@ class _HomeScreenState extends State<HomeScreen> {
     _watch?.cancel();
     _postalCode.dispose();
     _server.dispose();
+    _apiKey.dispose();
     super.dispose();
   }
 
@@ -53,14 +57,25 @@ class _HomeScreenState extends State<HomeScreen> {
       _busy = true;
       _error = '';
     });
-    final client = KorbKlarClient(baseUrl: normalized);
+    final key = _apiKey.text.trim();
+    final client = KorbKlarClient(baseUrl: normalized, apiKey: key);
     try {
-      final ok = await client.ping();
-      if (!ok) {
-        setState(() => _error = 'Unter dieser Adresse antwortet kein KorbKlar.');
-        return;
+      switch (await client.check()) {
+        case ServerCheck.notKorbKlar:
+          setState(() => _error = 'Unter dieser Adresse antwortet kein KorbKlar.');
+          return;
+        case ServerCheck.needsApiKey:
+          setState(
+            () => _error = key.isEmpty
+                ? 'Dieser Server verlangt einen API-Key.'
+                : 'Der API-Key wurde abgelehnt.',
+          );
+          return;
+        case ServerCheck.ok:
+          break;
       }
       await widget.settings.setServerUrl(normalized);
+      await widget.settings.setApiKey(key);
       _server.text = normalized;
       setState(() {});
     } on KorbKlarException catch (exception) {
@@ -80,7 +95,10 @@ class _HomeScreenState extends State<HomeScreen> {
     FocusScope.of(context).unfocus();
     await widget.settings.setPostalCode(postalCode);
 
-    final client = KorbKlarClient(baseUrl: widget.settings.serverUrl);
+    final client = KorbKlarClient(
+      baseUrl: widget.settings.serverUrl,
+      apiKey: widget.settings.apiKey,
+    );
     setState(() {
       _busy = true;
       _error = '';
@@ -207,6 +225,20 @@ class _HomeScreenState extends State<HomeScreen> {
             decoration: const InputDecoration(
               hintText: 'http://192.0.2.10:8000',
               prefixIcon: Icon(Icons.dns_outlined),
+            ),
+            onSubmitted: (_) => _saveServer(),
+          ),
+          const SizedBox(height: 10),
+          TextField(
+            controller: _apiKey,
+            autocorrect: false,
+            obscureText: true,
+            enableSuggestions: false,
+            decoration: const InputDecoration(
+              labelText: 'API-Key (optional)',
+              helperText: 'Nur nötig, wenn der Server öffentlich erreichbar ist.',
+              helperMaxLines: 2,
+              prefixIcon: Icon(Icons.key_outlined),
             ),
             onSubmitted: (_) => _saveServer(),
           ),

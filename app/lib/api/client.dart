@@ -43,15 +43,42 @@ class ResultHandle {
 /// The app deliberately drives the same endpoints as the browser interface:
 /// the comparison engine, normalisation and loyalty logic stay on the server,
 /// exactly as the project intends. No price is computed here.
+/// What a connection check found.
+enum ServerCheck {
+  /// A KorbKlar server that accepts this client.
+  ok,
+
+  /// A KorbKlar server that requires an API key the client did not supply,
+  /// or supplied wrongly.
+  needsApiKey,
+
+  /// Nothing that identifies itself as KorbKlar.
+  notKorbKlar,
+}
+
 class KorbKlarClient {
-  KorbKlarClient({required String baseUrl, http.Client? httpClient})
-    : baseUrl = normalizeBaseUrl(baseUrl),
-      _http = httpClient ?? http.Client();
+  KorbKlarClient({
+    required String baseUrl,
+    String apiKey = '',
+    http.Client? httpClient,
+  }) : baseUrl = normalizeBaseUrl(baseUrl),
+       apiKey = apiKey.trim(),
+       _http = httpClient ?? http.Client();
 
   final String baseUrl;
+
+  /// Sent as a bearer token on every request. A server reachable only over
+  /// VPN may leave this empty; a public one requires it.
+  final String apiKey;
+
   final http.Client _http;
 
   static const _timeout = Duration(seconds: 30);
+
+  Map<String, String> _headers([Map<String, String>? extra]) => {
+    if (apiKey.isNotEmpty) 'Authorization': 'Bearer $apiKey',
+    ...?extra,
+  };
 
   /// Accepts what a user actually types: bare host, host:port, or full URL.
   static String normalizeBaseUrl(String raw) {
@@ -109,17 +136,36 @@ class KorbKlarClient {
     }
   }
 
-  /// Confirms the base URL points at a KorbKlar instance.
-  Future<bool> ping() => _guard(() async {
-    final response = await _http.get(_uri('/health')).timeout(_timeout);
+  /// Confirms the base URL points at a KorbKlar instance this client may use.
+  ///
+  /// ``/health`` stays reachable without authorisation but withholds its
+  /// detail fields, which makes it a cheap and side-effect-free way to tell
+  /// "wrong address" from "needs an API key".
+  Future<ServerCheck> check() => _guard(() async {
+    final response = await _http
+        .get(_uri('/health'), headers: _headers())
+        .timeout(_timeout);
     final payload = _json(response);
-    return payload['service'] == 'korbklar';
+    if (payload['service'] != 'korbklar') return ServerCheck.notKorbKlar;
+    return payload.containsKey('api_auth_configured')
+        ? ServerCheck.ok
+        : ServerCheck.needsApiKey;
   });
 
   /// Starts a background search and returns its job id.
-  Future<String> startSearch(String postalCode) => _guard(() async {
+  /// Starts a background search. ``refresh`` skips the server's snapshot
+  /// cache and re-queries every source.
+  Future<String> startSearch(String postalCode, {bool refresh = false}) =>
+      _guard(() async {
     final response = await _http
-        .post(_uri('/search/jobs'), body: {'postal_code': postalCode})
+        .post(
+          _uri('/search/jobs'),
+          headers: _headers(),
+          body: {
+            'postal_code': postalCode,
+            if (refresh) 'refresh': '1',
+          },
+        )
         .timeout(_timeout);
     final jobId = _json(response)['job_id'];
     if (jobId is! String || jobId.isEmpty) {
@@ -130,7 +176,7 @@ class KorbKlarClient {
 
   Future<SearchProgress> searchProgress(String jobId) => _guard(() async {
     final response = await _http
-        .get(_uri('/search/jobs/$jobId'))
+        .get(_uri('/search/jobs/$jobId'), headers: _headers())
         .timeout(_timeout);
     return SearchProgress.fromJson(_json(response));
   });
@@ -176,6 +222,7 @@ class KorbKlarClient {
             'loyalty': loyaltyPrograms.join(','),
             'sort': sort,
           }),
+          headers: _headers(),
         )
         .timeout(_timeout);
     return ResultPage.fromJson(_json(response));
@@ -206,6 +253,7 @@ class KorbKlarClient {
                 '/results/${Uri.encodeComponent(handle.searchId)}/shopping-list/targets',
                 {'token': handle.token},
               ),
+              headers: _headers(),
             )
             .timeout(_timeout);
         if (response.statusCode == 404) return ShoppingListInfo.disabled;
@@ -224,7 +272,7 @@ class KorbKlarClient {
             '/results/${Uri.encodeComponent(handle.searchId)}/shopping-list/items',
             {'token': handle.token},
           ),
-          headers: {'Content-Type': 'application/json; charset=utf-8'},
+          headers: _headers({'Content-Type': 'application/json; charset=utf-8'}),
           body: jsonEncode({
             'entity_id': entityId,
             'items': [

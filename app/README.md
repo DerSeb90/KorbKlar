@@ -19,6 +19,8 @@ price; it renders the values the comparison engine returns.
 - warnings for failed or incomplete sources
 - endless scrolling
 - putting offers on a Bring shopping list, one at a time or as a selection
+- a refresh action that bypasses the server's snapshot cache and re-queries
+  every source
 
 Server address, postal code, loyalty selection and target list are remembered
 on the device.
@@ -47,7 +49,14 @@ flutter run
 ```
 
 On first start the app asks for the server address, for example
-`http://192.0.2.10:8000`, and verifies it against `/health` before saving it.
+`http://192.0.2.10:8000`, plus an optional API key, and verifies both against
+`/health` before saving them.
+
+The key is only needed when the server is publicly reachable and has
+`SUPERMARKT_API_KEY` set. `/health` answers without authorisation but withholds
+its detail fields, which lets the app tell a wrong address from a wrong or
+missing key without triggering a search. Once saved, the key is sent as a
+bearer token on every request, so the app works from outside the VPN.
 
 A release build for Android:
 
@@ -77,6 +86,8 @@ Against a real server:
 ```bash
 flutter test --tags live --dart-define=KORBKLAR_URL=http://127.0.0.1:8000 --dart-define=KORBKLAR_PLZ=26188
 ```
+
+Add `--dart-define=KORBKLAR_KEY=...` for an instance that requires an API key.
 
 Golden images of the result list in both themes, useful for reviewing layout
 and palette without a device:

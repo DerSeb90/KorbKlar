@@ -30,6 +30,7 @@ def build_results_html(
     search_id: str,
     signature: str,
     selected_programs: tuple[str, ...] = (),
+    postal_code: str = "",
 ) -> str:
     selected = ",".join(normalize_program_ids(selected_programs))
     return (
@@ -37,4 +38,5 @@ def build_results_html(
         .replace("__SEARCH_ID__", html.escape(search_id, quote=True))
         .replace("__RESULT_TOKEN__", html.escape(signature, quote=True))
         .replace("__LOYALTY_PROGRAMS__", html.escape(selected, quote=True))
+        .replace("__POSTAL_CODE__", html.escape(postal_code, quote=True))
     )

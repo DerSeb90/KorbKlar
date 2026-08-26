@@ -13,6 +13,8 @@ import 'package:korbklar_app/api/client.dart';
 /// flutter test --tags live --dart-define=KORBKLAR_URL=http://127.0.0.1:8000
 /// ```
 ///
+/// Add `--dart-define=KORBKLAR_KEY=...` for an instance that requires one.
+///
 /// Set `KORBKLAR_PLZ` to a postal code your instance can actually resolve.
 void main() {
   const baseUrl = String.fromEnvironment('KORBKLAR_URL');
@@ -20,6 +22,7 @@ void main() {
     'KORBKLAR_PLZ',
     defaultValue: '26188',
   );
+  const apiKey = String.fromEnvironment('KORBKLAR_KEY');
 
   if (baseUrl.isEmpty) {
     test('skipped: pass --dart-define=KORBKLAR_URL to run', () {}, skip: true);
@@ -32,13 +35,13 @@ void main() {
     // The test runner has no browser sandbox, so a self-hosted instance with
     // a self-signed certificate would otherwise be unreachable here.
     HttpOverrides.global = null;
-    client = KorbKlarClient(baseUrl: baseUrl);
+    client = KorbKlarClient(baseUrl: baseUrl, apiKey: apiKey);
   });
 
   tearDownAll(() => client.close());
 
-  test('server identifies itself as KorbKlar', () async {
-    expect(await client.ping(), isTrue);
+  test('server identifies itself and accepts this client', () async {
+    expect(await client.check(), ServerCheck.ok);
   });
 
   test('a search runs to completion and yields a signed result link', () async {

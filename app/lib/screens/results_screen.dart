@@ -53,6 +53,7 @@ class _ResultsScreenState extends State<ResultsScreen> {
 
   int _nextPage = 1;
   bool _loading = false;
+  bool _refreshing = false;
   bool _done = false;
   String _error = '';
   Timer? _debounce;
@@ -133,6 +134,44 @@ class _ResultsScreenState extends State<ResultsScreen> {
       });
     } finally {
       if (mounted && seq == _requestSeq) setState(() => _loading = false);
+    }
+  }
+
+  /// Re-queries every source for this postal code, bypassing the server's
+  /// snapshot cache, then swaps in the new result.
+  Future<void> _hardRefresh() async {
+    final postalCode = _page?.postalCode ?? '';
+    if (postalCode.isEmpty || _refreshing) return;
+    setState(() => _refreshing = true);
+    try {
+      final jobId = await widget.client.startSearch(postalCode, refresh: true);
+      SearchProgress? last;
+      await for (final progress in widget.client.watchSearch(jobId)) {
+        last = progress;
+      }
+      if (!mounted || last == null) return;
+      if (last.isFailed) {
+        _toast(last.error.isEmpty ? 'Neuladen fehlgeschlagen.' : last.error);
+        return;
+      }
+      final handle = ResultHandle.parse(last.resultPath);
+      if (handle == null) {
+        _toast('Der Server lieferte keinen gültigen Ergebnislink.');
+        return;
+      }
+      await Navigator.of(context).pushReplacement(
+        MaterialPageRoute<void>(
+          builder: (_) => ResultsScreen(
+            client: widget.client,
+            handle: handle,
+            settings: widget.settings,
+          ),
+        ),
+      );
+    } on KorbKlarException catch (exception) {
+      _toast(exception.message);
+    } finally {
+      if (mounted) setState(() => _refreshing = false);
     }
   }
 
@@ -382,6 +421,17 @@ class _ResultsScreenState extends State<ResultsScreen> {
           style: const TextStyle(fontWeight: FontWeight.w700),
         ),
         actions: [
+          IconButton(
+            tooltip: 'Quellen neu abrufen',
+            onPressed: _refreshing || page == null ? null : _hardRefresh,
+            icon: _refreshing
+                ? const SizedBox(
+                    height: 18,
+                    width: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2.2),
+                  )
+                : const Icon(Icons.refresh),
+          ),
           if (warnings.isNotEmpty)
             IconButton(
               tooltip: 'Hinweise',

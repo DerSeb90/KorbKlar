@@ -26,4 +26,9 @@ VOLUME ["/data"]
 EXPOSE 8000
 
 ENTRYPOINT ["dumb-init", "--"]
-CMD ["uvicorn", "supermarkt.asgi:app", "--host", "0.0.0.0", "--port", "8000"]
+# --no-proxy-headers is required, not cosmetic. With uvicorn's default
+# proxy handling any caller from an allowed peer can rewrite its own
+# source address through X-Forwarded-For, which would defeat
+# SUPERMARKT_TRUSTED_NETWORKS. KorbKlar evaluates the header itself and
+# only for peers listed in SUPERMARKT_TRUSTED_PROXIES.
+CMD ["uvicorn", "supermarkt.asgi:app", "--host", "0.0.0.0", "--port", "8000", "--no-proxy-headers"]

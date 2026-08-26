@@ -2,24 +2,35 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Request
 
+from .authz import access_summary, authorize
 from .config import CACHE_TTL_MINUTES
-from .security import api_key
 from . import runtime
 
 router = APIRouter()
 
 
 @router.get("/health", include_in_schema=False)
-def health() -> dict[str, Any]:
+def health(request: Request) -> dict[str, Any]:
+    # This route stays reachable for container health checks even on a public
+    # instance, so an unauthorised caller only learns that the service is up.
+    # Cache paths, source wiring and shopping-list details are withheld.
+    client = request.client
+    if not authorize(
+        client.host if client else "",
+        request.headers.get("x-forwarded-for", ""),
+        request.headers.get("authorization", ""),
+    ):
+        return {"status": "ok", "service": "korbklar"}
+
     engine = runtime.get_engine()
     return {
         "status": "ok",
         "service": "korbklar",
         "backend": "persistent-sqlite-cache",
         "cache_ttl_minutes": CACHE_TTL_MINUTES,
-        "api_auth_configured": bool(api_key()),
+        **access_summary(),
         **runtime.get_image_service().health(),
         "sources": {
             "REWE": "official primary with Marktguru fallback",

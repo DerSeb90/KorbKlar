@@ -221,6 +221,55 @@ In the results interface each offer has a `+ Liste` button, and a checkbox colle
 
 If `SUPERMARKT_HA_URL` or `SUPERMARKT_HA_TOKEN` is empty, the integration stays switched off and the interface hides the shopping-list controls.
 
+## Running it publicly: API key and VPN
+
+Without `SUPERMARKT_API_KEY` nothing is restricted, and a private instance behaves as before.
+
+With the key set, **every** route except `/health` requires either that bearer token or a source address inside `SUPERMARKT_TRUSTED_NETWORKS`:
+
+```bash
+SUPERMARKT_API_KEY=a-long-random-key
+SUPERMARKT_TRUSTED_NETWORKS=10.8.0.0/24
+SUPERMARKT_TRUSTED_PROXIES=127.0.0.1/32
+```
+
+One instance then covers both halves: the browser interface stays usable without a login for anyone on the VPN, scripts and the mobile client authenticate with the key from anywhere, and everyone else receives 401. The check runs as middleware in front of all routes, so a newly added route cannot be left open by accident.
+
+`/health` stays reachable for container health checks but reveals only `status` and `service` to an unauthorised caller. Cache paths, source wiring and shopping-list details appear only for an authorised one.
+
+### Behind a reverse proxy
+
+`X-Forwarded-For` is believed only when the immediate peer is listed in `SUPERMARKT_TRUSTED_PROXIES`. The chain is read from the right with known proxies skipped, so a client cannot grant itself an allowed address by prepending an entry. With no proxies configured the header is ignored entirely.
+
+**uvicorn must run with `--no-proxy-headers`.** By default uvicorn parses `X-Forwarded-For` itself and replaces the client address before KorbKlar sees it, which lets anyone able to set that header bypass `SUPERMARKT_TRUSTED_NETWORKS`. The bundled Docker image already starts correctly; keep the flag when starting uvicorn yourself.
+
+The reverse proxy should additionally drop or overwrite any `X-Forwarded-For` supplied by the client.
+
+## Controlling the cache
+
+KorbKlar keeps several caches with different lifetimes:
+
+| What | Key | Fresh for | Afterwards |
+| --- | --- | --- | --- |
+| Offer snapshot | postal code and ALDI region | `SUPERMARKT_CACHE_TTL_MINUTES`, 30 minutes by default | reloaded |
+| Result link | `search_id` | — | stays openable for `SUPERMARKT_RESULT_RETENTION_HOURS`, even when stale |
+| REWE and Kaufland store mapping | postal code | 24 hours | re-resolved |
+| Image cache | image URL | 7 days, 512 MiB | discarded |
+
+Within the freshness window every search for the same postal code returns the same snapshot. A reload can be forced three ways:
+
+- the **Neu laden** button on the results page and in the app
+- `"refresh": true` in the body of `POST /api/v1/compare`
+- the command line tool, which also clears the other caches
+
+```bash
+docker exec korbklar python -m supermarkt.cache_cli status
+docker exec korbklar python -m supermarkt.cache_cli purge --postal-code 26188
+docker exec korbklar python -m supermarkt.cache_cli purge --all
+```
+
+`purge` drops snapshots, optionally the image cache (`--images`) and the store mappings (`--stores`); `--all` covers both. The signing key is never touched, so result links from other searches stay valid.
+
 ## Cache and data
 
 No external database server is required. SQLite stores offer snapshots so filtering, sorting, and incremental result loading do not repeatedly query retailer sources.
@@ -266,6 +315,9 @@ The default setup needs no `.env`. [`.env.example`](.env.example) documents ever
 - `SUPERMARKT_HA_VERIFY_TLS`
 - `SUPERMARKT_HA_TIMEOUT_SECONDS`
 - `SUPERMARKT_HA_MAX_ITEMS`
+- `SUPERMARKT_TRUSTED_NETWORKS`
+- `SUPERMARKT_TRUSTED_PROXIES`
+- `SUPERMARKT_CHROMIUM_BINARY`
 
 The historical internal prefixes remain part of the current technical interface. `.env.example` is authoritative for meanings, defaults, and Docker paths.
 
@@ -324,6 +376,8 @@ src/supermarkt/
 ├── presentation.py      response fields
 ├── images.py            downloads, image cache, and SSRF protection
 ├── security.py          signatures and optional API key
+├── authz.py             API key, trusted networks, proxy handling
+├── cache_cli.py         cache status and purge command
 ├── homeassistant.py     Home Assistant todo lists, for example Bring
 ├── shopping_routes.py   shopping list routes
 ├── access.py            access and request helpers
@@ -340,6 +394,8 @@ The internal Python package name `supermarkt` remains for technical reasons. Ada
 ## Limitations
 
 Retailer websites and undocumented interfaces may change at any time. An individual adapter may fail temporarily without making KorbKlar unusable as a whole. Where suitable regional fallback data exists, it can replace only the affected retailer; other reachable sources remain usable.
+
+The Kaufland adapter needs a Chromium-compatible browser. The Docker image ships one; a local checkout probes the usual names and install locations for Chromium, Chrome and Edge, and `SUPERMARKT_CHROMIUM_BINARY` sets the path explicitly. Without a browser only that one adapter fails and Marktguru stands in for it.
 
 KorbKlar does not invent missing prices or estimate unknown loyalty benefits. Completeness and freshness depend on reachable regional source data.
 

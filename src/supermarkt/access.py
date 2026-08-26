@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import secrets
 from typing import Any
 from urllib.parse import quote, urlencode
 
@@ -11,17 +10,29 @@ from .config import MARKTGURU_HOME
 from .images import is_rejected_image_url, normalize_image_url
 from .loyalty import normalize_program_ids
 from .models import AGGREGATOR_RETAILERS
+from .authz import authorize
 from .security import api_key, signature, valid_signature
 
 
 def require_api_auth(request: Request) -> None:
-    expected = api_key()
-    if not expected:
+    """Re-check authorisation at the route, matching the global middleware.
+
+    A caller inside a trusted network is accepted without a token, so the
+    browser interface keeps working over the VPN without a login.
+    """
+    if not api_key():
         return
-    authorization = request.headers.get("authorization", "")
-    scheme, _, credential = authorization.partition(" ")
-    if scheme.casefold() != "bearer" or not credential or not secrets.compare_digest(credential, expected):
-        raise HTTPException(status_code=401, detail="Ungültiger Bearer-Token")
+    client = request.client
+    if authorize(
+        client.host if client else "",
+        request.headers.get("x-forwarded-for", ""),
+        request.headers.get("authorization", ""),
+    ):
+        return
+    raise HTTPException(
+        status_code=401,
+        detail="Zugriff nur mit gültigem Bearer-Token oder aus einem freigegebenen Netz.",
+    )
 
 
 def result_token(search_id: str) -> str:

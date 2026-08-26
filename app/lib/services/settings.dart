@@ -14,9 +14,15 @@ class Settings {
   static const _postalCode = 'postal_code';
   static const _loyalty = 'loyalty_programs';
   static const _listEntity = 'shopping_list_entity';
+  static const _apiKey = 'api_key';
 
   String get serverUrl => _prefs.getString(_serverUrl) ?? '';
   Future<void> setServerUrl(String value) => _prefs.setString(_serverUrl, value);
+
+  /// Bearer token for a publicly reachable instance. Empty when the server
+  /// is only used over VPN.
+  String get apiKey => _prefs.getString(_apiKey) ?? '';
+  Future<void> setApiKey(String value) => _prefs.setString(_apiKey, value);
 
   String get postalCode => _prefs.getString(_postalCode) ?? '';
   Future<void> setPostalCode(String value) =>

@@ -13,7 +13,8 @@ permissions:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: lesecuritae/korbklar
+  # Derived from the owner so forks publish to their own namespace.
+  IMAGE_NAME: ${{ github.repository_owner }}/korbklar
 
 jobs:
   publish:

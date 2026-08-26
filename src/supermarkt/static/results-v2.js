@@ -26,3 +26,11 @@ $("rows").addEventListener("click",async event=>{const button=event.target.close
 $("listAddSelected").addEventListener("click",async()=>{if(!pickedOffers.size)return;const button=$("listAddSelected");button.disabled=true;listStatus("Wird übertragen …");try{const result=await sendToList([...pickedOffers.values()]);const failed=(result.failed||[]).length;listStatus(failed?`${result.added_count} übernommen, ${failed} fehlgeschlagen.`:`${result.added_count} Angebote übernommen.`,failed?"error":"done");if(!failed){pickedOffers.clear();syncListSelection()}}catch(error){listStatus(error.message,"error")}finally{updateListBar()}});
 $("listClear").addEventListener("click",()=>{pickedOffers.clear();syncListSelection();listStatus("")});
 initShoppingList();
+/* Neu laden: Snapshot-Cache umgehen und alle Quellen erneut abrufen. */
+$("refresh").addEventListener("click",async()=>{const button=$("refresh"),postalCode=pageData.postalCode;if(!postalCode){$("sentinel").innerHTML='<span class="error">Postleitzahl unbekannt.</span>';return}
+button.disabled=true;const original=button.textContent;button.textContent="Lädt …";$("sentinel").textContent="Quellen werden neu abgerufen …";
+try{const body=new URLSearchParams({postal_code:postalCode,refresh:"1"});const start=await fetch("/search/jobs",{method:"POST",headers:{"Content-Type":"application/x-www-form-urlencoded"},body});if(!start.ok)throw new Error((await start.json().catch(()=>({}))).detail||`HTTP ${start.status}`);const{job_id:jobId}=await start.json();
+for(;;){await new Promise(resolve=>setTimeout(resolve,800));const poll=await fetch(`/search/jobs/${encodeURIComponent(jobId)}`,{cache:"no-store"});if(!poll.ok)throw new Error(`HTTP ${poll.status}`);const job=await poll.json();button.textContent=`${job.progress||0} %`;
+if(job.status==="failed")throw new Error(job.error||"Die Suche ist fehlgeschlagen.");
+if(job.status==="completed"){if(!job.result_url)throw new Error("Kein Ergebnislink erhalten.");location.href=job.result_url;return}}}
+catch(error){button.disabled=false;button.textContent=original;$("sentinel").innerHTML=`<span class="error">${esc(error.message)}</span>`}});

@@ -240,6 +240,55 @@ In der Ergebnisliste hat jedes Angebot einen `+ Liste`-Knopf. Eine Checkbox samm
 
 Bleiben `SUPERMARKT_HA_URL` oder `SUPERMARKT_HA_TOKEN` leer, ist die Anbindung abgeschaltet und die Oberfläche blendet die Einkaufslisten-Bedienung aus.
 
+## Öffentlich betreiben: API-Key und VPN
+
+Ohne `SUPERMARKT_API_KEY` ist nichts eingeschränkt; eine private Instanz verhält sich wie bisher.
+
+Ist der Schlüssel gesetzt, braucht **jede** Route außer `/health` entweder diesen Bearer-Token oder eine Quell-IP aus `SUPERMARKT_TRUSTED_NETWORKS`:
+
+```bash
+SUPERMARKT_API_KEY=ein-langer-zufaelliger-schluessel
+SUPERMARKT_TRUSTED_NETWORKS=10.8.0.0/24
+SUPERMARKT_TRUSTED_PROXIES=127.0.0.1/32
+```
+
+Damit deckt eine Instanz beide Fälle ab: Im VPN ist die Oberfläche ohne Login erreichbar, App und Skripte weisen sich von überall mit dem Token aus, alle anderen bekommen 401. Die Prüfung sitzt als Middleware vor sämtlichen Routen, damit eine neu hinzugefügte Route nicht versehentlich offen bleibt.
+
+`/health` bleibt für Container-Healthchecks erreichbar, verrät ohne Autorisierung aber nur `status` und `service`. Cache-Pfade, Quellenzuordnung und Einkaufslisten-Details erscheinen erst für autorisierte Aufrufer.
+
+### Hinter einem Reverse Proxy
+
+`X-Forwarded-For` wird ausschließlich geglaubt, wenn der direkte Peer in `SUPERMARKT_TRUSTED_PROXIES` steht. Die Kette wird von rechts gelesen und bekannte Proxys werden übersprungen, damit ein Client sich nicht durch einen vorangestellten Eintrag eine erlaubte Adresse geben kann. Ohne konfigurierte Proxys wird der Header vollständig ignoriert.
+
+**uvicorn muss dabei mit `--no-proxy-headers` laufen.** Standardmäßig wertet uvicorn `X-Forwarded-For` selbst aus und ersetzt die Client-Adresse, bevor KorbKlar sie sieht — wer den Header setzen kann, umgeht damit `SUPERMARKT_TRUSTED_NETWORKS`. Das mitgelieferte Docker-Image startet bereits korrekt; bei eigenem Start das Flag nicht vergessen.
+
+Der Reverse Proxy sollte ein vom Client mitgeschicktes `X-Forwarded-For` zusätzlich verwerfen oder überschreiben.
+
+## Cache steuern
+
+KorbKlar hält mehrere Caches mit unterschiedlichen Lebensdauern:
+
+| Was | Schlüssel | Frisch | Danach |
+| --- | --- | --- | --- |
+| Angebots-Snapshot | PLZ und ALDI-Region | `SUPERMARKT_CACHE_TTL_MINUTES`, Standard 30 Minuten | wird neu geladen |
+| Ergebnislink | `search_id` | — | bleibt `SUPERMARKT_RESULT_RETENTION_HOURS` lang öffenbar, auch veraltet |
+| REWE- und Kaufland-Filialzuordnung | PLZ | 24 Stunden | wird neu ermittelt |
+| Bildcache | Bild-URL | 7 Tage, 512 MiB | wird verworfen |
+
+Innerhalb der Frische liefert jede Suche derselben Postleitzahl denselben Snapshot. Ein Neuabruf lässt sich auf drei Wegen erzwingen:
+
+- der Knopf **Neu laden** auf der Ergebnisseite und in der App
+- `"refresh": true` im Rumpf von `POST /api/v1/compare`
+- das Kommandozeilenwerkzeug, das auch die übrigen Caches leert
+
+```bash
+docker exec korbklar python -m supermarkt.cache_cli status
+docker exec korbklar python -m supermarkt.cache_cli purge --postal-code 26188
+docker exec korbklar python -m supermarkt.cache_cli purge --all
+```
+
+`purge` löscht Snapshots, optional zusätzlich Bildcache (`--images`) und Filialzuordnungen (`--stores`); `--all` umfasst beides. Der Signierschlüssel bleibt unangetastet, damit bereits verschickte Ergebnislinks anderer Suchen gültig bleiben.
+
 ## Daten, Cache und Bildproxy
 
 SQLite ist Bestandteil der Python-Standardbibliothek. Ein externer Datenbankserver wird nicht benötigt.
@@ -306,6 +355,8 @@ src/supermarkt/
 ├── presentation.py      Ausgabefelder
 ├── images.py            Bilddownload, Cache und SSRF-Schutz
 ├── security.py          Signaturen und optionaler API-Key
+├── authz.py             API-Key, vertrauenswürdige Netze, Proxy-Auswertung
+├── cache_cli.py         Cache-Status und -Bereinigung
 ├── homeassistant.py     todo-Listen in Home Assistant, zum Beispiel Bring
 ├── shopping_routes.py   Routen der Einkaufsliste
 ├── access.py            Zugriffs- und Request-Helfer
@@ -322,6 +373,8 @@ Die Händleradapter kennen die jeweiligen Datenquellen. Die Oberfläche berechne
 ## Grenzen
 
 Händlerseiten und nicht dokumentierte Webschnittstellen können sich ändern. Ein einzelner Adapter kann deshalb zeitweise ausfallen, obwohl KorbKlar selbst läuft. Wo ein geeigneter regionaler Ersatzdatenweg vorhanden ist, kann dieser händlerspezifisch einspringen. Ansonsten bleibt der Vergleich mit den übrigen erreichbaren Quellen nutzbar.
+
+Der Kaufland-Adapter benötigt einen Chromium-kompatiblen Browser. Das Docker-Image bringt ihn mit; bei lokaler Installation werden die üblichen Namen und Installationspfade von Chromium, Chrome und Edge gesucht, alternativ setzt `SUPERMARKT_CHROMIUM_BINARY` den Pfad. Ohne Browser fällt nur dieser eine Adapter aus und Marktguru springt für ihn ein.
 
 KorbKlar erfindet keine fehlenden Preise und schätzt keine unbekannten Bonusvorteile. Die Ergebnisse sind nur so vollständig und aktuell wie die erreichbaren Quelldaten.
 
