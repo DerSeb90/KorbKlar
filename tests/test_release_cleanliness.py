@@ -32,7 +32,7 @@ def _dependency_names() -> set[str]:
     metadata = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
     result = set()
     for requirement in metadata["project"]["dependencies"]:
-        name = re.split(r"[<>=!~\[\s]", requirement, maxsplit=1)[0]
+        name = re.split(r"[<>=!~;\[\s]", requirement, maxsplit=1)[0]
         result.add(name.replace("_", "-").casefold())
     return result
 
@@ -60,7 +60,7 @@ def test_source_root_contains_only_the_package():
 
 
 def test_declared_runtime_dependencies_are_intentional_and_small():
-    assert _dependency_names() == {"fastapi", "pydantic", "curl-cffi", "beautifulsoup4", "uvicorn", "python-multipart"}
+    assert _dependency_names() == {"fastapi", "pydantic", "curl-cffi", "beautifulsoup4", "uvicorn", "python-multipart", "tzdata"}
 
 
 def test_external_python_imports_match_declared_runtime_components():

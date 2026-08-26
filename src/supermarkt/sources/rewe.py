@@ -15,6 +15,7 @@ from urllib.parse import urljoin, urlsplit
 from ..common import build_match_key, clean_text, deduplicate_offers, normalize_pack, offer_reference_date, parse_base_price_text, parse_deposit_text, parse_number, today_berlin
 from ..http import PostalCodeLocator
 from ..models import LoyaltyBenefit, Offer, ToolError
+from .browser import chromium_command
 
 class OfficialReweSource:
     BASE = "https://www.rewe.de"
@@ -281,7 +282,7 @@ class OfficialReweSource:
             try:
                 completed = subprocess.run(
                     [
-                        "chromium", headless, "--no-sandbox", "--disable-gpu",
+                        chromium_command(), headless, "--no-sandbox", "--disable-gpu",
                         "--disable-dev-shm-usage", "--lang=de-DE",
                         "--virtual-time-budget=12000", "--dump-dom", market_url,
                     ],

@@ -248,6 +248,22 @@ pip install -e .
 uvicorn supermarkt.asgi:app --host 0.0.0.0 --port 8000
 ```
 
+### Windows mit Startsymbol
+
+Für den Alltagsbetrieb auf einem Windows-PC liegt ein fertiger Weg ohne Docker bei. Voraussetzung ist Python 3.12 oder neuer, zu bekommen über `winget install Python.Python.3.13` oder von [python.org](https://www.python.org/downloads/windows/) - im Setup den Haken bei "Add python.exe to PATH" setzen.
+
+1. Dieses Verzeichnis an einen dauerhaften Ort legen, zum Beispiel `C:\KorbKlar`.
+2. `windows\install.cmd` per Doppelklick starten. Das legt die virtuelle Umgebung an, installiert alles Nötige und erzeugt eine Verknüpfung **KorbKlar** auf dem Desktop.
+3. Ab jetzt genügt ein Doppelklick auf das Desktop-Symbol. KorbKlar startet und der Browser öffnet sich nach wenigen Sekunden auf <http://127.0.0.1:8000/>.
+
+Das schwarze Fenster gehört dazu und zeigt an, dass KorbKlar läuft. Es zu schließen beendet das Programm. Ein anderer Port lässt sich über die Umgebungsvariable `SUPERMARKT_PORT` vorgeben.
+
+Die Angebote von ALDI Süd, Kaufland und REWE werden über einen Browser im Hintergrund geladen. KorbKlar sucht dafür selbstständig nach Chromium, Google Chrome oder dem auf Windows vorinstallierten Microsoft Edge. Nur wenn keiner davon gefunden wird, muss `SUPERMARKT_CHROMIUM` auf die passende `.exe` zeigen. Alle übrigen Händler brauchen keinen Browser.
+
+KorbKlar hört bewusst nur auf `127.0.0.1` und ist damit ausschließlich auf diesem PC erreichbar. Wer die Oberfläche auch am Handy im eigenen WLAN nutzen möchte, startet stattdessen mit `--host 0.0.0.0` und öffnet den Port in der Windows-Firewall. Da die Oberfläche keine eigene Anmeldung hat, ist das nur im vertrauenswürdigen Heimnetz sinnvoll.
+
+Nach einem Update des Verzeichnisses `windows\install.cmd` erneut starten.
+
 ## Entwicklung und Tests
 
 ```bash

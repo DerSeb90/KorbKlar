@@ -35,6 +35,7 @@ from ..config import TIMEOUT_SECONDS
 from ..http import HttpClient
 from ..images import is_rejected_image_url, normalize_image_url
 from ..models import LoadResult, Offer, ToolError
+from .browser import chromium_command
 
 LOGGER = logging.getLogger(__name__)
 
@@ -364,7 +365,7 @@ class OfficialAldiSource:
             try:
                 completed = subprocess.run(
                     [
-                        "chromium", headless, "--no-sandbox", "--disable-gpu",
+                        chromium_command(), headless, "--no-sandbox", "--disable-gpu",
                         "--disable-dev-shm-usage", "--lang=de-DE",
                         "--virtual-time-budget=10000", "--dump-dom", url,
                     ],

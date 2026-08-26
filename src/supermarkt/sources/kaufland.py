@@ -20,6 +20,7 @@ from ..common import build_match_key, clean_text, normalize_pack, parse_base_pri
 from ..http import HttpClient, PostalCodeLocator
 from ..images import is_rejected_image_url, normalize_image_url
 from ..models import LoyaltyBenefit, Offer, ToolError
+from .browser import chromium_command
 
 class KauflandOfficialAnchorParser(HTMLParser):
     IMAGE_ATTRS = (
@@ -142,7 +143,7 @@ class OfficialKauflandSource:
     ) -> str:
         errors: list[str] = []
         base = [
-            "chromium",
+            chromium_command(),
             "--no-sandbox",
             "--disable-gpu",
             "--disable-dev-shm-usage",

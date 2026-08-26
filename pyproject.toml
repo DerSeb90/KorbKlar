@@ -17,6 +17,8 @@ dependencies = [
   "beautifulsoup4>=4.12,<5",
   "uvicorn>=0.52,<1",
   "python-multipart>=0.0.20,<1",
+  # Windows ships no IANA time zone database; zoneinfo needs this for Europe/Berlin.
+  "tzdata>=2025.2; sys_platform == 'win32'",
 ]
 
 [project.optional-dependencies]
