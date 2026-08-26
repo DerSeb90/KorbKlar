@@ -26,4 +26,4 @@ Der Bildproxy lehnt Loopback, private, Link-local, reservierte, Multicast- und u
 
 ## Verbleibende Releasegates
 
-Das Releaseverfahren verlangt nach dem letzten Code-Diff Tests, Dependency-Audit, Bandit, Gitleaks, alle drei lokalen Trivy-Scans und die Chrome-Liveprüfung. Nach der Veröffentlichung folgen der Scan des unveränderlichen GHCR-Digests sowie der Produktions- und Tailscale-Smoke-Test; ein rotes verpflichtendes Gate stoppt den weiteren Rollout.
+Das Releaseverfahren verlangt nach dem letzten Code-Diff Tests, Dependency-Audit, Bandit, Gitleaks, alle drei lokalen Trivy-Scans und die Chrome-Liveprüfung. Nach der Veröffentlichung folgen der Scan des unveränderlichen GHCR-Digests sowie der Produktions- und private Netzwerk-Smoke-Test; ein rotes verpflichtendes Gate stoppt den weiteren Rollout.
