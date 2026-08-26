@@ -29,7 +29,7 @@ class AldiRegionResolver:
     # official store pages. Ranges below are expanded into exact postcodes;
     # this is not a 52xxx/prefix heuristic. Unknown codes still use bounded
     # geocoding, while genuinely split cities remain explicit border cases.
-    SCHEMA_VERSION = 3
+    SCHEMA_VERSION = 4
     OFFICIAL_EVIDENCE: dict[str, tuple[str, ...]] = {
         "01067": ("nord",),
         "28195": ("nord",),
@@ -47,6 +47,10 @@ class AldiRegionResolver:
         "52531": ("sued",), "52538": ("sued",),
         **{str(code): ("sued",) for code in range(45468, 45482)},
         "47179": ("sued",), "46282": ("nord",), "80331": ("sued",),
+        # Leverkusen: ALDI Süd führt 14 Filialen im Stadtgebiet, ALDI Nord keine.
+        # Nachbarschaft ohne verwertbare OSM-Merkmale, daher PLZ-genau belegt.
+        "51371": ("sued",), "51373": ("sued",), "51375": ("sued",),
+        "51377": ("sued",), "51379": ("sued",), "51381": ("sued",),
         "51643": ("nord", "sued"), "57072": ("nord", "sued"),
     }
 

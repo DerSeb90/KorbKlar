@@ -56,3 +56,20 @@ def test_unknown_52_postcode_is_not_classified_by_prefix():
     assert http.calls == 2
     assert resolver.detect("52000") == "nord"
     assert http.calls == 2
+
+
+def test_leverkusen_is_aldi_sued_without_geocoding():
+    """ALDI Süd betreibt 14 Filialen in Leverkusen, ALDI Nord keine.
+
+    Ohne diesen Nachweis lieferte die Nominatim-Umkreissuche "nord", weil im
+    gesamten Suchfenster nur zwei Filialen ein verwertbares Nord/Süd-Merkmal
+    tragen und beide zu ALDI Nord gehören.
+    """
+    http = FakeHttp()
+    resolver = AldiRegionResolver(http)
+    resolver.http = http
+    for code in ("51371", "51373", "51375", "51377", "51379", "51381"):
+        assert resolver.detect(code) == "sued", code
+        assert resolver.last_provider.startswith("Offizielle ALDI")
+        assert resolver.last_confidence == "hoch"
+    assert http.calls == 0
