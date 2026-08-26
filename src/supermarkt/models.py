@@ -37,10 +37,22 @@ RETAILER_SPECS: tuple[RetailerSpec, ...] = (
         True,
         ("globus baumarkt",),
     ),
+    # Bünting group, regional in north-western Germany. Both are optional
+    # because most German postal codes are outside their sales area.
+    RetailerSpec("Combi", ("combi",), "#e2001a", "https://www.combi.de/kontakt/markt", True),
+    RetailerSpec(
+        "famila Nordwest",
+        ("famila-nordwest", "famila nordwest"),
+        "#004494",
+        "https://www.famila-nordwest.de/unsere-maerkte/marktsuche",
+        True,
+        # famila Nordost is a different, unrelated retail group.
+        ("famila-nordost", "famila nordost"),
+    ),
 )
 
 SPEC_BY_NAME = {spec.name: spec for spec in RETAILER_SPECS}
-AGGREGATOR_RETAILERS = frozenset({"Lidl", "PENNY", "Netto", "Globus"})
+AGGREGATOR_RETAILERS = frozenset({"Lidl", "PENNY", "Netto", "Globus", "Combi", "famila Nordwest"})
 
 
 @dataclass(frozen=True)
