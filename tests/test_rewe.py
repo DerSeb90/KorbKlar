@@ -1,4 +1,5 @@
 from bs4 import BeautifulSoup
+import pytest
 
 from supermarkt.sources.rewe import OfficialReweSource
 
@@ -23,6 +24,40 @@ def test_rewe_card_keeps_explicit_deposit():
     )
     assert bonus_only is False
     assert offer is not None and offer.deposit == 0.25
+
+
+def test_rewe_bonus_in_additional_text_is_applied_as_cashback():
+    from supermarkt.compare import OfferComparator
+    from supermarkt.models import LoyaltyBenefit
+
+    card = BeautifulSoup(
+        '''
+        <article>
+          <h3 class="cor-offer-information__title">Joghurt</h3>
+          <span class="cor-offer-price__tag-price">0,99 €</span>
+          <div class="cor-offer-information__additional">HINWEIS: MIT APP 0,10 € REWE BONUS</div>
+        </article>
+        ''',
+        "html.parser",
+    ).article
+    offer, bonus_only = OfficialReweSource(object())._parse_card(
+        card, nan="bonus", category="Molkereiprodukte & Eier", market_id="456",
+        market_url="https://www.rewe.de/angebote/test/456/rewe-markt-test/",
+    )
+    assert bonus_only is False
+    assert offer is not None
+    assert offer.benefits == (LoyaltyBenefit("rewe_bonus", "cashback", 0.10, "REWE Bonus"),)
+    compared = OfferComparator().compare([offer], ("rewe_bonus",), "all").offers[0]
+    assert compared.checkout_price == 0.99
+    assert compared.effective_price == 0.89
+    assert compared.loyalty_savings == pytest.approx(0.10)
+
+
+def test_rewe_bonus_parser_does_not_invent_value_from_points_or_percentages():
+    source = OfficialReweSource(object())
+    empty = BeautifulSoup("<article></article>", "html.parser").article
+    assert source._bonus_amount(empty, "10 % REWE Bonus") is None
+    assert source._bonus_amount(empty, "100 REWE Bonus-Punkte") is None
 
 
 def test_rewe_current_container_accepts_current_class_layout():

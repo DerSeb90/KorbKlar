@@ -459,16 +459,35 @@ class OfficialReweSource:
         title = clean_text(" ".join(parts))
         return re.sub(r"[¹²³⁴⁵⁶⁷⁸⁹⁰]+$", "", title).strip()
 
+    @classmethod
+    def _bonus_amount(cls, card: Any, description: str = "") -> Optional[float]:
+        """Return only an explicitly published Euro REWE Bonus amount.
+
+        REWE currently renders the amount either in its loyalty badge or in an
+        additional line such as ``MIT APP 0,10 € REWE BONUS``. Percentages,
+        points and unspecified app benefits deliberately remain unpriced.
+        """
+        badge = cls._money(card.select_one(".cor-loyalty-badge") if card is not None else None)
+        if badge is not None and badge > 0:
+            return badge
+        text = clean_text(description)
+        for pattern in (
+            r"(?:mit\s+app\s+)?(\d+[,.]\d{2})\s*€\s*rewe\s*bonus\b",
+            r"\brewe\s*bonus\b[^\d]{0,24}(\d+[,.]\d{2})\s*€",
+        ):
+            match = re.search(pattern, text, flags=re.IGNORECASE)
+            if match:
+                amount = parse_number(match.group(1))
+                if amount is not None and amount > 0:
+                    return amount
+        return None
+
     def _parse_card(self, card: Any, *, nan: str, category: str, market_id: str, market_url: str) -> tuple[Optional[Offer], bool]:
         title_node = card.select_one(".cor-offer-information__title") if card is not None else None
         title = self._offer_title(title_node)
         price = self._money(card.select_one(".cor-offer-price__tag-price") if card is not None else None)
-        bonus = self._money(card.select_one(".cor-loyalty-badge") if card is not None else None)
-
         if not title:
             return None, False
-        if price is None or price <= 0:
-            return None, bonus is not None and bonus > 0
 
         details = [
             clean_text(node.get_text(" ", strip=True))
@@ -476,6 +495,9 @@ class OfficialReweSource:
             if clean_text(node.get_text(" ", strip=True))
         ]
         description = " ".join(details)
+        bonus = self._bonus_amount(card, description)
+        if price is None or price <= 0:
+            return None, bonus is not None and bonus > 0
         base_price, base_unit = parse_base_price_text(description)
         pack = normalize_pack(f"{title} {description}")
         image_url = self._product_image(card, market_url)
