@@ -529,6 +529,14 @@ Copyright © 2026 lesecuritae for Tarnkappe.info.
 
 KorbKlar is independent and is not affiliated with any retailer or loyalty program mentioned. Brand, retailer, and product names belong to their respective owners.
 
+## What is new in 0.0.4
+
+ALDI Süd offer validity is now resolved from the individual product card first, its offer group second, and the general weekly range only as a fallback. Weekly, Thursday, and Friday/Saturday promotions therefore remain distinct. Redundant parser paths and expired day groups no longer create duplicate offers, while genuinely different promotions are retained.
+
+## What is new in 0.0.4
+
+ALDI Süd offer validity is now resolved from the individual product card first, its offer group second, and the general weekly range only as a fallback. Weekly, Thursday, and Friday/Saturday promotions therefore remain distinct. Redundant parser paths and expired day groups no longer create duplicate offers, while genuinely different promotions are retained.
+
 ## What is new in 0.0.3
 
 Categories map to 18 stable German top-level labels. HOL’AB! appears only for postcodes in its official store list; six structured offers are honestly marked as partial coverage. Deposits and quantity conditions remain separate. REWE uses card deeplinks where present, while Lidl without a reliable identifier uses an official product search. The lightbox, local background and automatic light/dark theme load no third-party assets.

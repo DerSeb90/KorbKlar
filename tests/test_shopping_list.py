@@ -16,6 +16,9 @@ def js(expression: str):
         check=True,
         capture_output=True,
         text=True,
+        # node writes UTF-8. Without this the Windows default codec
+        # fails on the checkbox character in the exported list.
+        encoding="utf-8",
     )
     return json.loads(result.stdout)
 
@@ -45,6 +48,22 @@ def test_offer_identity_increments_only_strict_identity():
     result = js("m.mergeItems([{name:'Milch',quantity:1,retailer:'REWE',offer_id:'one'}],[{name:'Milch',quantity:1,retailer:'REWE',offer_id:'one'},{name:'Milch Bio',quantity:1,retailer:'REWE',offer_id:'two'}])")
     assert len(result) == 2
     assert result[0]["quantity"] == 2
+
+
+def test_buenting_offers_use_the_existing_canonical_shopping_model():
+    result = js("""(()=>{
+      const combi=m.offerToItem({offer_id:'combi-1',product:'Milch',retailer:'Combi',category:'Molkereiprodukte & Eier',pack:'1 l',regular_price:0.99});
+      const famila=m.offerToItem({offer_id:'famila-1',product:'Brot',retailer:'famila Nordwest',category:'Backwaren',regular_price:null});
+      const items=m.mergeItems([combi],[combi,famila]);
+      return {items,totals:m.totals(items),text:m.exportText(items,new Date('2026-08-26T00:00:00Z'))};
+    })()""")
+    assert [(item["retailer"], item["quantity"]) for item in result["items"]] == [
+        ("Combi", 2),
+        ("famila Nordwest", 1),
+    ]
+    assert result["totals"]["goods_cents"] == 198
+    assert result["totals"]["unknown_price_count"] == 1
+    assert "Combi" in result["text"] and "famila Nordwest" in result["text"]
 
 
 def test_text_parser_checkbox_quantity_prices_crlf_and_plain_text():

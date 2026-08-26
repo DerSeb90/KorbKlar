@@ -1,3 +1,19 @@
+# 0.1.2
+
+Enthält alle Korrekturen aus KorbKlar 0.0.4, insbesondere die ALDI-Süd-Gültigkeiten.
+
+## Behoben
+
+- In der KitchenOwl-Notiz stand der Artikelname doppelt, sobald ein früherer Versand den Artikel unter genau diesem Namen angelegt hatte. Der Angebotsname steht nur noch dort, wo der Artikel anders heißt.
+- Ein in KitchenOwl abgehakter Artikel galt in der App weiter als hinzugefügt. Die App gleicht jetzt mit dem tatsächlichen Listeninhalt ab.
+
+## Geändert
+
+- Ein Angebot landet mit einem Klick in KitchenOwl, in Weboberfläche und App gleichermaßen. Der Umweg über das Sammeln entfällt.
+- Angebote werden auf bereits vorhandene KitchenOwl-Artikel gelegt statt als beinahe gleiche Zweitartikel; der Händler wird zur Kategorie.
+
+---
+
 # 0.1.1
 
 ## Behobene Fehler in der App
@@ -47,6 +63,13 @@ Erste eigene Version dieses Forks. Enthält alles aus 0.0.3 und darüber hinaus:
 - Die Marktguru-Slug-Zuordnung war ein unbedingter Dict-Zugriff und warf `KeyError` für jeden Aggregator-Händler ohne Eintrag.
 
 ---
+# 0.0.4
+
+KorbKlar 0.0.4 korrigiert die Verarbeitung der offiziellen ALDI-Süd-Wochenangebote. Gültigkeiten werden nun mit der Priorität Produktkarte, Angebotsgruppe und Wochenzeitraum ermittelt. Montag-, Donnerstag-, Freitag-/Samstag- und weitere ausdrücklich genannte Aktionstage bleiben dadurch erhalten.
+
+Der Abruf verwendet das bereits vorhandene gehärtete Browserprofil von `curl_cffi`. Alte Vorwochen, redundante Themenansichten und parallele Kategorieparser werden nicht mehr zu einem gemischten Bestand vereinigt. Die angebotsbezogene Deduplizierung bevorzugt einen präzisen Zeitraum gegenüber einer groben Wochenangabe, behält aber echte Preis-, Packungs- und Zeitraumvarianten. Lose Ware mit der Schreibweise „Preis €/1 kg“ wird ebenfalls vollständig erfasst.
+
+Combi und famila Nordwest ergänzen als optionale regionale Händler die bestehende Marktguru-Schiene. Eine leere regionale Antwort ist kein Quellenfehler; die dokumentierte Abdeckung kann je PLZ unterschiedlich sein. famila Nordost ist als eigenständige Handelsgruppe ausdrücklich von der Zuordnung ausgeschlossen. Angebote beider neuen Händler lassen sich ohne Sondermodell in die lokale Einkaufsliste übernehmen.
 
 # 0.0.3
 

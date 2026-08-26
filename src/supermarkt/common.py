@@ -406,11 +406,46 @@ def format_validity(start: Optional[date], end: Optional[date]) -> str:
 def deduplicate_offers(offers: Iterable[Offer]) -> list[Offer]:
     unique: dict[tuple[Any, ...], Offer] = {}
     for offer in offers:
+        benefits = tuple((benefit.program_id, benefit.kind, benefit.value) for benefit in offer.benefits)
+        if offer.retailer == "ALDI Süd":
+            try:
+                source_host = (urlsplit(offer.source_url).hostname or "").casefold()
+            except ValueError:
+                source_host = ""
+            identity = (offer.retailer, offer.offer_id, offer.price, offer.pack_signature, benefits, source_host)
+            vague = offer.validity_label.casefold() in {"aktuell", "aktuelle woche", "aktuelle angebotsseite"}
+            competing = [key for key in unique if key[:6] == identity]
+            if competing:
+                precise = next((key for key in competing if key[6] is False), None)
+                if vague and precise is not None:
+                    continue
+                if not vague:
+                    same_period = next(
+                        (
+                            key for key in competing
+                            if key[6] is False
+                            and key[7][:2] == (offer.valid_from or "", offer.valid_until or "")
+                        ),
+                        None,
+                    )
+                    if same_period is not None:
+                        existing_specific = unique[same_period].validity_label.casefold().startswith("nur ")
+                        incoming_specific = offer.validity_label.casefold().startswith("nur ")
+                        if not incoming_specific or existing_specific:
+                            continue
+                        del unique[same_period]
+                    for key in competing:
+                        if key in unique and key[6] is True:
+                            del unique[key]
+            period = (offer.valid_from or "", offer.valid_until or "", offer.validity_label.casefold())
+            key = identity + (vague, period)
+            unique.setdefault(key, offer)
+            continue
         key = (
             offer.retailer,
             offer.match_key,
             offer.price,
-            tuple((benefit.program_id, benefit.kind, benefit.value) for benefit in offer.benefits),
+            benefits,
             offer.validity_label,
         )
         unique.setdefault(key, offer)
