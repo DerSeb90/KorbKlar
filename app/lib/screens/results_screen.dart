@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -65,6 +66,7 @@ class _ResultsScreenState extends State<ResultsScreen> {
   void initState() {
     super.initState();
     _scroll.addListener(_onScroll);
+    _restoreCollection();
     _reload();
     _loadShoppingList();
   }
@@ -76,6 +78,26 @@ class _ResultsScreenState extends State<ResultsScreen> {
     _search.dispose();
     super.dispose();
   }
+
+  /// Collected offers survive a reload of the results and a restart, so a
+  /// list built over several searches is not lost.
+  void _restoreCollection() {
+    for (final raw in widget.settings.collectedOffers) {
+      try {
+        final decoded = jsonDecode(raw);
+        if (decoded is! Map<String, dynamic>) continue;
+        final offer = Offer.fromJson(decoded);
+        _picked[offer.key] = offer;
+      } on FormatException {
+        // A stored entry from an older layout is simply dropped.
+      }
+    }
+    if (_picked.isNotEmpty) setState(() {});
+  }
+
+  Future<void> _saveCollection() => widget.settings.setCollectedOffers([
+    for (final offer in _picked.values) jsonEncode(offer.toCollectedJson()),
+  ]);
 
   Future<void> _loadShoppingList() async {
     try {
@@ -184,6 +206,12 @@ class _ResultsScreenState extends State<ResultsScreen> {
     setState(() {
       if (_picked.remove(offer.key) == null) _picked[offer.key] = offer;
     });
+    _saveCollection();
+  }
+
+  void _clearCollection() {
+    setState(_picked.clear);
+    _saveCollection();
   }
 
   // ---------------------------------------------------------------- Bring
@@ -194,20 +222,29 @@ class _ResultsScreenState extends State<ResultsScreen> {
     final canShare = share.isSupported;
     final canServer = _shoppingList.configured && _shoppingList.targets.isNotEmpty;
 
-    if (!canShare && !canServer) {
-      _toast('Keine Einkaufslisten-Anbindung verfügbar.');
-      return;
-    }
-
+    // Without a share sheet and without a configured server the clipboard is
+    // still a way out, so collecting is never a dead end.
     final route = (canShare && canServer)
         ? await _askRoute(offers.length)
-        : (canServer ? BringRoute.server : BringRoute.share);
+        : canShare
+        ? BringRoute.share
+        : canServer
+        ? BringRoute.server
+        : BringRoute.clipboard;
     if (route == null) return;
+
+    if (route == BringRoute.clipboard) {
+      await share.copy(offers);
+      if (!mounted) return;
+      _clearCollection();
+      _toast('In die Zwischenablage kopiert.');
+      return;
+    }
 
     if (route == BringRoute.share) {
       final ok = await share.share(offers);
       if (ok && mounted) {
-        setState(_picked.clear);
+        _clearCollection();
         _toast('An die Einkaufsliste übergeben.');
       }
       return;
@@ -222,7 +259,7 @@ class _ResultsScreenState extends State<ResultsScreen> {
         offers: offers,
       );
       if (!mounted) return;
-      setState(_picked.clear);
+      _clearCollection();
       _toast('$added Angebote übernommen.');
     } on KorbKlarException catch (exception) {
       _toast(exception.message);
@@ -254,6 +291,12 @@ class _ResultsScreenState extends State<ResultsScreen> {
             title: const Text('Über KorbKlar-Server'),
             subtitle: const Text('Mit Händler, Preis und Gültigkeit als Notiz'),
             onTap: () => Navigator.pop(sheetContext, BringRoute.server),
+          ),
+          ListTile(
+            leading: const Icon(Icons.copy_all_outlined),
+            title: const Text('In die Zwischenablage'),
+            subtitle: const Text('Eine Zeile je Angebot'),
+            onTap: () => Navigator.pop(sheetContext, BringRoute.clipboard),
           ),
           const SizedBox(height: 8),
         ],
@@ -593,9 +636,6 @@ class _ResultsScreenState extends State<ResultsScreen> {
       );
     }
 
-    final canPick =
-        (const BringShare()).isSupported || _shoppingList.configured;
-
     return ListView.separated(
       controller: _scroll,
       padding: const EdgeInsets.fromLTRB(12, 10, 12, 24),
@@ -608,7 +648,7 @@ class _ResultsScreenState extends State<ResultsScreen> {
           offer: offer,
           imageUrl: widget.client.imageUrl(offer.imageUrl),
           showRetailer: _retailer.isEmpty,
-          selectable: canPick,
+          selectable: true,
           selected: _picked.containsKey(offer.key),
           onToggleSelected: () => _toggle(offer),
           onAddToList: () => _addToList([offer]),
@@ -661,7 +701,7 @@ class _ResultsScreenState extends State<ResultsScreen> {
         children: [
           IconButton(
             tooltip: 'Auswahl leeren',
-            onPressed: () => setState(_picked.clear),
+            onPressed: _clearCollection,
             icon: const Icon(Icons.close),
           ),
           Expanded(

@@ -156,6 +156,54 @@ void main() {
     });
   });
 
+  group('collecting offers', () {
+    test('a collected offer survives a round trip through storage', () {
+      final original = Offer.fromJson({
+        'retailer': 'Combi',
+        'retailers': ['Combi', 'famila Nordwest'],
+        'retailer_label': 'Combi · famila Nordwest',
+        'product': 'Kerrygold Butter',
+        'pack': '250 g',
+        'validity': 'bis 29.08.',
+        'regular_price_text': '2,29 €',
+        'effective_price_text': '1,59 €',
+      });
+
+      final restored = Offer.fromJson(
+        jsonDecode(jsonEncode(original.toCollectedJson()))
+            as Map<String, dynamic>,
+      );
+
+      expect(restored.key, original.key);
+      expect(restored.product, 'Kerrygold Butter');
+      expect(restored.retailers, ['Combi', 'famila Nordwest']);
+      expect(restored.effectivePriceText, '1,59 €');
+      expect(BringShare.lineFor(restored), BringShare.lineFor(original));
+    });
+
+    test('several offers become one line each', () {
+      final offers = [
+        Offer.fromJson({'product': 'Butter', 'effective_price_text': '1,59 €'}),
+        Offer.fromJson({'product': 'Brot', 'effective_price_text': '0,99 €'}),
+      ];
+      expect(BringShare.textFor(offers), 'Butter · 1,59 €\nBrot · 0,99 €');
+    });
+
+    test('a merged row names every retailer it stands for', () {
+      final offer = Offer.fromJson({
+        'product': 'Butter',
+        'retailer': 'Combi',
+        'retailers': ['Combi', 'famila Nordwest'],
+        'retailer_label': 'Combi · famila Nordwest',
+        'effective_price_text': '1,59 €',
+      });
+      expect(
+        BringShare.lineFor(offer),
+        'Butter · Combi · famila Nordwest · 1,59 €',
+      );
+    });
+  });
+
   group('error handling', () {
     test('reports the server detail message', () async {
       final client = KorbKlarClient(

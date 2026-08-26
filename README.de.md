@@ -277,6 +277,55 @@ Damit deckt eine Instanz beide Fälle ab: Im VPN ist die Oberfläche ohne Login 
 
 Der Reverse Proxy sollte ein vom Client mitgeschicktes `X-Forwarded-For` zusätzlich verwerfen oder überschreiben.
 
+## HTTPS und Deployment
+
+Der Compose-Stack bringt einen optionalen Reverse Proxy mit. Caddy holt und erneuert die Let's-Encrypt-Zertifikate selbst, ohne certbot-Container und ohne Cron.
+
+```bash
+KORBKLAR_DOMAIN=korbklar.deine-domain.de
+KORBKLAR_ACME_EMAIL=du@deine-domain.de
+docker compose --profile proxy up -d
+```
+
+Ohne `--profile proxy` startet der Stack unverändert wie bisher; der Proxy-Container wird dann gar nicht angelegt.
+
+Vor dem ersten Start muss ein A- beziehungsweise AAAA-Record der Domain auf den Server zeigen und Port 80 und 443 erreichbar sein — Let's Encrypt prüft darüber.
+
+### Aufteilung zwischen VPN und Internet
+
+Die Netz-Allowlist prüft die Quell-IP, **wie der Server sie sieht**. Wer über das Internet auf die öffentliche Domain zugeht, erscheint mit der IP seines Providers, nicht mit der VPN-Adresse. Deshalb sind es zwei getrennte Wege:
+
+| Weg | Adresse | Autorisierung |
+| --- | --- | --- |
+| Oberfläche im VPN | `http://VPN-IP:8000` | Quell-IP aus `SUPERMARKT_TRUSTED_NETWORKS`, kein Login |
+| App und Skripte | `https://korbklar.deine-domain.de` | Bearer-Token |
+
+`KORBKLAR_BIND_ADDRESS` legt fest, auf welcher Schnittstelle Port 8000 veröffentlicht wird. Hinter dem Proxy gehört dort die VPN-Adresse hin, damit die Oberfläche nicht zusätzlich öffentlich hängt:
+
+```bash
+KORBKLAR_BIND_ADDRESS=10.8.0.1
+```
+
+`SUPERMARKT_TRUSTED_PROXIES` muss das Compose-Netz enthalten, in dem Caddy läuft, sonst wird sein `X-Forwarded-For` ignoriert. Beide Werte stehen standardmäßig auf `172.28.0.0/24`.
+
+Caddy **überschreibt** ein vom Client mitgeschicktes `X-Forwarded-For` mit der tatsächlichen Gegenstelle, statt es zu ergänzen. Die Allowlist bekommt so nie eine Adresse zu sehen, die der Client selbst gewählt hat.
+
+### Eigenes Image aus der CI
+
+Der Workflow baut bei jedem Push auf `main` und veröffentlicht nach GHCR im Namensraum des Repository-Eigentümers. In einem Fork ist das automatisch der eigene. Auf dem Server danach nur noch:
+
+```bash
+docker compose pull && docker compose up -d --no-build
+```
+
+Damit `pull` das eigene Image zieht, in `.env` setzen:
+
+```bash
+KORBKLAR_IMAGE=ghcr.io/DEIN-NAME/korbklar:latest
+```
+
+In einem frisch geforkten Repository sind GitHub Actions deaktiviert; einmal im Reiter „Actions" freigeben. Das erzeugte Paket ist zunächst privat — entweder unter „Packages" auf öffentlich stellen, oder auf dem Server einmal `docker login ghcr.io` mit einem Token, das `read:packages` erlaubt.
+
 ## Cache steuern
 
 KorbKlar hält mehrere Caches mit unterschiedlichen Lebensdauern:

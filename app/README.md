@@ -19,7 +19,9 @@ price; it renders the values the comparison engine returns.
 - product images through the server's signed image proxy
 - warnings for failed or incomplete sources
 - endless scrolling
-- putting offers on a Bring shopping list, one at a time or as a selection
+- collecting offers across searches and sending them together; the collection
+  survives a reload and a restart
+- putting offers on a Bring shopping list, one at a time or as a whole collection
 - a refresh action that bypasses the server's snapshot cache and re-queries
   every source
 
@@ -38,6 +40,10 @@ without a token, but carries only text. Android and iOS only.
 a proper article plus a note holding retailer, price, package size and
 validity. Requires that integration to be configured and the server to be
 reachable from the phone. The app never sees the Home Assistant token.
+
+**Clipboard.** Where neither applies — desktop, or a server without the
+integration — the collection is copied as one line per offer, so collecting is
+never a dead end.
 
 Bring has no documented public write API for third-party apps, so the app does
 not pretend to talk to Bring directly.
@@ -59,11 +65,23 @@ its detail fields, which lets the app tell a wrong address from a wrong or
 missing key without triggering a search. Once saved, the key is sent as a
 bearer token on every request, so the app works from outside the VPN.
 
-A release build for Android:
+### Installing on Android
+
+The `Build Android app` workflow produces an installable APK on every push
+that touches `app/`, and can also be started by hand from the Actions tab.
+Download the `korbklar-apk` artifact and install `app-arm64-v8a-release.apk`
+on the phone; Android asks once to allow installation from that source.
+
+Building locally works too, when the machine's Gradle toolchain is healthy:
 
 ```bash
 flutter build apk --release
 ```
+
+Both builds are signed with Flutter's debug key. That is fine for sideloading
+a personal build, but a differently signed build cannot replace it without
+uninstalling first. For a stable signing identity, create a keystore and a
+`android/key.properties` referencing it; keep both out of the repository.
 
 ### Cleartext HTTP
 

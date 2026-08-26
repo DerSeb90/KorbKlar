@@ -258,6 +258,55 @@ One instance then covers both halves: the browser interface stays usable without
 
 The reverse proxy should additionally drop or overwrite any `X-Forwarded-For` supplied by the client.
 
+## HTTPS and deployment
+
+The Compose stack ships an optional reverse proxy. Caddy obtains and renews Let's Encrypt certificates on its own, with no certbot container and no cron job.
+
+```bash
+KORBKLAR_DOMAIN=korbklar.example.com
+KORBKLAR_ACME_EMAIL=you@example.com
+docker compose --profile proxy up -d
+```
+
+Without `--profile proxy` the stack starts exactly as before and the proxy container is never created.
+
+Before the first start an A or AAAA record must point at the server and ports 80 and 443 must be reachable, because Let's Encrypt validates over them.
+
+### Splitting VPN from internet
+
+The network allowlist checks the source address **as the server sees it**. Anyone reaching the public domain over the internet appears with their provider's address, not their VPN one, so these are two separate paths:
+
+| Path | Address | Authorisation |
+| --- | --- | --- |
+| Browser over VPN | `http://VPN-IP:8000` | source address in `SUPERMARKT_TRUSTED_NETWORKS`, no login |
+| App and scripts | `https://korbklar.example.com` | bearer token |
+
+`KORBKLAR_BIND_ADDRESS` selects the interface the published port binds to. Behind the proxy that is the VPN address, so the browser interface is not additionally exposed:
+
+```bash
+KORBKLAR_BIND_ADDRESS=10.8.0.1
+```
+
+`SUPERMARKT_TRUSTED_PROXIES` must contain the Compose network Caddy runs in, otherwise its `X-Forwarded-For` is ignored. Both default to `172.28.0.0/24`.
+
+Caddy **overwrites** a client-supplied `X-Forwarded-For` with the actual peer rather than appending to it, so the allowlist never sees an address the client chose.
+
+### Publishing your own image
+
+The workflow builds on every push to `main` and publishes to GHCR under the repository owner's namespace, which in a fork is that fork's own. The server then only needs:
+
+```bash
+docker compose pull && docker compose up -d --no-build
+```
+
+Point `KORBKLAR_IMAGE` at it:
+
+```bash
+KORBKLAR_IMAGE=ghcr.io/your-name/korbklar:latest
+```
+
+A freshly forked repository has GitHub Actions disabled; enable them once under the Actions tab. The resulting package starts out private: either make it public under Packages, or run `docker login ghcr.io` on the server with a token that grants `read:packages`.
+
 ## Controlling the cache
 
 KorbKlar keeps several caches with different lifetimes:
@@ -331,6 +380,11 @@ The default setup needs no `.env`. [`.env.example`](.env.example) documents ever
 - `SUPERMARKT_TRUSTED_NETWORKS`
 - `SUPERMARKT_TRUSTED_PROXIES`
 - `SUPERMARKT_CHROMIUM_BINARY`
+- `KORBKLAR_IMAGE`
+- `KORBKLAR_BIND_ADDRESS`
+- `KORBKLAR_SUBNET`
+- `KORBKLAR_DOMAIN`
+- `KORBKLAR_ACME_EMAIL`
 
 The historical internal prefixes remain part of the current technical interface. `.env.example` is authoritative for meanings, defaults, and Docker paths.
 
