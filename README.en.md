@@ -470,7 +470,7 @@ KorbKlar does not invent missing prices or estimate unknown loyalty benefits. Co
 
 The Home Assistant shopping list described above is implemented. Potential future integrations include Grocy, KitchenOwl, and further REST or OpenAPI connections for local automations, agents, and Conduit or LLM workflows such as the originally planned automatic Monday report.
 
-Those remaining integrations are not part of version 0.1.0. The existing REST API can already support custom automations.
+Those remaining integrations are planned for later versions. The existing REST API can already support custom automations.
 
 ## Support the project
 

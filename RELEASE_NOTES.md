@@ -1,3 +1,44 @@
+# 0.1.0
+
+Erste eigene Version dieses Forks. Enthält alles aus 0.0.3 und darüber hinaus:
+
+## Händler
+
+- Combi und famila Nordwest über die regionalen Marktguru-Daten. Beide optional, weil sie nur im Nordwesten vertreten sind; famila Nordost ist ausdrücklich ausgeschlossen.
+- Preisgleiche identische Angebote mehrerer Händler erscheinen als eine Zeile, die alle nennt. Filter und Chips folgen der zusammengefassten Zeile.
+
+## Öffentlich betreiben
+
+- Ist `SUPERMARKT_API_KEY` gesetzt, verlangt jede Route außer `/health` entweder diesen Bearer-Token oder eine Quell-IP aus `SUPERMARKT_TRUSTED_NETWORKS`. Damit bleibt die Oberfläche im VPN ohne Login nutzbar, während App und Skripte sich von überall ausweisen.
+- `X-Forwarded-For` wird nur von Proxys aus `SUPERMARKT_TRUSTED_PROXIES` geglaubt, von rechts gelesen und um bekannte Proxys bereinigt.
+- uvicorn läuft mit `--no-proxy-headers`. Ohne das überschreibt uvicorn selbst die Client-Adresse aus dem Header und die Netz-Allowlist wäre umgehbar.
+- `/health` bleibt für Container-Healthchecks erreichbar, verrät ohne Autorisierung aber nur noch Status und Dienstnamen.
+- Optionaler Caddy-Reverse-Proxy im Profil `proxy` mit automatischen Let's-Encrypt-Zertifikaten.
+
+## Einkaufsliste über Home Assistant
+
+- Angebote lassen sich einzeln oder gesammelt auf eine `todo`-Entität schreiben, etwa eine Bring-Liste. Artikel ist das Produkt, die Notiz trägt Händler, Preis, Packungsgröße und Gültigkeit.
+- Ziel-Listen werden aus Home Assistant gelesen; Entitäten anderer Domains werden abgelehnt, bevor etwas geschrieben wird. Der Token bleibt auf dem Server.
+
+## App
+
+- Flutter-Client für Android, iOS, Web und Windows, gestaltet nach den Farbtokens der Weboberfläche inklusive Dunkeldesign.
+- Voller Funktionsumfang der Ergebnisliste, Sammeln über mehrere Suchen hinweg, Übergabe an Bring per Teilen-Dialog oder über den Server.
+
+## Cache
+
+- „Neu laden" in Oberfläche und App umgeht den Snapshot-Cache und ruft alle Quellen neu ab.
+- `python -m supermarkt.cache_cli status` und `purge` zeigen und leeren Snapshots, Bildcache und Filialzuordnungen.
+
+## Behobene Fehler
+
+- Der Kaufland-Adapter rief ein fest verdrahtetes `chromium` auf und fiel außerhalb von Linux immer auf Marktguru zurück. Er sucht jetzt die üblichen Namen und Pfade von Chromium, Chrome und Edge.
+- Chromium bekam kein eigenes Profilverzeichnis und scheiterte deshalb an einem geöffneten Browser oder an parallelen Aufrufen.
+- Konfigurierte Pfade werden absolut aufgelöst; ein relatives Datenverzeichnis erzeugte ein relatives `--user-data-dir`, das Chromium ablehnt.
+- Die Marktguru-Slug-Zuordnung war ein unbedingter Dict-Zugriff und warf `KeyError` für jeden Aggregator-Händler ohne Eintrag.
+
+---
+
 # 0.0.3
 
 - ALDI behandelt bestätigte Regionen und die Grenzstädte Gummersbach/Siegen ohne PLZ-Präfix-Heuristik.

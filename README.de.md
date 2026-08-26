@@ -467,8 +467,7 @@ SUPERMARKT_DATA_DIR=.devdata python -m supermarkt.diagnostics 26123
 
 ## Roadmap
 
-Die oben beschriebene Einkaufsliste über Home Assistant ist umgesetzt. Für spätere Versionen sind weitere Integrationen denkbar beziehungsweise geplant, darunter Grocy, KitchenOwl und zusätzliche REST-/OpenAPI-Anbindungen für lokale Automationen und Agenten. Diese Integrationen sind keine Voraussetzung für Version 0.1.0.
-Für spätere Versionen sind zusätzliche Integrationen denkbar beziehungsweise geplant, darunter Grocy, KitchenOwl und weitere REST-/OpenAPI-Anbindungen für lokale Automationen und Agenten. Diese Integrationen sind keine Voraussetzung für Version 0.1.0.
+Die oben beschriebene Einkaufsliste über Home Assistant ist umgesetzt. Weitere Integrationen sind für spätere Versionen vorgesehen, darunter Grocy, KitchenOwl und zusätzliche REST-/OpenAPI-Anbindungen für lokale Automationen und Agenten.
 
 ## Neuerungen in 0.0.3
 

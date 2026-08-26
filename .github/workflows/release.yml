@@ -1,0 +1,97 @@
+name: Release
+
+# Publishes a GitHub release for a version tag and attaches the Android app.
+# The container image is published separately by the docker-publish workflow,
+# which reacts to the same tags.
+#
+# Kept apart from the app's CI workflow on purpose: that one filters by paths,
+# and a path filter behaves unreliably for tag pushes.
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing tag to build the release from
+        required: true
+
+permissions:
+  # Required to create the release and upload the APK to it.
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+          fetch-depth: 0
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Resolve dependencies
+        working-directory: app
+        run: flutter pub get
+
+      - name: Test the app
+        working-directory: app
+        # Goldens are platform dependent and the live suite needs a server.
+        run: flutter test --exclude-tags "golden,live"
+
+      - name: Build APK
+        working-directory: app
+        # Split per ABI so the download stays small; the arm64 file covers
+        # every phone from the last several years.
+        run: flutter build apk --release --split-per-abi
+
+      - name: Extract the release notes for this version
+        id: notes
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          # RELEASE_NOTES.md keeps one "# <version>" section per release.
+          awk -v v="$version" '
+            $0 == "# " v { found = 1; next }
+            found && /^# [0-9]/ { exit }
+            found { print }
+          ' RELEASE_NOTES.md > release-body.md
+          if [ ! -s release-body.md ]; then
+            echo "No section for $version in RELEASE_NOTES.md" >&2
+            exit 1
+          fi
+          {
+            echo
+            echo "## Android"
+            echo
+            echo "Install \`app-arm64-v8a-release.apk\` below. It is signed with"
+            echo "Flutter's debug key, which suits sideloading but means a"
+            echo "differently signed build cannot replace it in place."
+            echo
+            echo "## Container image"
+            echo
+            echo '```'
+            echo "docker pull ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/korbklar:${version}"
+            echo '```'
+          } >> release-body.md
+
+      - name: Publish the release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ inputs.tag || github.ref_name }}
+          body_path: release-body.md
+          files: app/build/app/outputs/flutter-apk/*.apk
+          fail_on_unmatched_files: true
