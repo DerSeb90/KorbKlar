@@ -78,6 +78,21 @@ services:
       KORBKLAR_ACME_EMAIL: ${KORBKLAR_ACME_EMAIL:-}
     networks:
       - korbklar-net
+    # Both values are unavoidably optional at the Compose level, because
+    # Compose interpolates every service whether or not its profile is
+    # active. Checking here turns a Caddyfile parse error into one line.
+    command:
+      - sh
+      - -c
+      - |
+        missing=""
+        [ -n "$${KORBKLAR_DOMAIN}" ] || missing="KORBKLAR_DOMAIN"
+        [ -n "$${KORBKLAR_ACME_EMAIL}" ] || missing="$${missing:+$$missing und }KORBKLAR_ACME_EMAIL"
+        if [ -n "$$missing" ]; then
+          echo "Reverse Proxy nicht gestartet: $$missing fehlt in .env" >&2
+          exit 1
+        fi
+        exec caddy run --config /etc/caddy/Caddyfile --adapter caddyfile
     ports:
       - "80:80"
       - "443:443"

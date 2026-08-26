@@ -268,7 +268,9 @@ KORBKLAR_ACME_EMAIL=you@example.com
 docker compose --profile proxy up -d
 ```
 
-Without `--profile proxy` the stack starts exactly as before and the proxy container is never created.
+**The profile is required.** A plain `docker compose up -d` never creates the Caddy container, so it appears in neither `docker ps` nor `docker compose ps`. That is deliberate, so an installation without HTTPS keeps working unchanged. Check it with `docker compose --profile proxy ps`.
+
+If either value is missing the container exits immediately with one log line naming it; read it with `docker compose --profile proxy logs caddy`.
 
 Before the first start an A or AAAA record must point at the server and ports 80 and 443 must be reachable, because Let's Encrypt validates over them.
 
