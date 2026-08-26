@@ -261,7 +261,12 @@ class _HomeScreenState extends State<HomeScreen> {
         children: [
           TextField(
             controller: _postalCode,
-            keyboardType: TextInputType.number,
+            // Plain digits. TextInputType.number still lets some Android
+            // keyboards offer a signed or decimal pad.
+            keyboardType: const TextInputType.numberWithOptions(
+              signed: false,
+              decimal: false,
+            ),
             maxLength: 5,
             enabled: !_busy,
             inputFormatters: [FilteringTextInputFormatter.digitsOnly],

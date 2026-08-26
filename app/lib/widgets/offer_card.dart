@@ -12,6 +12,7 @@ class OfferCard extends StatelessWidget {
     super.key,
     required this.offer,
     required this.imageUrl,
+    required this.imageHeaders,
     required this.showRetailer,
     required this.selected,
     required this.selectable,
@@ -22,6 +23,10 @@ class OfferCard extends StatelessWidget {
 
   final Offer offer;
   final String? imageUrl;
+
+  /// Passed with the image request; the proxy is gated like every other
+  /// route, so an unauthenticated load would only yield a placeholder.
+  final Map<String, String> imageHeaders;
 
   /// Hidden when the list is already filtered to a single retailer, matching
   /// the web interface's `single-retailer` rule.
@@ -54,7 +59,7 @@ class OfferCard extends StatelessWidget {
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _Thumb(url: imageUrl),
+              _Thumb(url: imageUrl, headers: imageHeaders),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
@@ -224,9 +229,10 @@ class _Meta extends StatelessWidget {
 }
 
 class _Thumb extends StatelessWidget {
-  const _Thumb({required this.url});
+  const _Thumb({required this.url, required this.headers});
 
   final String? url;
+  final Map<String, String> headers;
 
   @override
   Widget build(BuildContext context) {
@@ -244,6 +250,7 @@ class _Thumb extends StatelessWidget {
             ? Icon(Icons.image_not_supported_outlined, color: colors.muted)
             : Image.network(
                 url!,
+                headers: headers,
                 fit: BoxFit.contain,
                 errorBuilder: (_, _, _) =>
                     Icon(Icons.image_not_supported_outlined, color: colors.line),

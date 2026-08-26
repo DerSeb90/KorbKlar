@@ -80,6 +80,13 @@ class KorbKlarClient {
     ...?extra,
   };
 
+  /// Headers any image request must carry.
+  ///
+  /// The image proxy is gated like every other route, so a widget loading
+  /// a product image needs the bearer token too; without it the server
+  /// answers 401 and every picture silently falls back to a placeholder.
+  Map<String, String> get imageHeaders => _headers();
+
   /// Accepts what a user actually types: bare host, host:port, or full URL.
   static String normalizeBaseUrl(String raw) {
     var value = raw.trim();

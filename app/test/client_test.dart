@@ -156,6 +156,18 @@ void main() {
     });
   });
 
+  group('image requests', () {
+    test('carry the bearer token, because the proxy is gated too', () {
+      final client = KorbKlarClient(baseUrl: 'http://korb.example', apiKey: 'k');
+      expect(client.imageHeaders, {'Authorization': 'Bearer k'});
+    });
+
+    test('carry nothing when no key is configured', () {
+      final client = KorbKlarClient(baseUrl: 'http://korb.example');
+      expect(client.imageHeaders, isEmpty);
+    });
+  });
+
   group('collecting offers', () {
     test('a collected offer survives a round trip through storage', () {
       final original = Offer.fromJson({

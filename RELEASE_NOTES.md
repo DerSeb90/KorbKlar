@@ -1,3 +1,12 @@
+# 0.1.1
+
+## Behobene Fehler in der App
+
+- Produktbilder blieben leer, sobald der Server einen API-Key verlangt. Der Bildproxy ist wie jede andere Route geschützt, die Bildanfrage trug den Token aber nicht mit und lief in 401. Über VPN fiel das nicht auf, per Mobilfunk zeigte jede Karte den Platzhalter.
+- Die Postleitzahl öffnet jetzt eine reine Zifferntastatur. `TextInputType.number` erlaubt manchen Android-Tastaturen weiterhin Vorzeichen- und Dezimalfelder.
+
+---
+
 # 0.1.0
 
 Erste eigene Version dieses Forks. Enthält alles aus 0.0.3 und darüber hinaus:

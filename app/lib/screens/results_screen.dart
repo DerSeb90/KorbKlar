@@ -647,6 +647,7 @@ class _ResultsScreenState extends State<ResultsScreen> {
         return OfferCard(
           offer: offer,
           imageUrl: widget.client.imageUrl(offer.imageUrl),
+          imageHeaders: widget.client.imageHeaders,
           showRetailer: _retailer.isEmpty,
           selectable: true,
           selected: _picked.containsKey(offer.key),
