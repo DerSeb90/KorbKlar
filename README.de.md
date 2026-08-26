@@ -292,3 +292,13 @@ KorbKlar erfindet keine fehlenden Preise und schätzt keine unbekannten Bonusvor
 ## Roadmap
 
 Für spätere Versionen sind zusätzliche Integrationen denkbar beziehungsweise geplant, darunter Grocy, KitchenOwl und weitere REST-/OpenAPI-Anbindungen für lokale Automationen und Agenten. Diese Integrationen sind keine Voraussetzung für Version 0.1.0.
+
+## Neuerungen in 0.0.3
+
+Kategorien werden auf 18 feste deutsche Hauptkategorien normalisiert. HOL’AB! erscheint nur für PLZ aus der offiziellen Marktliste; sechs strukturierte Angebote sind ehrlich als Teilabdeckung markiert. Pfand und Mengenbedingungen bleiben getrennt. REWE nutzt vorhandene Karten-Deeplinks, Lidl ohne sichere Kennung eine offizielle Produktsuche. Lightbox, lokales Hintergrundmotiv und automatisches Hell-/Dunkeldesign laden keine Drittanbieter-Assets.
+
+Der Bereich **Einkauf** speichert die persönliche Liste ausschließlich im IndexedDB-Speicher des jeweiligen Browserprofils. Es gibt keine Konten, serverseitigen persönlichen Listen, Tracker oder automatische Gerätesynchronisation. Angebote und manuelle Artikel lassen sich hinzufügen, bearbeiten, abhaken und nach Händler gruppieren. Warenwert und Pfand werden mit Integer-Cent-Beträgen getrennt berechnet; fehlen Preise, heißt die Anzeige ehrlich „Bekannte Gesamtsumme“. Gespeicherte Angebotspreise werden durch spätere Suchen nicht still geändert, Ablauf und Mengenbedingungen bleiben sichtbar.
+
+Für die Geräteübergabe stehen lesbarer Text, Zwischenablage, Web Share, TXT sowie ein versioniertes JSON-Backup mit Importvorschau bereit. Importdaten sind auf 256 KiB begrenzt und werden ausschließlich lokal geparst. Das kanonische Datenmodell trennt Menge, Einheit, Packung, lokale ID, Angebots-ID, Quell-ID und optionalen Barcode. Eine kleine Adaptergrenze bereitet spätere KitchenOwl-/Grocy-Adapter vor; 0.0.3 enthält keine solche Verbindung und keinen Sync.
+
+ALDI wird aus exakten offiziellen PLZ-Nachweisen beziehungsweise belastbaren Filial-Tags bestimmt. Grenzgebiete laden Nord und Süd getrennt. Die Angebotskette verwendet offizielle Seiten, einen schema- und regionsgebundenen Last-known-good-Cache und erst danach austauschbare externe Katalogdaten; niemals ersetzt Nord die Süd-Region oder umgekehrt.

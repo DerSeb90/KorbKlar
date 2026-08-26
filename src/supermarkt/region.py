@@ -22,9 +22,28 @@ class AldiRegionResolver:
         self.last_provider = ""
         self.last_distance_km: Optional[float] = None
         self.last_error = ""
+        self.last_regions: tuple[str, ...] = ()
+        self.last_confidence = ""
+
+    # Versioned, deliberately postcode-exact official evidence for release
+    # regression and border handling. Source: ALDI Nord Filialnetz-Geographie
+    # (2025-07-14) and the retailers' official store detail pages. This is not
+    # a prefix heuristic; unknown postcodes still go through geocoding.
+    SCHEMA_VERSION = 2
+    OFFICIAL_EVIDENCE: dict[str, tuple[str, ...]] = {
+        "01067": ("nord",),
+        "28195": ("nord",),
+        "52068": ("sued",), "52070": ("sued",), "80331": ("sued",),
+        "51643": ("nord", "sued"), "57072": ("nord", "sued"),
+    }
 
     @staticmethod
     def _region_from_tags(tags: dict[str, Any]) -> str:
+        wikidata = clean_text(tags.get("brand:wikidata")).upper()
+        if wikidata == "Q41171373":
+            return "nord"
+        if wikidata == "Q41171672":
+            return "sued"
         websites = " ".join(
             clean_text(tags.get(key))
             for key in ("website", "contact:website", "url")
@@ -35,20 +54,19 @@ class AldiRegionResolver:
         if "aldi-sued.de" in websites or "aldi-süd.de" in websites:
             return "sued"
 
-        wikidata = clean_text(tags.get("brand:wikidata")).upper()
-        if wikidata == "Q41171373":
-            return "nord"
-        if wikidata == "Q41171672":
-            return "sued"
-
         identity = " ".join(
             clean_text(tags.get(key))
-            for key in ("brand", "name", "operator", "network", "brand:wikipedia")
+            for key in ("brand", "operator", "network", "brand:wikipedia")
             if clean_text(tags.get(key))
         ).casefold()
         if "aldi nord" in identity:
             return "nord"
         if "aldi süd" in identity or "aldi sued" in identity or "aldi sud" in identity:
+            return "sued"
+        name = clean_text(tags.get("name")).casefold()
+        if "aldi nord" in name:
+            return "nord"
+        if "aldi süd" in name or "aldi sued" in name or "aldi sud" in name:
             return "sued"
         return ""
 
@@ -90,7 +108,7 @@ class AldiRegionResolver:
             self.last_error = f"PLZ-Geocoding: {type(exc).__name__}: {exc}"
         return None
 
-    def _nearby(self, origin: tuple[float, float]) -> list[dict[str, Any]]:
+    def _nearby(self, origin: tuple[float, float], postal_code: str = "") -> list[dict[str, Any]]:
         lat, lon = origin
         query = urlencode(
             {
@@ -144,6 +162,7 @@ class AldiRegionResolver:
                     "region": region,
                     "distance_km": self._distance_km(origin, point),
                     "provider": "Nominatim",
+                    "exact_postcode": clean_text(address.get("postcode")) == postal_code,
                 }
             )
         return candidates
@@ -152,6 +171,13 @@ class AldiRegionResolver:
         code = validate_postal_code(postal_code)
         if not code:
             return "auto"
+        evidence = self.OFFICIAL_EVIDENCE.get(code)
+        if evidence:
+            self.last_regions = evidence
+            self.last_provider = "Offizielle ALDI-Filialseiten (versionierter Nachweis)"
+            self.last_distance_km = None
+            self.last_confidence = "hoch"
+            return evidence[0] if len(evidence) == 1 else "auto"
         cached = self._cache.get(code)
         if cached in {"nord", "sued"}:
             return cached
@@ -159,11 +185,13 @@ class AldiRegionResolver:
         self.last_provider = ""
         self.last_distance_km = None
         self.last_error = ""
+        self.last_regions = ()
+        self.last_confidence = ""
         origin = self._postal_coordinates(code)
         if origin is None:
             return "auto"
 
-        candidates = sorted(self._nearby(origin), key=lambda item: float(item["distance_km"]))
+        candidates = sorted(self._nearby(origin, code), key=lambda item: (not bool(item.get("exact_postcode")), float(item["distance_km"])))
         if not candidates:
             return "auto"
 
@@ -171,5 +199,12 @@ class AldiRegionResolver:
         region = str(nearest["region"])
         self.last_provider = str(nearest["provider"])
         self.last_distance_km = float(nearest["distance_km"])
+        second_region = next((item for item in candidates if item["region"] != region), None)
+        if second_region and float(second_region["distance_km"]) <= float(nearest["distance_km"]) + 5.0:
+            self.last_regions = tuple(dict.fromkeys((region, str(second_region["region"]))))
+            self.last_confidence = "mehrdeutig"
+            return "auto"
+        self.last_regions = (region,)
+        self.last_confidence = "mittel"
         self._cache[code] = region
         return region

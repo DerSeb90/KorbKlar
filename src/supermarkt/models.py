@@ -37,6 +37,7 @@ RETAILER_SPECS: tuple[RetailerSpec, ...] = (
         True,
         ("globus baumarkt",),
     ),
+    RetailerSpec("HOL’AB!", ("hol'ab", "hol’ab", "holab"), "#e30613", "https://holab.de/angebote", True),
 )
 
 SPEC_BY_NAME = {spec.name: spec for spec in RETAILER_SPECS}
@@ -79,6 +80,16 @@ class Offer:
     match_key: str
     source_url: str
     image_url: str = ""
+    source_category: str = ""
+    product_url: str = ""
+    retailer_url: str = ""
+    deposit: Optional[float] = None
+    minimum_quantity: Optional[int] = None
+    offer_condition: str = ""
+    comparison_eligible: bool = True
+    coverage_note: str = ""
+    valid_from: Optional[str] = None
+    valid_until: Optional[str] = None
     benefits: tuple[LoyaltyBenefit, ...] = ()
 
     # These fields are calculated for a request and are not part of source parsing.

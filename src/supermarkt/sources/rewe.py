@@ -10,7 +10,7 @@ from datetime import date
 from pathlib import Path
 import uuid
 from typing import Any, Optional
-from urllib.parse import urljoin
+from urllib.parse import urljoin, urlsplit
 
 from ..common import build_match_key, clean_text, deduplicate_offers, normalize_pack, offer_reference_date, parse_base_price_text, parse_number, today_berlin
 from ..http import PostalCodeLocator
@@ -480,6 +480,16 @@ class OfficialReweSource:
         pack = normalize_pack(f"{title} {description}")
         image_url = self._product_image(card, market_url)
         offer_id = f"rewe:{market_id}:{nan}"
+        product_url = ""
+        for link in card.select("a[href]"):
+            candidate = urljoin(self.BASE, clean_text(link.get("href")))
+            try:
+                parsed = urlsplit(candidate)
+            except ValueError:
+                continue
+            if parsed.scheme == "https" and (parsed.hostname or "").casefold() in {"www.rewe.de", "shop.rewe.de"} and any(part in parsed.path.casefold() for part in ("/produkte/", "/produkt/", "/angebote/")):
+                product_url = candidate
+                break
         return Offer(
             offer_id=offer_id,
             retailer="REWE",
@@ -494,6 +504,8 @@ class OfficialReweSource:
             validity_label=self._week_label(),
             match_key=build_match_key("", title, pack, offer_id),
             source_url=market_url,
+            product_url=product_url or market_url,
+            retailer_url=market_url,
             image_url=image_url,
             benefits=(LoyaltyBenefit("rewe_bonus", "cashback", float(bonus), "REWE Bonus"),)
             if bonus is not None and bonus > 0

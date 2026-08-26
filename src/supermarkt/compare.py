@@ -3,6 +3,8 @@ from __future__ import annotations
 from collections import defaultdict
 from dataclasses import replace
 from typing import Any, Iterable
+from urllib.parse import quote_plus
+import re
 
 from .common import (
     build_match_key,
@@ -101,9 +103,29 @@ class OfferMapper:
         )
         context = retailers[retailer]
         source_url = context.market_url
+        product_url = ""
         if retailer in AGGREGATOR_RETAILERS:
             retailer_slug = {"Lidl": "lidl", "PENNY": "penny", "Netto": "netto-marken-discount", "Globus": "globus"}[retailer]
             source_url = f"https://www.marktguru.de/r/{retailer_slug}"
+        if retailer == "Lidl":
+            # Lidl redirects some over-specific catalogue names (own brand +
+            # marketing suffix) to its home page. Prefer a conservative,
+            # deterministic product-type term when one is explicit in the
+            # source name. This remains a search fallback, never an identity
+            # claim or a guessed product detail link.
+            search_term = display_name
+            for pattern, label in (
+                (r"\benergy[- ]?drink\b", "Energy-Drink"),
+                (r"\bjoghurt\b", "Joghurt"),
+                (r"\bkaffee\b", "Kaffee"),
+                (r"\bbutter\b", "Butter"),
+                (r"\bmilch\b", "Milch"),
+                (r"\bmineralwasser\b", "Mineralwasser"),
+            ):
+                if re.search(pattern, display_name, flags=re.IGNORECASE):
+                    search_term = label
+                    break
+            product_url = f"https://www.lidl.de/q/search?q={quote_plus(search_term)}"
 
         return Offer(
             offer_id=offer_id or f"{retailer}:{match_key}:{price}",
@@ -119,6 +141,8 @@ class OfferMapper:
             validity_label=validity_label,
             match_key=match_key,
             source_url=source_url,
+            product_url=product_url,
+            retailer_url=context.market_url,
             image_url=extract_image_url(product) or extract_image_url(raw),
             benefits=benefits,
         )
