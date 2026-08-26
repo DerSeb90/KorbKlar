@@ -326,3 +326,13 @@ The source code is available under the [BSD 3-Clause License](LICENSE).
 Copyright © 2026 lesecuritae for Tarnkappe.info.
 
 KorbKlar is independent and is not affiliated with any retailer or loyalty program mentioned. Brand, retailer, and product names belong to their respective owners.
+
+## What is new in 0.0.3
+
+Categories map to 18 stable German top-level labels. HOL’AB! appears only for postcodes in its official store list; six structured offers are honestly marked as partial coverage. Deposits and quantity conditions remain separate. REWE uses card deeplinks where present, while Lidl without a reliable identifier uses an official product search. The lightbox, local background and automatic light/dark theme load no third-party assets.
+
+The **Einkauf** area stores the personal shopping list exclusively in IndexedDB in the current browser profile. There are no accounts, server-side personal lists, trackers, or automatic device synchronisation. Offers and manual items can be added, edited, checked and grouped by retailer. Goods and deposits use separate integer-cent arithmetic. Missing prices result in an explicitly incomplete known total; saved offer prices are never silently refreshed and expiry and quantity conditions remain visible.
+
+Portable options include readable text, clipboard, Web Share, TXT, and a versioned JSON backup with a local preview. Imports are limited to 256 KiB and never sent to the backend. The canonical model keeps quantity, unit, pack, local ID, offer ID, source ID, and optional barcode separate. A small adapter boundary allows future KitchenOwl/Grocy adapters, but 0.0.3 includes no connection or synchronisation.
+
+ALDI resolution uses exact official postcode evidence or strong store tags. Border regions load North and South separately. The offer chain uses official pages, a schema- and region-bound last-known-good cache, then replaceable external catalogue data; one ALDI region is never substituted for the other.

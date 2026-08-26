@@ -10,8 +10,9 @@
 <meta name="theme-color" content="#116149">
 <title>KorbKlar – Angebote</title>
 <link rel="stylesheet" href="/static/results.css">
+<link rel="stylesheet" href="/static/shopping.css">
 </head>
-<body data-search-id="__SEARCH_ID__" data-token="__RESULT_TOKEN__" data-loyalty="__LOYALTY_PROGRAMS__"><div class="wrap">
+<body data-search-id="__SEARCH_ID__" data-token="__RESULT_TOKEN__" data-loyalty="__LOYALTY_PROGRAMS__"><nav class="mainTabs" aria-label="Bereiche"><button type="button" class="mainTab active" data-panel="resultsPanel">Ergebnisse</button><button type="button" class="mainTab" data-panel="shoppingPanel">Einkauf</button></nav><div class="wrap" id="resultsPanel">
 <div class="top"><div class="titlebar"><h1>Korb<span style="color:var(--accent)">Klar</span></h1><a class="newSearch" href="/">Neue Suche</a></div><div class="meta" id="meta">Lade gespeicherten Vergleich …</div>
 <div class="controls"><input id="q" type="search" placeholder="Produkt oder Marke filtern"><select id="category" aria-label="Kategorie"><option value="">Alle Kategorien</option></select><select id="sort"><option value="price">Preis mit Auswahl</option><option value="unit_price">Grundpreis mit Auswahl</option><option value="retailer">Händler</option><option value="product">Produktname</option></select></div><div class="viewTabs" role="tablist" aria-label="Dubletten"><button type="button" class="viewTab active" id="viewBest" data-view="best_only" role="tab" aria-selected="true">Günstigste</button><button type="button" class="viewTab" id="viewAll" data-view="all" role="tab" aria-selected="false">Teurere Dubletten einblenden</button></div>
 <div class="loyaltyBox" id="loyaltyBox" hidden><div class="loyaltyHead"><div class="loyaltyTitle">Bonusprogramme</div><div class="loyaltyActions"><button type="button" id="loyaltyAll">Alle</button><button type="button" id="loyaltyNone">Keine</button></div></div><div class="loyaltyPrograms" id="loyaltyPrograms"></div><div class="loyaltyNote" id="loyaltyNote"></div></div>
@@ -19,4 +20,5 @@
 <details id="warningsBox" hidden><summary>Hinweise oder Fehler</summary><div id="warnings"></div></details>
 <div class="table" id="table"><div class="row head"><div>Bild</div><div class="retailer">Händler</div><div>Produkt</div><div>Ohne Bonus</div><div>Mit Auswahl</div><div>Packung / Grundpreis</div><div>Gültig</div></div><div id="rows"></div></div>
 <div id="sentinel">Lade Angebote …</div></div>
-<script src="/static/results-v2.js" defer></script></body></html>
+<dialog id="lightbox" aria-labelledby="lightboxTitle"><button id="lightboxClose" type="button" aria-label="Bild schließen">×</button><h2 id="lightboxTitle"></h2><img id="lightboxImage" alt=""></dialog>
+<main class="shoppingPage" id="shoppingPanel" hidden><div id="shoppingRoot"></div></main><script type="module" src="/static/shopping.js"></script><script src="/static/results-v2.js" defer></script></body></html>

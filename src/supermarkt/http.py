@@ -16,6 +16,9 @@ class HttpClient:
         self.timeout_seconds = max(3, timeout_seconds)
 
     def get_bytes(self, url: str, headers: Optional[dict[str, str]] = None) -> bytes:
+        parsed = urlsplit(url)
+        if parsed.scheme != "https" or not parsed.hostname:
+            raise ToolError("Nur HTTPS-Quellen sind erlaubt")
         request_headers = {
             "User-Agent": USER_AGENT,
             "Accept": "text/html,application/json;q=0.9,*/*;q=0.8",
@@ -24,8 +27,11 @@ class HttpClient:
         request_headers.update(headers or {})
         request = Request(url, headers=request_headers)
         try:
-            with urlopen(request, timeout=self.timeout_seconds) as response:
-                return response.read()
+            with urlopen(request, timeout=self.timeout_seconds) as response:  # nosec B310: scheme and host validated above
+                data = response.read(10 * 1024 * 1024 + 1)
+                if len(data) > 10 * 1024 * 1024:
+                    raise ToolError("Quellantwort überschreitet das Größenlimit")
+                return data
         except HTTPError as exc:
             raise ToolError(f"HTTP {exc.code} bei {urlsplit(url).netloc}") from exc
         except (URLError, TimeoutError, OSError) as exc:

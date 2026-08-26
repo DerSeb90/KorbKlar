@@ -38,3 +38,7 @@ def build_results_html(
         .replace("__RESULT_TOKEN__", html.escape(signature, quote=True))
         .replace("__LOYALTY_PROGRAMS__", html.escape(selected, quote=True))
     )
+
+
+def build_shopping_html() -> str:
+    return static_text("shopping.html")

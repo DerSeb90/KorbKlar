@@ -33,6 +33,7 @@ def health() -> dict[str, Any]:
             "Globus": "Marktguru regional catalogue",
             "Combi": "Marktguru regional catalogue",
             "famila Nordwest": "Marktguru regional catalogue",
+            "HOL’AB!": "official regional selected offers",
         },
         **engine.store.health(),
     }

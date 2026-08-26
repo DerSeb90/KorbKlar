@@ -10,3 +10,4 @@ form{display:grid;grid-template-columns:1fr auto;gap:10px} input,button{font:inh
 @media(max-width:520px){.card{padding:22px} form{grid-template-columns:1fr}}
 @media(max-width:700px){body:before{display:none}}
 .progressRow{display:grid;grid-template-columns:1fr auto;align-items:center;gap:10px;margin-top:12px}.progressRow progress{width:100%;height:14px;accent-color:var(--accent)}.failed .progressRow progress{accent-color:var(--error)}
+:root{color-scheme:light}body:before{background:linear-gradient(color-mix(in srgb,var(--bg) 88%,transparent),color-mix(in srgb,var(--bg) 94%,transparent)),url('/static/korb-bg.svg') center/cover no-repeat}@media(prefers-color-scheme:dark){:root{color-scheme:dark}}

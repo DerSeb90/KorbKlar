@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "korb-klar"
-version = "0.0.2"
+version = "0.0.3"
 description = "KorbKlar: self-hosted comparison of regional supermarket offers in Germany."
 readme = "README.md"
 requires-python = ">=3.12"
@@ -29,7 +29,7 @@ package-dir = {"" = "src"}
 where = ["src"]
 
 [tool.setuptools.package-data]
-supermarkt = ["static/*.html", "static/*.css", "static/*.js"]
+supermarkt = ["static/*.html", "static/*.css", "static/*.js", "static/*.mjs", "static/*.svg"]
 
 [tool.pytest.ini_options]
 addopts = "-q"

@@ -11,7 +11,7 @@ from .common import clean_text, validate_postal_code
 from .loyalty import normalize_program_ids
 from .models import ToolError
 from . import runtime
-from .ui import build_home_html, build_results_html
+from .ui import build_home_html, build_results_html, build_shopping_html
 
 router = APIRouter()
 
@@ -29,6 +29,11 @@ def favicon_ico() -> Response:
 @router.get("/", include_in_schema=False, response_class=HTMLResponse)
 def home() -> HTMLResponse:
     return HTMLResponse(build_home_html(), headers={"Cache-Control": "no-store"})
+
+
+@router.get("/shopping", include_in_schema=False, response_class=HTMLResponse)
+def shopping() -> HTMLResponse:
+    return HTMLResponse(build_shopping_html(), headers={"Cache-Control": "no-store"})
 
 
 @router.post("/search", include_in_schema=False)
