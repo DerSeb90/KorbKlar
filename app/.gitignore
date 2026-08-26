@@ -46,3 +46,6 @@ app.*.map.json
 
 # Flutter build output
 /build/
+
+# Golden test failure output. Regenerated on every mismatch, never shipped.
+test/failures/

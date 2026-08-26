@@ -41,6 +41,8 @@ jobs:
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
+          # Resolved rather than pinned, so the release follows each stable
+          # release. A pin would go stale silently; this fails loudly instead.
           channel: stable
           cache: true
 

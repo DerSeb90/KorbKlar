@@ -185,7 +185,9 @@ def test_uvicorn_does_not_parse_forwarding_headers_itself():
 
 
 def test_release_contains_no_runtime_state_or_patch_residue():
-    forbidden_dirs = {".git", "build", "dist", "data"}
+    # "failures" is where a golden test writes its diff images; they were
+    # once committed by accident and are pure build residue.
+    forbidden_dirs = {".git", "build", "dist", "data", "failures"}
     forbidden_suffixes = {".rej", ".orig", ".bak", ".log", ".sqlite3", ".sqlite3-wal", ".sqlite3-shm"}
     for path in _release_paths():
         relative = path.relative_to(ROOT)

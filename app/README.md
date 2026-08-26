@@ -42,6 +42,23 @@ The KitchenOwl token stays on the server; the app never sees it.
 Where no list is configured the offer is copied to the clipboard instead, so
 the button is never a dead end.
 
+## Toolchain
+
+The app is built and tested against the current Flutter **stable** channel.
+Both workflows resolve the channel rather than a fixed version, so CI
+follows each stable release; keep the local SDK on stable too, or `flutter
+analyze` and the goldens can disagree with CI for no reason of yours:
+
+```bash
+flutter upgrade
+flutter --version
+```
+
+`environment: sdk:` in `pubspec.yaml` states the oldest Dart the code needs,
+not the one it is built with. It is deliberately not raised to whatever the
+newest stable ships, so a contributor on a slightly older SDK is not shut out
+for nothing.
+
 ## Running it
 
 ```bash
