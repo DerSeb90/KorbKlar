@@ -1,0 +1,28 @@
+{$KORBKLAR_DOMAIN} {
+	encode zstd gzip
+
+	reverse_proxy korbklar:8000 {
+		# Overwrite rather than append. Caddy would otherwise keep whatever the
+		# client sent and add the real address behind it, and KorbKlar's network
+		# allowlist must never see an address the client chose. Setting it to
+		# the immediate peer makes the header say exactly one thing.
+		header_up X-Forwarded-For {remote_host}
+		header_up X-Real-IP {remote_host}
+		header_up X-Forwarded-Proto {scheme}
+		header_up Host {host}
+	}
+
+	header {
+		# Caddy already redirects to HTTPS; this tells browsers to skip the
+		# plaintext attempt next time.
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "no-referrer"
+		-Server
+	}
+
+	log {
+		output stderr
+		format console
+	}
+}

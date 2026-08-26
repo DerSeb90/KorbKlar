@@ -77,6 +77,15 @@ Die Oberfläche ist dann unter `http://SERVER-IP:8080` erreichbar. Dauerhaft kan
 
 Die Laufzeitdaten liegen im Docker-Volume `korbklar-data` und bleiben bei normalen Container-Neustarts erhalten.
 
+## Weiterführende Dokumentation
+
+| Thema | Seite |
+| --- | --- |
+| Deployment, Compose-Dateien, HTTPS, eigenes CI-Image | [docs/deployment.de.md](docs/deployment.de.md) |
+| Zugriffskontrolle: API-Key, VPN, Reverse Proxy | [docs/access-control.de.md](docs/access-control.de.md) |
+| Einkaufsliste über KitchenOwl | [docs/kitchenowl.de.md](docs/kitchenowl.de.md) |
+| Flutter-App | [app/README.md](app/README.md) |
+
 ## Was bei einer Suche passiert
 
 ```text
@@ -233,55 +242,43 @@ Der Browserbetrieb funktioniert ohne Schlüssel. Soll die REST-Schnittstelle zus
 
 ## Einkaufsliste über KitchenOwl
 
-KorbKlar schreibt Angebote auf eine Einkaufsliste in [KitchenOwl](https://kitchenowl.org), einer selbst gehosteten Einkaufsliste mit gemeinsamen Haushalten.
+KorbKlar schreibt Angebote auf eine Einkaufsliste in
+[KitchenOwl](https://kitchenowl.org), einer selbst gehosteten Einkaufsliste
+mit gemeinsamen Haushalten. Optional: ohne Konfiguration bleibt die Funktion
+aus und die Oberfläche blendet sie aus.
 
-Ist im Haushalt bereits ein passender Artikel angelegt, landet das Angebot dort statt als beinahe gleicher Zweitartikel: „GUT&GÜNSTIG Weizenbrötchen / Schrippen" wird zu deinem vorhandenen „Brötchen", der vollständige Angebotsname rückt in die Notiz. Verglichen wird über ganze Wörter, wobei das Grundwort deutscher Komposita hinten steht — „Weizenbrötchen" trifft „Brötchen", „Buttermilch" dagegen „Milch" und nicht „Butter". Abschaltbar über `SUPERMARKT_KITCHENOWL_MATCH_ITEMS=0`.
+Ist im Haushalt bereits ein passender Artikel angelegt, landet das Angebot
+dort statt als beinahe gleicher Zweitartikel — „GUT&GÜNSTIG Weizenbrötchen /
+Schrippen" wird zu deinem vorhandenen „Brötchen", der vollständige
+Angebotsname rückt in die Notiz. Der Händler wird zur Kategorie, damit die
+Liste nach Markt gruppiert.
 
-Gibt es noch keinen passenden Artikel, wird auch der neue kurz benannt: Eigenmarken in Großbuchstaben, Packungsgrößen und Zusätze wie „aus der Region“ fallen weg, aus „GUT&GÜNSTIG Weizenbrötchen / Schrippen“ wird „Weizenbrötchen“. So trifft das anders formulierte Angebot der nächsten Woche denselben Artikel. Einträge aus mehr als drei Wörtern gelten beim Abgleich als Angebotsüberschrift und nicht als Artikel — sonst gewännen die von früheren Versionen angelegten Langnamen jedes Mal gegen dein „Brötchen“.
+### KitchenOwl selbst betreiben
 
-Der Händler wird zur Kategorie, damit die Liste nach Markt gruppiert; fehlende Kategorien legt KorbKlar an. KitchenOwl-Kategorien haben nur einen Namen und kein Bildfeld, ein Ladenlogo ist also nicht möglich — `SUPERMARKT_KITCHENOWL_CATEGORY_PREFIX` stellt stattdessen ein Emoji davor, standardmäßig `🛒`.
-
-**Zu bedenken:** Die Kategorie hängt am Artikel, nicht am Listeneintrag. Ein Artikel wandert also mit, sobald ein anderer Markt ihn günstiger anbietet. Wer lieber nach Abteilungen sortiert, setzt `SUPERMARKT_KITCHENOWL_RETAILER_CATEGORIES=0`; dann bleibt der Händler in der Notiz.
-
-In die Notiz kommt nur, was das Angebot wirklich hergibt: Menge, Preis, Packungsgröße und Gültigkeit. Der Angebotsname steht dort nur, wenn der Artikel anders heißt — sonst stünde er doppelt. Nichts wird geschätzt.
-
-### KitchenOwl im Stack
-
-Das Profil `proxy` startet KitchenOwl gleich mit, auf einer eigenen Subdomain:
-
-```bash
-KORBKLAR_KITCHENOWL_DOMAIN=einkauf.deine-domain.de
-KITCHENOWL_JWT_SECRET=ein-langer-zufaelliger-wert
-KITCHENOWL_PUBLIC_URL=https://einkauf.deine-domain.de
-docker compose --profile proxy up -d
-```
-
-Das Secret erzeugst du auf dem Server mit `openssl rand -base64 48`. Es ist Pflicht: KitchenOwl **lehnt einen fehlenden Wert nicht ab**, sondern nutzt still einen veröffentlichten Standard, und ein leerer Wert ergibt einen leeren Signierschlüssel — damit wären seine Tokens fälschbar. Der Stack prüft das deshalb vor dem Start und bricht mit einer Meldung ab. Einmal gesetzt, sollte der Wert nicht mehr geändert werden; ein neuer entwertet alle Sitzungen und Long-lived Tokens.
-
-Auch für diese Subdomain muss ein DNS-Record auf den Server zeigen, sonst bekommt Caddy kein Zertifikat.
-
-Beim ersten Aufruf legst du in KitchenOwl Konto und Haushalt an.
+KitchenOwl kann im selben Stack mitlaufen, muss aber nicht — eine Instanz,
+die du schon betreibst, wird genauso angebunden. Beides steht in
+[docs/deployment.de.md](docs/deployment.de.md).
 
 ### Verbindung herstellen
 
-Den Token erzeugst du in KitchenOwl unter Profil, Sitzungen, Long-lived Tokens. Danach in `.env`:
+Den Token erzeugst du in KitchenOwl unter Profil, Sitzungen, Long-lived
+Tokens. Danach in `.env`:
 
 ```bash
 SUPERMARKT_KITCHENOWL_URL=http://kitchenowl-web
 SUPERMARKT_KITCHENOWL_TOKEN=dein-long-lived-token
 ```
 
-Im mitgelieferten Stack spricht KorbKlar den Web-Container im Compose-Netz an, nicht das Backend: dieses lauscht auf einem uwsgi-Socket und nicht auf HTTP. Die Anfragen verlassen den Server dabei nicht. Läuft KitchenOwl woanders, trägst du dort die Adresse seiner Weboberfläche ein.
+Bleibt einer der beiden Werte leer, ist die Anbindung abgeschaltet und die
+Oberfläche blendet die Bedienung aus.
 
-`SUPERMARKT_KITCHENOWL_LIST_ID` wählt eine Liste nur vor. KorbKlar liest die Listen aller erreichbaren Haushalte aus KitchenOwl und bietet sie in der Ergebnisliste zur Auswahl an. Nicht vorhandene Listen werden abgelehnt, bevor etwas geschrieben wird. Der Token bleibt auf dem Server und erscheint auch in `/health` nicht.
+In der Ergebnisliste hat jedes Angebot einen Knopf **→ KitchenOwl**. Ein Klick
+legt es in der Liste ab, die du oben in der Leiste einmal auswählst. Die App
+verhält sich genauso.
 
-In der Ergebnisliste hat jedes Angebot einen Knopf **→ KitchenOwl**. Ein Klick legt es in der Liste ab, die du oben in der Leiste einmal auswählst; der Knopf bestätigt mit `✓ in <Liste>`. Ein Zwischenschritt ist nicht nötig.
+Vollständig beschrieben in [docs/kitchenowl.de.md](docs/kitchenowl.de.md):
+Artikelabgleich, Notiz, Kategorien und der Tab „Einkauf".
 
-Daneben gibt es weiterhin den Tab **Einkauf**. Diese Liste heißt dort „Eigene Liste" und bleibt im Browserprofil — sie kann Mengen, Pfand und Summen je Händler, was KitchenOwl nicht kennt. Rechts daneben steht der abgesetzte Bereich **KitchenOwl** mit Ziel-Liste und dem Knopf „Kopie senden". Gesendet wird eine Kopie: die eigene Liste bleibt unverändert, abgehakte Artikel werden übersprungen, und die Rückmeldung nennt Anzahl, Ziel-Liste und übersprungene Artikel.
-
-Die Menge führt die Notiz an, weil KitchenOwl kein eigenes Mengenfeld hat.
-
-Bleiben `SUPERMARKT_KITCHENOWL_URL` oder `SUPERMARKT_KITCHENOWL_TOKEN` leer, ist die Anbindung abgeschaltet und die Oberfläche blendet die Bedienung aus.
 ## Öffentlich betreiben: API-Key und VPN
 
 Ohne `SUPERMARKT_API_KEY` ist nichts eingeschränkt; eine private Instanz verhält sich wie bisher.
@@ -300,60 +297,30 @@ Damit deckt eine Instanz beide Fälle ab: Im VPN ist die Oberfläche ohne Login 
 
 ### Hinter einem Reverse Proxy
 
-`X-Forwarded-For` wird ausschließlich geglaubt, wenn der direkte Peer in `SUPERMARKT_TRUSTED_PROXIES` steht. Die Kette wird von rechts gelesen und bekannte Proxys werden übersprungen, damit ein Client sich nicht durch einen vorangestellten Eintrag eine erlaubte Adresse geben kann. Ohne konfigurierte Proxys wird der Header vollständig ignoriert.
+`X-Forwarded-For` wird ausschließlich geglaubt, wenn der direkte Peer in
+`SUPERMARKT_TRUSTED_PROXIES` steht, und die Kette wird von rechts gelesen.
 
-**uvicorn muss dabei mit `--no-proxy-headers` laufen.** Standardmäßig wertet uvicorn `X-Forwarded-For` selbst aus und ersetzt die Client-Adresse, bevor KorbKlar sie sieht — wer den Header setzen kann, umgeht damit `SUPERMARKT_TRUSTED_NETWORKS`. Das mitgelieferte Docker-Image startet bereits korrekt; bei eigenem Start das Flag nicht vergessen.
+**uvicorn muss dabei mit `--no-proxy-headers` laufen**, sonst ersetzt es die
+Client-Adresse selbst und die Netz-Allowlist ist umgehbar. Das mitgelieferte
+Docker-Image startet bereits korrekt.
 
-Der Reverse Proxy sollte ein vom Client mitgeschicktes `X-Forwarded-For` zusätzlich verwerfen oder überschreiben.
+Einzelheiten und ein Prüfbefehl: [docs/access-control.de.md](docs/access-control.de.md).
 
 ## HTTPS und Deployment
 
-Der Compose-Stack bringt einen optionalen Reverse Proxy mit. Caddy holt und erneuert die Let's-Encrypt-Zertifikate selbst, ohne certbot-Container und ohne Cron.
+Zwei optionale Compose-Dateien liegen neben `compose.yml`: eine für einen
+Reverse Proxy mit Let's-Encrypt-Zertifikaten, eine für KitchenOwl. Sie werden
+dazugehängt statt ausgewählt:
 
 ```bash
-KORBKLAR_DOMAIN=korbklar.deine-domain.de
-KORBKLAR_ACME_EMAIL=du@deine-domain.de
-docker compose --profile proxy up -d
+docker compose -f compose.yml -f compose.proxy.yml up -d
 ```
 
-Ohne `--profile proxy` startet der Stack unverändert wie bisher; der Proxy-Container wird dann gar nicht angelegt.
+Ohne sie startet der Stack unverändert; die zusätzlichen Container werden
+dann gar nicht angelegt und ihre Pflichtwerte nicht gelesen.
 
-Vor dem ersten Start muss ein A- beziehungsweise AAAA-Record der Domain auf den Server zeigen und Port 80 und 443 erreichbar sein — Let's Encrypt prüft darüber.
-
-### Aufteilung zwischen VPN und Internet
-
-Die Netz-Allowlist prüft die Quell-IP, **wie der Server sie sieht**. Wer über das Internet auf die öffentliche Domain zugeht, erscheint mit der IP seines Providers, nicht mit der VPN-Adresse. Deshalb sind es zwei getrennte Wege:
-
-| Weg | Adresse | Autorisierung |
-| --- | --- | --- |
-| Oberfläche im VPN | `http://VPN-IP:8000` | Quell-IP aus `SUPERMARKT_TRUSTED_NETWORKS`, kein Login |
-| App und Skripte | `https://korbklar.deine-domain.de` | Bearer-Token |
-
-`KORBKLAR_BIND_ADDRESS` legt fest, auf welcher Schnittstelle Port 8000 veröffentlicht wird. Hinter dem Proxy gehört dort die VPN-Adresse hin, damit die Oberfläche nicht zusätzlich öffentlich hängt:
-
-```bash
-KORBKLAR_BIND_ADDRESS=10.8.0.1
-```
-
-`SUPERMARKT_TRUSTED_PROXIES` muss das Compose-Netz enthalten, in dem Caddy läuft, sonst wird sein `X-Forwarded-For` ignoriert. Beide Werte stehen standardmäßig auf `172.28.0.0/24`.
-
-Caddy **überschreibt** ein vom Client mitgeschicktes `X-Forwarded-For` mit der tatsächlichen Gegenstelle, statt es zu ergänzen. Die Allowlist bekommt so nie eine Adresse zu sehen, die der Client selbst gewählt hat.
-
-### Eigenes Image aus der CI
-
-Der Workflow baut bei jedem Push auf `main` und veröffentlicht nach GHCR im Namensraum des Repository-Eigentümers. In einem Fork ist das automatisch der eigene. Auf dem Server danach nur noch:
-
-```bash
-docker compose pull && docker compose up -d --no-build
-```
-
-Damit `pull` das eigene Image zieht, in `.env` setzen:
-
-```bash
-KORBKLAR_IMAGE=ghcr.io/DEIN-NAME/korbklar:latest
-```
-
-In einem frisch geforkten Repository sind GitHub Actions deaktiviert; einmal im Reiter „Actions" freigeben. Das erzeugte Paket ist zunächst privat — entweder unter „Packages" auf öffentlich stellen, oder auf dem Server einmal `docker login ghcr.io` mit einem Token, das `read:packages` erlaubt.
+Alles Weitere — Domains, VPN-Trennung, eigenes Image aus der CI, Update —
+steht in [docs/deployment.de.md](docs/deployment.de.md).
 
 ## Cache steuern
 

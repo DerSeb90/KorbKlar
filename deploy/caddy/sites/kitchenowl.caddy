@@ -1,0 +1,26 @@
+# KitchenOwl on its own subdomain. Its Flutter frontend and the live updates
+# between household members both rely on WebSockets, which reverse_proxy
+# upgrades on its own.
+{$KORBKLAR_KITCHENOWL_DOMAIN} {
+	encode zstd gzip
+
+	# The frontend image already proxies /api to the backend, so one upstream
+	# is enough here.
+	reverse_proxy kitchenowl-web:80 {
+		header_up X-Forwarded-For {remote_host}
+		header_up X-Real-IP {remote_host}
+		header_up X-Forwarded-Proto {scheme}
+		header_up Host {host}
+	}
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		-Server
+	}
+
+	log {
+		output stderr
+		format console
+	}
+}

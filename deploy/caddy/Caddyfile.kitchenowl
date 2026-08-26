@@ -1,0 +1,10 @@
+# KorbKlar and a self-hosted KitchenOwl, each on its own domain. Select with
+# KORBKLAR_CADDYFILE=./deploy/caddy/Caddyfile.kitchenowl and add
+# compose.kitchenowl.yml, which provides the container this proxies to.
+
+{
+	email {$KORBKLAR_ACME_EMAIL}
+}
+
+import /etc/caddy/sites/korbklar.caddy
+import /etc/caddy/sites/kitchenowl.caddy

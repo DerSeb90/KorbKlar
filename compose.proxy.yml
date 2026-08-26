@@ -1,0 +1,53 @@
+# Optional: a TLS terminator in front of KorbKlar.
+#
+#   docker compose -f compose.yml -f compose.proxy.yml up -d
+#
+# Caddy obtains and renews Let's Encrypt certificates on its own; there is no
+# certbot container and no cron job. Requires KORBKLAR_DOMAIN and
+# KORBKLAR_ACME_EMAIL in .env, and port 80 and 443 reachable from the
+# internet so the ACME challenge can complete.
+#
+# Publishing KorbKlar's own port at the same time makes the proxy pointless:
+# set KORBKLAR_BIND_ADDRESS=127.0.0.1 in .env.
+#
+# To put KitchenOwl on a second domain, add compose.kitchenowl.yml and set
+# KORBKLAR_CADDYFILE=./deploy/caddy/Caddyfile.kitchenowl.
+
+services:
+  caddy:
+    image: caddy:2-alpine
+    container_name: korbklar-caddy
+    restart: unless-stopped
+    init: true
+    security_opt:
+      - no-new-privileges:true
+    depends_on:
+      korbklar:
+        condition: service_healthy
+    environment:
+      KORBKLAR_DOMAIN: "${KORBKLAR_DOMAIN:?Der Reverse Proxy braucht KORBKLAR_DOMAIN in .env}"
+      KORBKLAR_ACME_EMAIL: "${KORBKLAR_ACME_EMAIL:?Let's Encrypt braucht KORBKLAR_ACME_EMAIL in .env}"
+      # Only read by Caddyfile.kitchenowl.
+      KORBKLAR_KITCHENOWL_DOMAIN: ${KORBKLAR_KITCHENOWL_DOMAIN:-}
+    networks:
+      - korbklar-net
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ${KORBKLAR_CADDYFILE:-./deploy/caddy/Caddyfile}:/etc/caddy/Caddyfile:ro
+      # Both Caddyfiles import from here, so neither repeats the other.
+      - ./deploy/caddy/sites:/etc/caddy/sites:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    healthcheck:
+      test: ["CMD", "caddy", "version"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  caddy-data:
+  caddy-config:

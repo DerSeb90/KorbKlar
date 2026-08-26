@@ -64,6 +64,15 @@ SUPERMARKT_PORT=8080 docker compose up -d --no-build
 
 The interface is then available at `http://SERVER-IP:8080`. The value may also be stored in an optional `.env` file.
 
+## Further documentation
+
+| Topic | Page |
+| --- | --- |
+| Deployment, compose files, HTTPS, your own CI image | [docs/deployment.en.md](docs/deployment.en.md) |
+| Access control: API key, VPN, reverse proxy | [docs/access-control.en.md](docs/access-control.en.md) |
+| Shopping list through KitchenOwl | [docs/kitchenowl.en.md](docs/kitchenowl.en.md) |
+| Flutter app | [app/README.md](app/README.md) |
+
 ## What happens during a search
 
 ```text
@@ -214,55 +223,39 @@ Browser access remains unauthenticated. If `SUPERMARKT_API_KEY` is set, a bearer
 
 ## Shopping list through KitchenOwl
 
-KorbKlar writes offers to a list in [KitchenOwl](https://kitchenowl.org), a self-hosted grocery list with shared households.
+KorbKlar writes offers to a list in [KitchenOwl](https://kitchenowl.org), a
+self-hosted grocery list with shared households. Optional: unconfigured, the
+feature stays off and the interface hides it.
 
-Where the household already keeps a fitting article, the offer lands there instead of as a near duplicate: "GUT&GÜNSTIG Weizenbrötchen / Schrippen" joins your existing "Brötchen" and the full offer name moves into the note. Matching works on whole words, and German compounds carry their head noun last, so "Weizenbrötchen" matches "Brötchen" while "Buttermilch" matches "Milch" rather than "Butter". Switch it off with `SUPERMARKT_KITCHENOWL_MATCH_ITEMS=0`.
+Where the household already keeps a fitting article, the offer lands there
+instead of as a near duplicate — "GUT&GÜNSTIG Weizenbrötchen / Schrippen"
+joins your existing "Brötchen" and the full offer name moves into the note.
+The retailer becomes the category so the list groups by shop.
 
-When no article fits yet, the new one is named short as well: shouted private labels, pack sizes and qualifiers such as "aus der Region" are dropped, so "GUT&GÜNSTIG Weizenbrötchen / Schrippen" becomes "Weizenbrötchen" and next week's differently worded offer lands on the same article. Catalogue entries of more than three words count as leaflet headlines rather than articles, because otherwise the long names earlier versions filed would beat the household's own "Brötchen" every time.
+### Running KitchenOwl yourself
 
-The retailer becomes the category so the list groups by shop; KorbKlar creates the ones that are missing. KitchenOwl categories carry a name and no image field, so a store logo is not possible — `SUPERMARKT_KITCHENOWL_CATEGORY_PREFIX` puts an emoji in front instead, `🛒` by default.
-
-**Worth knowing:** the category belongs to the article, not to one list entry, so an article moves along as soon as a different retailer offers it more cheaply. To keep your own department ordering, set `SUPERMARKT_KITCHENOWL_RETAILER_CATEGORIES=0` and the retailer stays in the note.
-
-The note carries only what the offer actually has: quantity, price, package size and validity. The offer name appears only where the article is named differently, otherwise it would read twice. Nothing is estimated.
-
-### KitchenOwl in the stack
-
-The `proxy` profile starts KitchenOwl alongside, on its own subdomain:
-
-```bash
-KORBKLAR_KITCHENOWL_DOMAIN=shopping.example.com
-KITCHENOWL_JWT_SECRET=a-long-random-value
-KITCHENOWL_PUBLIC_URL=https://shopping.example.com
-docker compose --profile proxy up -d
-```
-
-Generate the secret on the server with `openssl rand -base64 48`. It is required: KitchenOwl **does not reject a missing value**, it quietly uses a published default, and an empty value yields an empty signing key, which would make its tokens forgeable. The stack therefore checks it before startup and aborts with a message. Once set, leave it alone; a new value invalidates every session and long-lived token.
-
-That subdomain also needs a DNS record pointing at the server, otherwise Caddy cannot obtain a certificate.
-
-On first visit you create the account and household inside KitchenOwl.
+KitchenOwl can run in the same stack but does not have to; an instance you
+already operate connects the same way. Both are in
+[docs/deployment.en.md](docs/deployment.en.md).
 
 ### Connecting the two
 
-Create the token in KitchenOwl under profile, sessions, long-lived tokens, then set:
+Create the token in KitchenOwl under profile, sessions, long-lived tokens.
+Then in `.env`:
 
 ```bash
 SUPERMARKT_KITCHENOWL_URL=http://kitchenowl-web
 SUPERMARKT_KITCHENOWL_TOKEN=your-long-lived-token
 ```
 
-In the bundled stack KorbKlar talks to the web container on the Compose network rather than the backend, which listens on a uwsgi socket instead of HTTP. Those requests never leave the server. Point it at the web interface's address if KitchenOwl runs somewhere else.
+Leave either empty and the integration is off.
 
-`SUPERMARKT_KITCHENOWL_LIST_ID` only preselects a list. KorbKlar reads the lists of every reachable household from KitchenOwl and offers them in the results interface. A list that does not exist is rejected before anything is written. The token stays on the server and is not exposed through `/health` either.
+Every offer in the results has a **→ KitchenOwl** button. One click files it
+in the list selected once in the bar above. The app behaves the same way.
 
-Every offer in the results list carries a **→ KitchenOwl** button. One click files it in the list picked once in the bar above, and the button confirms with `✓ in <list>`. No intermediate step is involved.
+Described in full in [docs/kitchenowl.en.md](docs/kitchenowl.en.md): article
+matching, the note, categories and the "Einkauf" tab.
 
-Alongside that the **Einkauf** tab remains. That list is labelled „Eigene Liste" and stays in the browser profile; it handles quantities, deposits and per-retailer totals, which KitchenOwl does not. Beside it sits a separated **KitchenOwl** area with the target list and a „Kopie senden" button. Sending copies: the local list is untouched, checked items are skipped, and the result names the count, the target list and what was skipped.
-
-The quantity leads the note, because KitchenOwl has no amount field of its own.
-
-If `SUPERMARKT_KITCHENOWL_URL` or `SUPERMARKT_KITCHENOWL_TOKEN` is empty the integration stays switched off and the interface hides the controls.
 ## Running it publicly: API key and VPN
 
 Without `SUPERMARKT_API_KEY` nothing is restricted, and a private instance behaves as before.
@@ -281,62 +274,30 @@ One instance then covers both halves: the browser interface stays usable without
 
 ### Behind a reverse proxy
 
-`X-Forwarded-For` is believed only when the immediate peer is listed in `SUPERMARKT_TRUSTED_PROXIES`. The chain is read from the right with known proxies skipped, so a client cannot grant itself an allowed address by prepending an entry. With no proxies configured the header is ignored entirely.
+`X-Forwarded-For` is believed only when the immediate peer is listed in
+`SUPERMARKT_TRUSTED_PROXIES`, and the chain is read from the right.
 
-**uvicorn must run with `--no-proxy-headers`.** By default uvicorn parses `X-Forwarded-For` itself and replaces the client address before KorbKlar sees it, which lets anyone able to set that header bypass `SUPERMARKT_TRUSTED_NETWORKS`. The bundled Docker image already starts correctly; keep the flag when starting uvicorn yourself.
+**uvicorn must run with `--no-proxy-headers`**, or it replaces the client
+address itself and the network allowlist can be bypassed. The bundled Docker
+image already starts correctly.
 
-The reverse proxy should additionally drop or overwrite any `X-Forwarded-For` supplied by the client.
+Details and a check command: [docs/access-control.en.md](docs/access-control.en.md).
 
 ## HTTPS and deployment
 
-The Compose stack ships an optional reverse proxy. Caddy obtains and renews Let's Encrypt certificates on its own, with no certbot container and no cron job.
+Two optional compose files sit beside `compose.yml`: one for a reverse proxy
+with Let's Encrypt certificates, one for KitchenOwl. They are added rather
+than chosen between:
 
 ```bash
-KORBKLAR_DOMAIN=korbklar.example.com
-KORBKLAR_ACME_EMAIL=you@example.com
-docker compose --profile proxy up -d
+docker compose -f compose.yml -f compose.proxy.yml up -d
 ```
 
-**The profile is required.** A plain `docker compose up -d` never creates the Caddy container, so it appears in neither `docker ps` nor `docker compose ps`. That is deliberate, so an installation without HTTPS keeps working unchanged. Check it with `docker compose --profile proxy ps`.
+Without them the stack starts unchanged; the extra containers are never
+created and their required values are never read.
 
-If either value is missing the container exits immediately with one log line naming it; read it with `docker compose --profile proxy logs caddy`.
-
-Before the first start an A or AAAA record must point at the server and ports 80 and 443 must be reachable, because Let's Encrypt validates over them.
-
-### Splitting VPN from internet
-
-The network allowlist checks the source address **as the server sees it**. Anyone reaching the public domain over the internet appears with their provider's address, not their VPN one, so these are two separate paths:
-
-| Path | Address | Authorisation |
-| --- | --- | --- |
-| Browser over VPN | `http://VPN-IP:8000` | source address in `SUPERMARKT_TRUSTED_NETWORKS`, no login |
-| App and scripts | `https://korbklar.example.com` | bearer token |
-
-`KORBKLAR_BIND_ADDRESS` selects the interface the published port binds to. Behind the proxy that is the VPN address, so the browser interface is not additionally exposed:
-
-```bash
-KORBKLAR_BIND_ADDRESS=10.8.0.1
-```
-
-`SUPERMARKT_TRUSTED_PROXIES` must contain the Compose network Caddy runs in, otherwise its `X-Forwarded-For` is ignored. Both default to `172.28.0.0/24`.
-
-Caddy **overwrites** a client-supplied `X-Forwarded-For` with the actual peer rather than appending to it, so the allowlist never sees an address the client chose.
-
-### Publishing your own image
-
-The workflow builds on every push to `main` and publishes to GHCR under the repository owner's namespace, which in a fork is that fork's own. The server then only needs:
-
-```bash
-docker compose pull && docker compose up -d --no-build
-```
-
-Point `KORBKLAR_IMAGE` at it:
-
-```bash
-KORBKLAR_IMAGE=ghcr.io/your-name/korbklar:latest
-```
-
-A freshly forked repository has GitHub Actions disabled; enable them once under the Actions tab. The resulting package starts out private: either make it public under Packages, or run `docker login ghcr.io` on the server with a token that grants `read:packages`.
+Everything else — domains, splitting VPN from internet, your own image from
+CI, updating — is in [docs/deployment.en.md](docs/deployment.en.md).
 
 ## Controlling the cache
 

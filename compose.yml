@@ -1,3 +1,16 @@
+# KorbKlar on its own. Nothing here reaches outside the host.
+#
+#   docker compose up -d
+#
+# Two optional pieces live in their own files, because neither is needed to
+# run the comparison and both pull in containers and settings that would
+# otherwise have to be read and ignored:
+#
+#   docker compose -f compose.yml -f compose.kitchenowl.yml up -d
+#   docker compose -f compose.yml -f compose.proxy.yml up -d
+#
+# They combine; see docs/deployment.md.
+
 name: korbklar
 
 services:
@@ -19,7 +32,6 @@ services:
       SUPERMARKT_KAUFLAND_CACHE_DIR: ${SUPERMARKT_KAUFLAND_CACHE_DIR:-/data/kaufland}
       SUPERMARKT_REWE_CACHE_DIR: ${SUPERMARKT_REWE_CACHE_DIR:-/data/rewe}
       SUPERMARKT_USER_AGENT: ${SUPERMARKT_USER_AGENT:-}
-      SUPERMARKT_API_KEY: ${SUPERMARKT_API_KEY:-}
       SUPERMARKT_CACHE_TTL_MINUTES: ${SUPERMARKT_CACHE_TTL_MINUTES:-30}
       SUPERMARKT_CACHE_MAX_SNAPSHOTS: ${SUPERMARKT_CACHE_MAX_SNAPSHOTS:-100}
       SUPERMARKT_RESULT_RETENTION_HOURS: ${SUPERMARKT_RESULT_RETENTION_HOURS:-168}
@@ -31,26 +43,20 @@ services:
       SUPERMARKT_IMAGE_CACHE_TTL_SECONDS: ${SUPERMARKT_IMAGE_CACHE_TTL_SECONDS:-604800}
       SUPERMARKT_IMAGE_CACHE_MAX_BYTES: ${SUPERMARKT_IMAGE_CACHE_MAX_BYTES:-536870912}
       SUPERMARKT_IMAGE_MAX_FILE_BYTES: ${SUPERMARKT_IMAGE_MAX_FILE_BYTES:-4194304}
-      SUPERMARKT_KITCHENOWL_URL: ${SUPERMARKT_KITCHENOWL_URL:-http://kitchenowl-web}
-      SUPERMARKT_KITCHENOWL_TOKEN: ${SUPERMARKT_KITCHENOWL_TOKEN:-}
-      SUPERMARKT_KITCHENOWL_LIST_ID: ${SUPERMARKT_KITCHENOWL_LIST_ID:-}
-      SUPERMARKT_KITCHENOWL_VERIFY_TLS: ${SUPERMARKT_KITCHENOWL_VERIFY_TLS:-1}
-      SUPERMARKT_KITCHENOWL_TIMEOUT_SECONDS: ${SUPERMARKT_KITCHENOWL_TIMEOUT_SECONDS:-15}
-      SUPERMARKT_KITCHENOWL_MAX_ITEMS: ${SUPERMARKT_KITCHENOWL_MAX_ITEMS:-50}
-      SUPERMARKT_KITCHENOWL_MATCH_ITEMS: ${SUPERMARKT_KITCHENOWL_MATCH_ITEMS:-1}
-      SUPERMARKT_KITCHENOWL_RETAILER_CATEGORIES: ${SUPERMARKT_KITCHENOWL_RETAILER_CATEGORIES:-1}
-      SUPERMARKT_KITCHENOWL_CATEGORY_PREFIX: ${SUPERMARKT_KITCHENOWL_CATEGORY_PREFIX-🛒 }
+      SUPERMARKT_CHROMIUM_BINARY: ${SUPERMARKT_CHROMIUM_BINARY:-}
+      # Access control. Empty means the instance is open, which is only safe
+      # on a private network. See docs/access-control.md.
+      SUPERMARKT_API_KEY: ${SUPERMARKT_API_KEY:-}
       SUPERMARKT_TRUSTED_NETWORKS: ${SUPERMARKT_TRUSTED_NETWORKS:-}
       SUPERMARKT_TRUSTED_PROXIES: ${SUPERMARKT_TRUSTED_PROXIES:-}
-      SUPERMARKT_CHROMIUM_BINARY: ${SUPERMARKT_CHROMIUM_BINARY:-}
     volumes:
       - korbklar-data:/data
     networks:
       - korbklar-net
     ports:
       # KORBKLAR_BIND_ADDRESS pins the published port to a single interface.
-      # Behind the reverse proxy set it to the VPN address; the container port
-      # stays 8000 either way.
+      # Behind the reverse proxy set it to 127.0.0.1 or the VPN address; the
+      # container port stays 8000 either way.
       - "${KORBKLAR_BIND_ADDRESS:-0.0.0.0}:${SUPERMARKT_PORT:-8000}:8000"
     healthcheck:
       test: ["CMD", "curl", "--fail", "--silent", "http://127.0.0.1:8000/health"]
@@ -58,131 +64,6 @@ services:
       timeout: 5s
       retries: 12
       start_period: 20s
-
-  caddy:
-    # Optional. Start with: docker compose --profile proxy up -d
-    # Obtains and renews Let's Encrypt certificates on its own.
-    image: caddy:2-alpine
-    container_name: korbklar-caddy
-    restart: unless-stopped
-    init: true
-    profiles: ["proxy"]
-    security_opt:
-      - no-new-privileges:true
-    depends_on:
-      korbklar:
-        condition: service_healthy
-    environment:
-      # Deliberately not marked required: Compose interpolates every service
-      # regardless of the active profile, so ":?" here would break the plain
-      # deployment that never starts this container. Caddy reports a missing
-      # domain itself when the profile is actually used.
-      KORBKLAR_DOMAIN: ${KORBKLAR_DOMAIN:-}
-      KORBKLAR_ACME_EMAIL: ${KORBKLAR_ACME_EMAIL:-}
-      KORBKLAR_KITCHENOWL_DOMAIN: ${KORBKLAR_KITCHENOWL_DOMAIN:-}
-    networks:
-      - korbklar-net
-    # Both values are unavoidably optional at the Compose level, because
-    # Compose interpolates every service whether or not its profile is
-    # active. Checking here turns a Caddyfile parse error into one line.
-    command:
-      - sh
-      - -c
-      - |
-        missing=""
-        [ -n "$${KORBKLAR_DOMAIN}" ] || missing="KORBKLAR_DOMAIN"
-        [ -n "$${KORBKLAR_ACME_EMAIL}" ] || missing="$${missing:+$$missing und }KORBKLAR_ACME_EMAIL"
-        [ -n "$${KORBKLAR_KITCHENOWL_DOMAIN}" ] || missing="$${missing:+$$missing, }KORBKLAR_KITCHENOWL_DOMAIN"
-        if [ -n "$$missing" ]; then
-          echo "Reverse Proxy nicht gestartet: $$missing fehlt in .env" >&2
-          exit 1
-        fi
-        exec caddy run --config /etc/caddy/Caddyfile --adapter caddyfile
-    ports:
-      - "80:80"
-      - "443:443"
-      - "443:443/udp"
-    volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
-      - caddy-data:/data
-      - caddy-config:/config
-    healthcheck:
-      test: ["CMD", "caddy", "version"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
-      start_period: 10s
-
-  kitchenowl-secret-check:
-    # KitchenOwl does not reject a missing signing key: get_secret falls
-    # back to a published default, and an empty value yields an empty key,
-    # which makes its tokens forgeable. Compose cannot mark the variable
-    # required, because it interpolates every service regardless of the
-    # active profile, so the check runs here and the backend waits for it.
-    image: alpine:3
-    container_name: korbklar-kitchenowl-secret-check
-    profiles: ["proxy"]
-    restart: "no"
-    security_opt:
-      - no-new-privileges:true
-    environment:
-      KITCHENOWL_JWT_SECRET: ${KITCHENOWL_JWT_SECRET:-}
-    command:
-      - sh
-      - -c
-      - |
-        if [ $${#KITCHENOWL_JWT_SECRET} -lt 32 ]; then
-          echo "KitchenOwl nicht gestartet: KITCHENOWL_JWT_SECRET fehlt oder ist kuerzer als 32 Zeichen." >&2
-          echo "Erzeugen mit: openssl rand -base64 48" >&2
-          exit 1
-        fi
-
-  kitchenowl-back:
-    # Self-hosted grocery list KorbKlar writes offers to. Shares the proxy
-    # profile because it is only reachable through the proxy.
-    image: tombursch/kitchenowl-backend:latest
-    container_name: korbklar-kitchenowl-back
-    restart: unless-stopped
-    init: true
-    profiles: ["proxy"]
-    depends_on:
-      kitchenowl-secret-check:
-        condition: service_completed_successfully
-    security_opt:
-      - no-new-privileges:true
-    environment:
-      # Verified by kitchenowl-secret-check before this container starts.
-      JWT_SECRET_KEY: ${KITCHENOWL_JWT_SECRET:-}
-      # Lets KitchenOwl build correct absolute links to its own frontend.
-      FRONT_URL: ${KITCHENOWL_PUBLIC_URL:-}
-      # Stated rather than inherited: the signup route only exists when this
-      # is true, and an upstream default is not a guarantee.
-      OPEN_REGISTRATION: "false"
-      # Onboarding closes itself once the first account exists, but saying so
-      # keeps a wiped data volume from reopening it unnoticed.
-      DISABLE_ONBOARDING: ${KITCHENOWL_DISABLE_ONBOARDING:-false}
-    networks:
-      - korbklar-net
-    volumes:
-      - kitchenowl-data:/data
-
-  kitchenowl-web:
-    image: tombursch/kitchenowl-web:latest
-    container_name: korbklar-kitchenowl-web
-    restart: unless-stopped
-    init: true
-    profiles: ["proxy"]
-    security_opt:
-      - no-new-privileges:true
-    environment:
-      # The image defaults this to "back:5000", the service name from its own
-      # compose example. Ours is named differently, and nginx refuses to start
-      # when the upstream host does not resolve.
-      BACK_URL: kitchenowl-back:5000
-    depends_on:
-      - kitchenowl-back
-    networks:
-      - korbklar-net
 
 networks:
   korbklar-net:
@@ -194,6 +75,3 @@ networks:
 
 volumes:
   korbklar-data:
-  kitchenowl-data:
-  caddy-data:
-  caddy-config:

@@ -98,9 +98,9 @@ def test_compose_is_one_self_contained_service():
     assert "${SUPERMARKT_PORT:-8000}:8000" in compose
     assert "healthcheck:" in compose
     assert "SUPERMARKT_DATA_DIR: ${SUPERMARKT_DATA_DIR:-/data}" in compose
-    # The TLS terminator must stay optional so a plain deployment is
-    # unchanged by its presence.
-    assert 'profiles: ["proxy"]' in compose
+    # The TLS terminator has its own file, so a plain deployment cannot
+    # accidentally start it.
+    assert "caddy" not in services.casefold()
 
 
 def test_legacy_configuration_names_are_gone():
@@ -133,16 +133,34 @@ def test_default_host_port_is_configurable_without_changing_container_port():
 
 
 def test_the_proxy_never_forwards_a_client_supplied_source_address():
-    caddyfile = (ROOT / "Caddyfile").read_text(encoding="utf-8")
+    site = (ROOT / "deploy/caddy/sites/korbklar.caddy").read_text(encoding="utf-8")
     # Overwriting rather than appending is what keeps the network allowlist
     # from ever seeing an address the client chose.
-    assert "header_up X-Forwarded-For {remote_host}" in caddyfile
-    assert "{$KORBKLAR_DOMAIN}" in caddyfile
-    assert "{$KORBKLAR_ACME_EMAIL}" in caddyfile
+    assert "header_up X-Forwarded-For {remote_host}" in site
+    assert "{$KORBKLAR_DOMAIN}" in site
+    for name in ("Caddyfile", "Caddyfile.kitchenowl"):
+        entry = (ROOT / "deploy/caddy" / name).read_text(encoding="utf-8")
+        assert "{$KORBKLAR_ACME_EMAIL}" in entry
+        # Both entry points import the same site file, so the header handling
+        # above cannot drift apart between them.
+        assert "import /etc/caddy/sites/korbklar.caddy" in entry
+
+
+def test_the_optional_pieces_are_separate_compose_files():
+    """Neither the shopping list nor TLS may be needed to run the comparison."""
+    base = (ROOT / "compose.yml").read_text(encoding="utf-8")
+    # Only the services block: the header comment names both files on purpose.
+    services = base.split("\nservices:")[1].split("\nnetworks:")[0]
+    assert "kitchenowl" not in services.casefold()
+    assert "caddy" not in services.casefold()
+    # The overlays add to the base rather than repeating it.
+    for name in ("compose.kitchenowl.yml", "compose.proxy.yml"):
+        overlay = (ROOT / name).read_text(encoding="utf-8")
+        assert "image: ${KORBKLAR_IMAGE" not in overlay
 
 
 def test_kitchenowl_cannot_start_without_a_signing_key():
-    compose = (ROOT / "compose.yml").read_text(encoding="utf-8")
+    compose = (ROOT / "compose.kitchenowl.yml").read_text(encoding="utf-8")
     # KitchenOwl falls back to a published default and accepts an empty key,
     # so the stack has to refuse before its backend comes up.
     assert "kitchenowl-secret-check:" in compose
@@ -151,7 +169,7 @@ def test_kitchenowl_cannot_start_without_a_signing_key():
 
 
 def test_the_kitchenowl_frontend_points_at_our_backend_service():
-    compose = (ROOT / "compose.yml").read_text(encoding="utf-8")
+    compose = (ROOT / "compose.kitchenowl.yml").read_text(encoding="utf-8")
     # The image defaults its upstream to the service name from its own compose
     # example; nginx refuses to start when that host does not resolve.
     assert "BACK_URL: kitchenowl-back:5000" in compose
@@ -187,15 +205,17 @@ def test_release_has_no_development_machine_references():
         assert marker not in text
 
 
-def test_release_has_only_the_base_compose_file():
+def test_release_carries_no_stray_compose_file():
     compose_files = sorted(path.name for path in ROOT.glob("compose*.yml"))
-    assert compose_files == ["compose.yml"]
-    compose = (ROOT / "compose.yml").read_text(encoding="utf-8")
-    assert "supermarkt-ts" not in compose
+    assert compose_files == ["compose.kitchenowl.yml", "compose.proxy.yml", "compose.yml"]
+    for name in compose_files:
+        assert "supermarkt-ts" not in (ROOT / name).read_text(encoding="utf-8")
 
 
 def test_all_supported_compose_environment_variables_are_documented():
-    compose = (ROOT / "compose.yml").read_text(encoding="utf-8")
+    compose = "\n".join(
+        path.read_text(encoding="utf-8") for path in sorted(ROOT.glob("compose*.yml"))
+    )
     env_example = (ROOT / ".env.example").read_text(encoding="utf-8")
     names = set(re.findall(r"\$\{(SUPERMARKT_[A-Z0-9_]+|KORBKLAR_[A-Z0-9_]+|KITCHENOWL_[A-Z0-9_]+)", compose))
     names.add("SUPERMARKT_PORT")
@@ -248,3 +268,15 @@ def test_readme_header_is_well_formed_svg():
     root = ET.fromstring(header.read_text(encoding="utf-8"))
     assert root.tag.endswith("svg")
     assert root.attrib.get("viewBox") == "0 0 1200 480"
+
+
+def test_every_relative_documentation_link_resolves():
+    """A moved section must not leave a dead link behind."""
+    pages = [ROOT / "README.md", ROOT / "README.de.md", ROOT / "README.en.md"]
+    pages += sorted((ROOT / "docs").glob("*.md"))
+    broken = []
+    for page in pages:
+        for target in re.findall(r"\]\(([^)#:]+\.md)\)", page.read_text(encoding="utf-8")):
+            if not (page.parent / target).resolve().is_file():
+                broken.append(f"{page.name} -> {target}")
+    assert not broken, broken

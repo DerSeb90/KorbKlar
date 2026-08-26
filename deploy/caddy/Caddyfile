@@ -1,0 +1,8 @@
+# KorbKlar behind TLS. Used by compose.proxy.yml unless KORBKLAR_CADDYFILE
+# names a different file.
+
+{
+	email {$KORBKLAR_ACME_EMAIL}
+}
+
+import /etc/caddy/sites/korbklar.caddy
