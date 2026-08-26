@@ -31,6 +31,9 @@ def health() -> dict[str, Any]:
             "PENNY": "Marktguru regional catalogue",
             "Netto": "Marktguru regional catalogue",
             "Globus": "Marktguru regional catalogue",
+            "Combi": "Marktguru regional catalogue",
+            "famila Nordwest": "Marktguru regional catalogue",
         },
+        "shopping_list": runtime.get_shopping_list().health(),
         **engine.store.health(),
     }

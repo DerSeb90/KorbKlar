@@ -88,11 +88,13 @@ The browser interface and REST API use the same comparison engine. Retailer adap
 
 ## Supported retailers and data paths
 
-KorbKlar currently supports REWE, EDEKA, Marktkauf, ALDI Nord, ALDI Süd, Kaufland, Lidl, PENNY, Netto Marken-Discount, and GLOBUS.
+KorbKlar currently supports REWE, EDEKA, Marktkauf, ALDI Nord, ALDI Süd, Kaufland, Lidl, PENNY, Netto Marken-Discount, GLOBUS, Combi, and famila Nordwest.
 
 REWE, EDEKA, Marktkauf, and Kaufland are loaded preferentially from direct retailer sources. For ALDI, the postal code determines the region and only ALDI Nord or ALDI Süd is retrieved directly. If the region cannot be determined unambiguously, ALDI is omitted and a warning is shown.
 
-Lidl, PENNY, Netto Marken-Discount, and GLOBUS are loaded from regional Marktguru data. KorbKlar combines a broad regional search with supplementary retailer-name searches; the name queries alone are never treated as a complete catalogue.
+Lidl, PENNY, Netto Marken-Discount, GLOBUS, Combi, and famila Nordwest are loaded from regional Marktguru data. KorbKlar combines a broad regional search with supplementary retailer-name searches; the name queries alone are never treated as a complete catalogue.
+
+Combi and famila Nordwest belong to the Bünting group and only trade in north-western Germany. Both are therefore optional: outside their sales area they simply return no offers, which is not reported as a source error. famila Nordost is a different, unrelated retail group and is never matched as famila Nordwest.
 
 If a direct adapter fails or returns no offers for the target week, Marktguru may act as a fallback for that retailer only. A successful direct catalogue is never mixed with a second complete Marktguru catalogue. Actual availability depends on postal code, region, and reachable sources; retailers without results are not shown as empty filters.
 
@@ -117,6 +119,7 @@ The interface includes:
 - selection of multiple loyalty programs
 - warnings for failed or incomplete sources
 - automatic loading of additional results while scrolling
+- adding offers to a Home Assistant shopping list such as Bring, individually or as a selection
 
 When exactly one retailer is selected, the redundant retailer column is hidden.
 
@@ -187,7 +190,36 @@ Optional fields include loyalty programs, product or brand filters, retailer, pa
 }
 ```
 
-Browser access remains unauthenticated. If `SUPERMARKT_API_KEY` is set, a bearer token protects only `POST /api/v1/compare`. See [`.env.example`](.env.example) for current settings.
+Two further endpoints exist once the shopping-list integration is configured:
+
+```text
+GET  /api/v1/shopping-list/targets
+POST /api/v1/shopping-list/items
+```
+
+Browser access remains unauthenticated. If `SUPERMARKT_API_KEY` is set, a bearer token protects `POST /api/v1/compare` and both shopping-list endpoints. See [`.env.example`](.env.example) for current settings.
+
+## Shopping list through Home Assistant
+
+KorbKlar can write offers to a Home Assistant todo list. Because the Bring integration exposes every Bring list as a `todo` entity, KorbKlar calls the generic `todo.add_item` service instead of a Bring-specific interface. The same path therefore also covers the built-in shopping list and other todo providers.
+
+Configure the connection with a long-lived access token from the Home Assistant user profile:
+
+```bash
+SUPERMARKT_HA_URL=http://homeassistant.local:8123
+SUPERMARKT_HA_TOKEN=your-long-lived-access-token
+SUPERMARKT_HA_TODO_ENTITY=todo.bring_einkaufsliste
+```
+
+The Home Assistant instance may be reachable only over LAN or VPN. Only the KorbKlar server talks to it, the token never reaches the browser, and it is not exposed through `/health`. This client deliberately does not use the SSRF guard applied to untrusted product images, because the target here is a first-party host chosen by the operator.
+
+`SUPERMARKT_HA_TODO_ENTITY` only preselects a list. KorbKlar reads the available `todo` entities from Home Assistant and offers them in the results interface, so several Bring lists can be used from the same instance. Entities from other domains are rejected before anything is written.
+
+Each offer becomes one list entry: the product name is the article, and the note holds retailer, price, package size, and validity, for example `famila Nordwest · 1,59 € · 250 g · bis 29.08.`. Only values the offer actually carries are written; nothing is estimated.
+
+In the results interface each offer has a `+ Liste` button, and a checkbox collects several offers for one combined transfer. The browser path is protected by the same HMAC result token that already guards result data and the image proxy, so the feature is reachable only with a valid results link.
+
+If `SUPERMARKT_HA_URL` or `SUPERMARKT_HA_TOKEN` is empty, the integration stays switched off and the interface hides the shopping-list controls.
 
 ## Cache and data
 
@@ -228,6 +260,12 @@ The default setup needs no `.env`. [`.env.example`](.env.example) documents ever
 - `SUPERMARKT_IMAGE_CACHE_TTL_SECONDS`
 - `SUPERMARKT_IMAGE_CACHE_MAX_BYTES`
 - `SUPERMARKT_IMAGE_MAX_FILE_BYTES`
+- `SUPERMARKT_HA_URL`
+- `SUPERMARKT_HA_TOKEN`
+- `SUPERMARKT_HA_TODO_ENTITY`
+- `SUPERMARKT_HA_VERIFY_TLS`
+- `SUPERMARKT_HA_TIMEOUT_SECONDS`
+- `SUPERMARKT_HA_MAX_ITEMS`
 
 The historical internal prefixes remain part of the current technical interface. `.env.example` is authoritative for meanings, defaults, and Docker paths.
 
@@ -253,6 +291,16 @@ pip install -e '.[dev]'
 pytest -m 'not live'
 ```
 
+On Windows use `.venv\Scripts\python.exe` instead of the activation script. The `dev` extra pulls in `tzdata` there, because Windows ships no IANA time-zone database and `Europe/Berlin` would otherwise fail at import time.
+
+To debug against live sources, run the app directly and keep runtime data out of the user state directory:
+
+```bash
+SUPERMARKT_DATA_DIR=.devdata uvicorn supermarkt.asgi:app --host 127.0.0.1 --port 8000 --reload
+```
+
+The Kaufland adapter drives a headless Chromium, which the Docker image provides. Without a local Chromium that one adapter fails and Marktguru serves as its fallback; every other source works unchanged.
+
 Live retailer tests are deliberately opt-in:
 
 ```bash
@@ -276,6 +324,8 @@ src/supermarkt/
 ├── presentation.py      response fields
 ├── images.py            downloads, image cache, and SSRF protection
 ├── security.py          signatures and optional API key
+├── homeassistant.py     Home Assistant todo lists, for example Bring
+├── shopping_routes.py   shopping list routes
 ├── access.py            access and request helpers
 ├── api_routes.py        REST routes
 ├── browser_routes.py    browser routes
@@ -295,9 +345,9 @@ KorbKlar does not invent missing prices or estimate unknown loyalty benefits. Co
 
 ## Roadmap
 
-Potential future integrations include Grocy, KitchenOwl, and further REST or OpenAPI connections for local automations, agents, and Conduit or LLM workflows such as the originally planned automatic Monday report.
+The Home Assistant shopping list described above is implemented. Potential future integrations include Grocy, KitchenOwl, and further REST or OpenAPI connections for local automations, agents, and Conduit or LLM workflows such as the originally planned automatic Monday report.
 
-These integrations are not part of version 0.1.0. The existing REST API can already support custom automations.
+Those remaining integrations are not part of version 0.1.0. The existing REST API can already support custom automations.
 
 ## Support the project
 

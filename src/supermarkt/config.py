@@ -72,6 +72,24 @@ TIMEOUT_SECONDS = _env_int("SUPERMARKT_TIMEOUT_SECONDS", 25, 5, 120)
 MARKTGURU_PAGE_SIZE = _env_int("SUPERMARKT_MARKTGURU_PAGE_SIZE", 500, 100, 1000)
 MAX_WORKERS = _env_int("SUPERMARKT_MAX_WORKERS", 8, 2, 24)
 
+def _env_bool(name: str, default: bool) -> bool:
+    raw = os.getenv(name)
+    if raw is None or not raw.strip():
+        return default
+    return raw.strip().casefold() in {"1", "true", "yes", "on", "ja"}
+
+
+# Home Assistant shopping-list integration. Disabled unless a base URL and a
+# long-lived access token are configured. The target instance is normally a
+# private or VPN address, so this client deliberately does not share the
+# SSRF guard used for untrusted product images.
+HOMEASSISTANT_URL = _env_text("SUPERMARKT_HA_URL", "").rstrip("/")
+HOMEASSISTANT_TOKEN = _env_text("SUPERMARKT_HA_TOKEN", "")
+HOMEASSISTANT_TODO_ENTITY = _env_text("SUPERMARKT_HA_TODO_ENTITY", "")
+HOMEASSISTANT_VERIFY_TLS = _env_bool("SUPERMARKT_HA_VERIFY_TLS", True)
+HOMEASSISTANT_TIMEOUT_SECONDS = _env_int("SUPERMARKT_HA_TIMEOUT_SECONDS", 15, 3, 60)
+HOMEASSISTANT_MAX_ITEMS_PER_REQUEST = _env_int("SUPERMARKT_HA_MAX_ITEMS", 50, 1, 200)
+
 MARKTGURU_HOME = "https://www.marktguru.de/"
 MARKTGURU_SEARCH_API = "https://api.marktguru.de/api/v1/offers/search"
 USER_AGENT = _env_text("SUPERMARKT_USER_AGENT", f"korb-klar/{__version__}")

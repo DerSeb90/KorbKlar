@@ -35,4 +35,10 @@ def test_openapi_exposes_only_compare_operation():
         for method, operation in methods.items():
             if method.lower() in {"get", "post", "put", "patch", "delete"}:
                 operations.append((method.lower(), path, operation.get("operationId")))
-    assert operations == [("post", "/api/v1/compare", "supermarkt_preisvergleich")]
+    # Only the documented v1 endpoints belong in the public schema. Browser
+    # routes and the image proxy stay out of it.
+    assert sorted(operations) == sorted([
+        ("post", "/api/v1/compare", "supermarkt_preisvergleich"),
+        ("get", "/api/v1/shopping-list/targets", "einkaufsliste_ziele"),
+        ("post", "/api/v1/shopping-list/items", "einkaufsliste_ergaenzen"),
+    ])

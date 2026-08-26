@@ -113,8 +113,12 @@ Der aktuelle Stand enthält Adapter beziehungsweise regionale Datenwege für:
 - PENNY
 - Netto Marken-Discount
 - GLOBUS
+- Combi
+- famila Nordwest
 
-REWE, EDEKA, Marktkauf, Kaufland sowie die passende ALDI-Region werden bevorzugt direkt aus den jeweiligen Händlerquellen geladen. Lidl, PENNY, Netto Marken-Discount und GLOBUS werden über regionale Marktguru-Daten eingebunden. Fällt eine direkte Händlerquelle aus, kann der vorhandene regionale Datenweg gezielt für diesen Händler einspringen. Ein erfolgreicher Direktbestand wird dabei nicht mit einem zweiten vollständigen Bestand vermischt.
+REWE, EDEKA, Marktkauf, Kaufland sowie die passende ALDI-Region werden bevorzugt direkt aus den jeweiligen Händlerquellen geladen. Lidl, PENNY, Netto Marken-Discount, GLOBUS, Combi und famila Nordwest werden über regionale Marktguru-Daten eingebunden. Fällt eine direkte Händlerquelle aus, kann der vorhandene regionale Datenweg gezielt für diesen Händler einspringen. Ein erfolgreicher Direktbestand wird dabei nicht mit einem zweiten vollständigen Bestand vermischt.
+
+Combi und famila Nordwest gehören zur Bünting-Gruppe und sind nur im Nordwesten vertreten. Beide sind deshalb optional: Außerhalb ihres Vertriebsgebiets liefern sie schlicht keine Angebote, was nicht als Quellenfehler gemeldet wird. famila Nordost ist eine andere, unabhängige Handelsgruppe und wird nie als famila Nordwest erkannt.
 
 Welche Händler tatsächlich erscheinen, hängt von Postleitzahl, Region und den aktuell erreichbaren Quelldaten ab. Händler ohne Treffer werden nicht als leere Filter angezeigt.
 
@@ -138,6 +142,7 @@ Die Ergebnisansicht bietet unter anderem:
 - Mehrfachauswahl der Bonusprogramme
 - Hinweise zu ausgefallenen oder unvollständigen Quellen
 - automatisches Nachladen beim Scrollen
+- Angebote einzeln oder als Auswahl auf eine Einkaufsliste in Home Assistant setzen, zum Beispiel Bring
 
 Packungsgröße und Referenzmenge des Grundpreises werden getrennt behandelt. Aus einer 0,33-l-Dose mit einem Grundpreis pro Liter wird deshalb beispielsweise `330 ml` als Packungsgröße und der Literpreis separat dargestellt. Alternative Größen wie `85 g oder 100 g` werden nicht zu `185 g` addiert.
 
@@ -204,7 +209,36 @@ Beispiel mit mehreren Bonusprogrammen:
 }
 ```
 
-Der Browserbetrieb funktioniert ohne Schlüssel. Soll nur der REST-Vergleichsendpunkt zusätzlich mit Bearer-Authentifizierung geschützt werden, kann `SUPERMARKT_API_KEY` gesetzt werden. Die weiteren optionalen Einstellungen stehen in [`.env.example`](.env.example).
+Ist die Einkaufslisten-Anbindung konfiguriert, kommen zwei Endpunkte dazu:
+
+```text
+GET  /api/v1/shopping-list/targets
+POST /api/v1/shopping-list/items
+```
+
+Der Browserbetrieb funktioniert ohne Schlüssel. Soll die REST-Schnittstelle zusätzlich mit Bearer-Authentifizierung geschützt werden, kann `SUPERMARKT_API_KEY` gesetzt werden; der Schlüssel gilt dann für den Vergleichsendpunkt und beide Einkaufslisten-Endpunkte. Die weiteren optionalen Einstellungen stehen in [`.env.example`](.env.example).
+
+## Einkaufsliste über Home Assistant
+
+KorbKlar kann Angebote auf eine todo-Liste in Home Assistant schreiben. Die Bring-Integration von Home Assistant stellt jede Bring-Liste als `todo`-Entität bereit. KorbKlar ruft deshalb den allgemeinen Dienst `todo.add_item` auf statt einer Bring-eigenen Schnittstelle. Damit funktionieren auch die eingebaute Einkaufsliste und andere todo-Anbieter.
+
+Die Verbindung wird mit einem langlebigen Zugriffstoken aus dem Home-Assistant-Benutzerprofil konfiguriert:
+
+```bash
+SUPERMARKT_HA_URL=http://homeassistant.local:8123
+SUPERMARKT_HA_TOKEN=dein-langlebiger-zugriffstoken
+SUPERMARKT_HA_TODO_ENTITY=todo.bring_einkaufsliste
+```
+
+Die Home-Assistant-Instanz darf ausschließlich über LAN oder VPN erreichbar sein. Nur der KorbKlar-Server spricht mit ihr, der Token erreicht den Browser nicht und wird auch über `/health` nicht ausgegeben. Dieser Client nutzt bewusst nicht den SSRF-Schutz der Bildproxy-Kette, denn das Ziel ist hier ein selbst gewählter eigener Host und keine fremde Bildquelle.
+
+`SUPERMARKT_HA_TODO_ENTITY` wählt eine Liste nur vor. KorbKlar liest die vorhandenen `todo`-Entitäten aus Home Assistant und bietet sie in der Ergebnisliste zur Auswahl an, sodass mehrere Bring-Listen derselben Instanz nutzbar bleiben. Entitäten aus anderen Domains werden abgelehnt, bevor irgendetwas geschrieben wird.
+
+Jedes Angebot wird ein Listeneintrag: Der Produktname ist der Artikel, die Notiz enthält Händler, Preis, Packungsgröße und Gültigkeit, zum Beispiel `famila Nordwest · 1,59 € · 250 g · bis 29.08.`. Geschrieben wird nur, was das Angebot wirklich hergibt; nichts wird geschätzt.
+
+In der Ergebnisliste hat jedes Angebot einen `+ Liste`-Knopf. Eine Checkbox sammelt mehrere Angebote für eine gemeinsame Übertragung. Der Browserweg ist durch dasselbe HMAC-Ergebnistoken geschützt, das bereits Ergebnisdaten und Bildproxy absichert. Ohne gültigen Ergebnislink ist die Funktion nicht erreichbar.
+
+Bleiben `SUPERMARKT_HA_URL` oder `SUPERMARKT_HA_TOKEN` leer, ist die Anbindung abgeschaltet und die Oberfläche blendet die Einkaufslisten-Bedienung aus.
 
 ## Daten, Cache und Bildproxy
 
@@ -272,6 +306,8 @@ src/supermarkt/
 ├── presentation.py      Ausgabefelder
 ├── images.py            Bilddownload, Cache und SSRF-Schutz
 ├── security.py          Signaturen und optionaler API-Key
+├── homeassistant.py     todo-Listen in Home Assistant, zum Beispiel Bring
+├── shopping_routes.py   Routen der Einkaufsliste
 ├── access.py            Zugriffs- und Request-Helfer
 ├── api_routes.py        REST-Routen
 ├── browser_routes.py    Browser-Routen
@@ -289,6 +325,31 @@ Händlerseiten und nicht dokumentierte Webschnittstellen können sich ändern. E
 
 KorbKlar erfindet keine fehlenden Preise und schätzt keine unbekannten Bonusvorteile. Die Ergebnisse sind nur so vollständig und aktuell wie die erreichbaren Quelldaten.
 
+## Lokal entwickeln und debuggen
+
+```bash
+python -m venv .venv
+. .venv/bin/activate
+pip install -e '.[dev]'
+pytest -m 'not live'
+```
+
+Unter Windows wird statt des Aktivierungsskripts `.venv\Scripts\python.exe` verwendet. Das `dev`-Extra installiert dort zusätzlich `tzdata`, weil Windows keine IANA-Zeitzonendatenbank mitbringt und `Europe/Berlin` sonst schon beim Import fehlschlägt.
+
+Zum Debuggen gegen echte Quellen wird die Anwendung direkt gestartet, mit Laufzeitdaten außerhalb des Benutzerverzeichnisses:
+
+```bash
+SUPERMARKT_DATA_DIR=.devdata uvicorn supermarkt.asgi:app --host 127.0.0.1 --port 8000 --reload
+```
+
+Der Kaufland-Adapter steuert ein Headless-Chromium, das im Docker-Image enthalten ist. Ohne lokal installiertes Chromium fällt genau dieser Adapter aus und Marktguru springt für ihn ein; alle übrigen Quellen arbeiten unverändert.
+
+Die Live-Diagnose einer Postleitzahl läuft auch ohne Container:
+
+```bash
+SUPERMARKT_DATA_DIR=.devdata python -m supermarkt.diagnostics 26123
+```
+
 ## Roadmap
 
-Für spätere Versionen sind zusätzliche Integrationen denkbar beziehungsweise geplant, darunter Grocy, KitchenOwl und weitere REST-/OpenAPI-Anbindungen für lokale Automationen und Agenten. Diese Integrationen sind keine Voraussetzung für Version 0.1.0.
+Die oben beschriebene Einkaufsliste über Home Assistant ist umgesetzt. Für spätere Versionen sind weitere Integrationen denkbar beziehungsweise geplant, darunter Grocy, KitchenOwl und zusätzliche REST-/OpenAPI-Anbindungen für lokale Automationen und Agenten. Diese Integrationen sind keine Voraussetzung für Version 0.1.0.
