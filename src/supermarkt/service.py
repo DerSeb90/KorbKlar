@@ -7,6 +7,7 @@ from dataclasses import asdict, replace
 from typing import Any
 
 from .cache import PersistentSnapshotStore
+from .categories import normalize_category
 from .common import clean_text, deduplicate_offers, filter_offers, normalize_aldi_region, normalize_view
 from .compare import OfferComparator, OfferMapper
 from .config import (
@@ -27,7 +28,8 @@ from .loyalty import available_programs, normalize_program_ids
 from .models import AGGREGATOR_RETAILERS, RETAILER_SPECS, Offer, RetailerContext, ToolError, offer_from_dict, offer_retailers, offer_to_dict
 from .presentation import offer_for_response, offer_sort_key, resolve_retailer_name
 from .region import AldiRegionResolver
-from .sources import MarktguruClient, OfficialAldiSource, OfficialEdekaSource, OfficialKauflandSource, OfficialMarktkaufSource, OfficialReweSource
+from .sources import MarktguruClient, OfficialAldiSource, OfficialEdekaSource, OfficialKauflandSource, OfficialMarktkaufSource, OfficialReweSource, OfficialHolabSource
+from .sources.aldi_chain import AldiOfferChain
 
 class SourceLoader:
     def __init__(self) -> None:
@@ -37,6 +39,7 @@ class SourceLoader:
         self.marktguru = MarktguruClient(http, MARKTGURU_PAGE_SIZE, MAX_WORKERS)
         self.aldi_region = AldiRegionResolver(http)
         self.official_aldi = OfficialAldiSource(http)
+        self.aldi_offers = AldiOfferChain(CACHE_DB, (self.official_aldi,))
         self.official_rewe = OfficialReweSource(
             locator,
             TIMEOUT_SECONDS,
@@ -44,6 +47,7 @@ class SourceLoader:
             store_cache_ttl_seconds=REWE_STORE_CACHE_TTL_SECONDS,
         )
         self.official_edeka = OfficialEdekaSource(TIMEOUT_SECONDS)
+        self.official_holab = OfficialHolabSource(http)
         self.official_marktkauf = OfficialMarktkaufSource(TIMEOUT_SECONDS)
         self.official_kaufland = OfficialKauflandSource(
             http,
@@ -86,16 +90,18 @@ class SourceLoader:
         resolved = normalize_aldi_region(aldi_region)
         if resolved == "auto":
             resolved = self.aldi_region.detect(postal_code)
-        aldi_name = "ALDI Nord" if resolved == "nord" else "ALDI Süd" if resolved == "sued" else ""
-        notify(total_sources=6 if aldi_name else 5)
-        if not aldi_name:
+        detected_regions = getattr(self.aldi_region, "last_regions", ())
+        resolved_regions = list(detected_regions or ((resolved,) if resolved in {"nord", "sued"} else ())) if normalize_aldi_region(aldi_region) == "auto" else ([resolved] if resolved in {"nord", "sued"} else [])
+        aldi_names = ["ALDI Nord" if item == "nord" else "ALDI Süd" for item in resolved_regions]
+        notify(total_sources=5 + len(aldi_names))
+        if not aldi_names:
             detail = clean_text(self.aldi_region.last_error)
             warning = "ALDI-Region konnte geografisch nicht eindeutig bestimmt werden; ALDI wurde für diesen Abruf ausgelassen."
             store_warnings.append(warning + (f" ({detail})" if detail else ""))
 
         active_contexts = dict(contexts)
         for name in ("ALDI Nord", "ALDI Süd"):
-            if name != aldi_name:
+            if name not in aldi_names:
                 active_contexts.pop(name, None)
 
         source_states = {name: "keine Treffer" for name in active_contexts}
@@ -111,6 +117,8 @@ class SourceLoader:
             "Kaufland": lambda: self.official_kaufland.load(postal_code),
             "Marktkauf": lambda: self.official_marktkauf.load(postal_code),
         }
+        if hasattr(self, "official_holab"):
+            official_jobs["HOL’AB!"] = lambda: self.official_holab.load(postal_code)
         completed_sources = 0
         processed_products = 0
         with ThreadPoolExecutor(max_workers=len(official_jobs)) as executor:
@@ -123,14 +131,14 @@ class SourceLoader:
                     offers = deduplicate_offers(list(future.result()))
                 except Exception as exc:
                     failed_primary.add(name)
-                    if name == "Marktkauf":
+                    if name in {"Marktkauf", "HOL’AB!"}:
                         source_states[name] = "kein Markt"
                     else:
                         request_errors.append(f"{name} offiziell: {type(exc).__name__}: {exc}")
                     continue
                 if not offers:
                     failed_primary.add(name)
-                    if name == "Marktkauf":
+                    if name in {"Marktkauf", "HOL’AB!"}:
                         source_states[name] = "kein Markt"
                     else:
                         request_errors.append(f"{name} offiziell: keine Angebote für die Zielwoche")
@@ -142,23 +150,28 @@ class SourceLoader:
 
         # ALDI is also first-party-first. Only the region determined for the
         # supplied postcode is loaded.
-        if aldi_name:
-            notify(status="loading", progress=50, source="Offizielle Webseite", retailer=aldi_name, category="Wochenangebote", step="Angebote werden geladen", processed_sources=completed_sources, processed_products=processed_products)
-            try:
-                aldi_result = self.official_aldi.load(aldi_name)
-                request_errors.extend(aldi_result.request_errors)
-                aldi_offers = deduplicate_offers(list(aldi_result.offers))
-            except Exception as exc:
-                aldi_offers = []
-                request_errors.append(f"{aldi_name} offiziell: {type(exc).__name__}: {exc}")
-            if aldi_offers:
-                final_by_retailer[aldi_name] = aldi_offers
-                source_states[aldi_name] = "offiziell"
-                processed_products += len(aldi_offers)
-            else:
-                failed_primary.add(aldi_name)
-            completed_sources += 1
-            notify(status="processing", progress=55, source="Offizielle Webseite", retailer=aldi_name, category="Wochenangebote", step="Quelle verarbeitet", processed_sources=completed_sources, processed_products=processed_products)
+        if aldi_names:
+            notify(status="loading", progress=50, source="Offizielle Webseite", retailer=" & ".join(aldi_names), category="Wochenangebote", step="Regionale Angebote werden getrennt geladen", processed_sources=completed_sources, processed_products=processed_products)
+        with ThreadPoolExecutor(max_workers=max(1, len(aldi_names))) as executor:
+            aldi_loader = getattr(self, "aldi_offers", self.official_aldi)
+            aldi_futures = {executor.submit(aldi_loader.load, name): name for name in aldi_names}
+            for future in as_completed(aldi_futures):
+                aldi_name = aldi_futures[future]
+                try:
+                    aldi_result = future.result()
+                    request_errors.extend(aldi_result.request_errors)
+                    aldi_offers = deduplicate_offers(list(aldi_result.offers))
+                except Exception as exc:
+                    aldi_offers = []
+                    request_errors.append(f"{aldi_name} offiziell: {type(exc).__name__}: {exc}")
+                if aldi_offers:
+                    final_by_retailer[aldi_name] = aldi_offers
+                    source_states[aldi_name] = getattr(aldi_loader, "last_source", {}).get(aldi_name, "offiziell")
+                    processed_products += len(aldi_offers)
+                else:
+                    failed_primary.add(aldi_name)
+                completed_sources += 1
+                notify(status="processing", progress=55, source="Offizielle Webseite", retailer=aldi_name, category="Wochenangebote", step="Quelle verarbeitet", processed_sources=completed_sources, processed_products=processed_products)
 
         # Lidl, PENNY, Netto and GLOBUS currently use Marktguru as their
         # catalogue source. The broad regional term search is supplemented by
@@ -253,6 +266,12 @@ class SourceLoader:
             for retailer_offers in final_by_retailer.values()
             for offer in retailer_offers
         ])
+        offers = [replace(
+            offer,
+            source_category=offer.source_category or offer.category,
+            category=normalize_category(offer.source_category or offer.category, offer.retailer, offer.name, offer.description),
+            retailer_url=offer.retailer_url or contexts.get(offer.retailer, RetailerContext("", (), (), "", "", "")).market_url,
+        ) for offer in offers]
         if not offers:
             raise ToolError("Keine Supermarktangebote konnten geladen werden")
 
@@ -261,6 +280,8 @@ class SourceLoader:
         return {
             "postal_code": postal_code,
             "resolved_aldi_region": resolved,
+            "resolved_aldi_regions": resolved_regions,
+            "aldi_resolution": {"source": getattr(self.aldi_region, "last_provider", ""), "distance_km": getattr(self.aldi_region, "last_distance_km", None), "confidence": getattr(self.aldi_region, "last_confidence", "")},
             "offers": [offer_to_dict(offer) for offer in offers],
             "retailers": {name: asdict(context) for name, context in active_contexts.items()},
             "source_states": source_states,
@@ -269,6 +290,7 @@ class SourceLoader:
         }
 
 class SupermarketEngine:
+    SNAPSHOT_SCHEMA = 3
     def __init__(self) -> None:
         self.store = PersistentSnapshotStore(CACHE_DB, CACHE_TTL_MINUTES, RESULT_RETENTION_HOURS, CACHE_MAX_SNAPSHOTS)
         self.loader = SourceLoader()
@@ -277,7 +299,7 @@ class SupermarketEngine:
 
     @staticmethod
     def cache_key(postal_code: str, aldi_region: str) -> str:
-        return f"{postal_code}:{normalize_aldi_region(aldi_region)}"
+        return f"v{SupermarketEngine.SNAPSHOT_SCHEMA}:{postal_code}:{normalize_aldi_region(aldi_region)}"
 
     def snapshot(self, postal_code: str, aldi_region: str, refresh: bool = False, progress=None) -> tuple[dict[str, Any], bool]:
         key = self.cache_key(postal_code, aldi_region)

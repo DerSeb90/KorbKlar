@@ -95,12 +95,14 @@ def offer_for_response(
 
     retailers = offer_retailers(offer)
     result = {
+        "offer_id": offer.offer_id,
         "retailer": offer.retailer,
         # Every retailer this row stands for. One entry unless equally priced
         # identical offers were folded together.
         "retailers": list(retailers),
         "retailer_label": " · ".join(retailers),
         "category": offer.category,
+        "source_category": offer.source_category,
         "product": offer.name,
         "description": offer.description,
         "regular_price": regular,
@@ -130,8 +132,28 @@ def offer_for_response(
             else ""
         ),
         "validity": offer.validity_label,
+        "valid_from": offer.valid_from,
+        "valid_until": offer.valid_until,
+        "deposit": offer.deposit,
+        "deposit_text": format_euro(offer.deposit) if offer.deposit is not None else "",
+        "minimum_quantity": offer.minimum_quantity,
+        "offer_condition": offer.offer_condition,
+        "coverage_note": offer.coverage_note,
+        "product_link_kind": (
+            "search"
+            if "/q/search" in offer.product_url or "/suche/produkte" in offer.product_url
+            else "market_offer"
+            if offer.product_url and offer.product_url == offer.retailer_url
+            else "direct"
+            if offer.product_url
+            else "none"
+        ),
+        "source_product_id": None,
+        "ean": None,
     }
     if include_image_urls:
         result["image_url"] = offer.image_url
         result["source_url"] = offer.source_url
+        result["product_url"] = offer.product_url
+        result["retailer_url"] = offer.retailer_url
     return result

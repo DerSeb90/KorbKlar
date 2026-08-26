@@ -27,12 +27,20 @@ class FakeHttp(HttpClient):
         ).encode()
 
 
-def test_region_resolver_uses_single_bounded_path_and_cache():
+def test_region_resolver_prefers_versioned_official_evidence():
     http = FakeHttp()
     resolver = AldiRegionResolver(http)
-    # Resolver creates its own short-timeout HttpClient; replace it for deterministic fixture use.
     resolver.http = http
     assert resolver.detect("01067") == "nord"
+    assert resolver.last_provider.startswith("Offizielle ALDI")
+    assert http.calls == 0
+
+
+def test_region_resolver_uses_bounded_fallback_and_cache():
+    http = FakeHttp()
+    resolver = AldiRegionResolver(http)
+    resolver.http = http
+    assert resolver.detect("01100") == "nord"
     assert http.calls == 2
-    assert resolver.detect("01067") == "nord"
+    assert resolver.detect("01100") == "nord"
     assert http.calls == 2

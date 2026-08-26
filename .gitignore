@@ -16,3 +16,5 @@ build/
 # Laufzeitdaten
 data/
 .devdata/
+artifacts/
+compose.override.yml

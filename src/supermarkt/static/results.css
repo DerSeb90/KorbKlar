@@ -20,3 +20,8 @@ input,select,button{font:inherit;border:1px solid var(--line);border-radius:10px
 @media(max-width:700px){.listBarHead{flex-direction:column;align-items:stretch}.listBarHead select{max-width:none}.listAdd{min-height:40px}}
 .titleActions{display:flex;align-items:center;gap:10px} #refresh{padding:7px 11px;font-size:13px;border-radius:999px} #refresh:disabled{opacity:.6;cursor:default}
 .retailer strong{display:block;line-height:1.25} .mergedNote{margin-top:2px}
+:root{color-scheme:light;--overlay:rgba(244,247,245,.92)}
+body{background:linear-gradient(var(--overlay),var(--overlay)),url('/static/korb-bg.svg') center/cover fixed,var(--bg)}
+.imageButton{border:0;padding:0;background:transparent;border-radius:8px;display:block}.imageButton:focus-visible{outline:3px solid var(--accent);outline-offset:3px}.modalOpen{overflow:hidden}dialog{width:min(94vw,1100px);height:min(92vh,900px);border:1px solid var(--line);border-radius:16px;background:var(--panel);color:var(--text);padding:50px 16px 16px}dialog::backdrop{background:rgba(0,0,0,.78)}dialog img{display:block;width:100%;height:calc(100% - 38px);object-fit:contain;touch-action:auto}dialog h2{position:absolute;left:18px;top:12px;margin:0;max-width:calc(100% - 80px);font-size:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}#lightboxClose{position:absolute;right:12px;top:8px;font-size:26px;line-height:1;padding:6px 11px}
+@media(prefers-color-scheme:dark){:root{color-scheme:dark;--overlay:rgba(17,19,24,.94)}}
+.mainTabs{position:sticky;top:0;z-index:30;display:flex;justify-content:center;gap:8px;padding:8px;background:var(--panel);border-bottom:1px solid var(--line)}.mainTab.active{background:var(--chip);border-color:var(--accent);font-weight:700}.shoppingAdd{min-height:44px}

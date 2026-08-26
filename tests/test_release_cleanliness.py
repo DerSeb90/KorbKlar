@@ -73,7 +73,7 @@ def test_docker_system_dependencies_are_actually_used():
     assert "chromium" in dockerfile and '"chromium"' in runtime
     assert " curl" in dockerfile and '"curl"' in runtime
     assert 'CMD ["uvicorn"' in dockerfile
-    assert "USER korbklar" in dockerfile
+    assert "USER 10001" in dockerfile
     assert "dumb-init" in dockerfile
     assert 'ENTRYPOINT ["dumb-init", "--"]' in dockerfile
 
@@ -120,7 +120,7 @@ def test_runtime_version_matches_package_metadata():
     metadata = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
     assert metadata["project"]["version"] == __version__
     assert USER_AGENT == f"korb-klar/{__version__}"
-    assert __version__ == "0.0.2"
+    assert __version__ == "0.0.3"
 
 
 def test_default_host_port_is_configurable_without_changing_container_port():

@@ -40,3 +40,7 @@ def build_results_html(
         .replace("__LOYALTY_PROGRAMS__", html.escape(selected, quote=True))
         .replace("__POSTAL_CODE__", html.escape(postal_code, quote=True))
     )
+
+
+def build_shopping_html() -> str:
+    return static_text("shopping.html")
