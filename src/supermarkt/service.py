@@ -190,7 +190,7 @@ class SourceLoader:
         marktguru_mapped: list[Offer] = []
         if marketguru_candidates:
             completed_sources += 1
-            notify(status="loading", progress=62, source="Marktguru", retailer="Lidl, PENNY, Netto, Globus", category="Händlerkategorien", step="Regionale Angebote werden geladen", processed_sources=completed_sources, processed_products=processed_products)
+            notify(status="loading", progress=62, source="Marktguru", retailer="Lidl, PENNY, Netto, Globus, Combi, famila", category="Händlerkategorien", step="Regionale Angebote werden geladen", processed_sources=completed_sources, processed_products=processed_products)
             raw: list[dict[str, Any]] = []
             try:
                 broad_raw, errors = self.marktguru.load_offers(postal_code)
@@ -212,7 +212,7 @@ class SourceLoader:
             if raw:
                 marktguru_mapped = deduplicate_offers(self.mapper.map_all(raw, active_contexts))
                 processed_products += len(marktguru_mapped)
-            notify(status="processing", progress=88, source="Marktguru", retailer="Lidl, PENNY, Netto, Globus", category="Händlerkategorien", step="Angebote zugeordnet", processed_sources=completed_sources, processed_products=processed_products)
+            notify(status="processing", progress=88, source="Marktguru", retailer="Lidl, PENNY, Netto, Globus, Combi, famila", category="Händlerkategorien", step="Angebote zugeordnet", processed_sources=completed_sources, processed_products=processed_products)
 
         for name in sorted(aggregator_names, key=str.casefold):
             offers = deduplicate_offers([

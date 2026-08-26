@@ -3,13 +3,16 @@ from supermarkt.service import SourceLoader
 
 
 def test_marktguru_scope_is_minimal():
-    assert AGGREGATOR_RETAILERS == {"Lidl", "PENNY", "Netto", "Globus"}
+    assert AGGREGATOR_RETAILERS == {"Lidl", "PENNY", "Netto", "Globus", "Combi", "famila Nordwest"}
     assert not {"ALDI Nord", "ALDI Süd", "REWE", "EDEKA", "Marktkauf", "Kaufland"} & AGGREGATOR_RETAILERS
 
 
 def test_all_expected_retailers_exist():
     names = {spec.name for spec in RETAILER_SPECS}
-    assert {"REWE", "EDEKA", "Marktkauf", "ALDI Nord", "ALDI Süd", "Kaufland", "Lidl", "PENNY", "Netto", "Globus"} <= names
+    assert {
+        "REWE", "EDEKA", "Marktkauf", "ALDI Nord", "ALDI Süd", "Kaufland",
+        "Lidl", "PENNY", "Netto", "Globus", "Combi", "famila Nordwest",
+    } <= names
 
 
 def test_contexts_have_no_implicit_postal_code():

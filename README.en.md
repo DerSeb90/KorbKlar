@@ -88,11 +88,17 @@ The browser interface and REST API use the same comparison engine. Retailer adap
 
 ## Supported retailers and data paths
 
-KorbKlar currently supports REWE, EDEKA, Marktkauf, ALDI Nord, ALDI Süd, Kaufland, Lidl, PENNY, Netto Marken-Discount, and GLOBUS.
+KorbKlar currently supports REWE, EDEKA, Marktkauf, ALDI Nord, ALDI Süd, Kaufland, Lidl, PENNY, Netto Marken-Discount, GLOBUS, Combi, and famila Nordwest.
 
 REWE, EDEKA, Marktkauf, and Kaufland are loaded preferentially from direct retailer sources. For ALDI, the postal code determines the region and only ALDI Nord or ALDI Süd is retrieved directly. If the region cannot be determined unambiguously, ALDI is omitted and a warning is shown.
 
-Lidl, PENNY, Netto Marken-Discount, and GLOBUS are loaded from regional Marktguru data. KorbKlar combines a broad regional search with supplementary retailer-name searches; the name queries alone are never treated as a complete catalogue.
+Lidl, PENNY, Netto Marken-Discount, GLOBUS, Combi, and famila Nordwest are loaded from regional Marktguru data. KorbKlar combines a broad regional search with supplementary retailer-name searches; the name queries alone are never treated as a complete catalogue.
+
+Combi and famila Nordwest belong to the Bünting group and only trade in north-western Germany. Both are therefore optional in the same sense as Marktkauf and GLOBUS: where they return nothing, that is not reported as a source error.
+
+Their regional coverage in the Marktguru catalogue is uneven and is not the same for both brands. A postal code inside the sales area may return one brand, both, or neither, so the presence of a Bünting store near a postal code does not guarantee offers. KorbKlar shows what the regional catalogue actually contains and does not substitute data from another area.
+
+famila Nordwest and famila Nordost are separate, unrelated retail groups. Only famila Nordwest is matched; famila Nordost is explicitly excluded so its offers can never appear under the Bünting brand.
 
 If a direct adapter fails or returns no offers for the target week, Marktguru may act as a fallback for that retailer only. A successful direct catalogue is never mixed with a second complete Marktguru catalogue. Actual availability depends on postal code, region, and reachable sources; retailers without results are not shown as empty filters.
 

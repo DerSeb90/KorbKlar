@@ -24,6 +24,18 @@ from .loyalty import apply_selected_programs, parse_public_loyalty_prices
 from .models import AGGREGATOR_RETAILERS, ComparisonResult, Offer, RetailerContext
 
 
+# Public Marktguru retailer landing pages used as the source link for offers
+# that come from the regional aggregator catalogue.
+MARKTGURU_RETAILER_SLUGS = {
+    "Lidl": "lidl",
+    "PENNY": "penny",
+    "Netto": "netto-marken-discount",
+    "Globus": "globus",
+    "Combi": "combi",
+    "famila Nordwest": "famila-nordwest",
+}
+
+
 class OfferMapper:
     def map_all(
         self,
@@ -104,8 +116,8 @@ class OfferMapper:
         context = retailers[retailer]
         source_url = context.market_url
         product_url = ""
-        if retailer in AGGREGATOR_RETAILERS:
-            retailer_slug = {"Lidl": "lidl", "PENNY": "penny", "Netto": "netto-marken-discount", "Globus": "globus"}[retailer]
+        retailer_slug = MARKTGURU_RETAILER_SLUGS.get(retailer)
+        if retailer in AGGREGATOR_RETAILERS and retailer_slug:
             source_url = f"https://www.marktguru.de/r/{retailer_slug}"
         if retailer == "Lidl":
             # Lidl redirects some over-specific catalogue names (own brand +
