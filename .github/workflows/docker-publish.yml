@@ -6,7 +6,8 @@ on:
       - main
     tags:
       - "v*.*.*"
-  # Lets a fork publish without waiting for the next push.
+  # Lets a fork publish without waiting for the next push. GitHub only offers
+  # the manual run when this trigger exists on the default branch.
   workflow_dispatch:
 
 permissions:
