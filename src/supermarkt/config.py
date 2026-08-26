@@ -101,16 +101,17 @@ TRUSTED_PROXIES = _env_list("SUPERMARKT_TRUSTED_PROXIES")
 # the well-known names and install locations are probed.
 CHROMIUM_BINARY = _env_text("SUPERMARKT_CHROMIUM_BINARY", "")
 
-# Home Assistant shopping-list integration. Disabled unless a base URL and a
-# long-lived access token are configured. The target instance is normally a
-# private or VPN address, so this client deliberately does not share the
+# KitchenOwl shopping-list integration. Disabled unless a base URL and a
+# long-lived token are configured. The instance normally runs on the same
+# host or a private network, so this client deliberately does not share the
 # SSRF guard used for untrusted product images.
-HOMEASSISTANT_URL = _env_text("SUPERMARKT_HA_URL", "").rstrip("/")
-HOMEASSISTANT_TOKEN = _env_text("SUPERMARKT_HA_TOKEN", "")
-HOMEASSISTANT_TODO_ENTITY = _env_text("SUPERMARKT_HA_TODO_ENTITY", "")
-HOMEASSISTANT_VERIFY_TLS = _env_bool("SUPERMARKT_HA_VERIFY_TLS", True)
-HOMEASSISTANT_TIMEOUT_SECONDS = _env_int("SUPERMARKT_HA_TIMEOUT_SECONDS", 15, 3, 60)
-HOMEASSISTANT_MAX_ITEMS_PER_REQUEST = _env_int("SUPERMARKT_HA_MAX_ITEMS", 50, 1, 200)
+KITCHENOWL_URL = _env_text("SUPERMARKT_KITCHENOWL_URL", "").rstrip("/")
+KITCHENOWL_TOKEN = _env_text("SUPERMARKT_KITCHENOWL_TOKEN", "")
+# Optional preselection; empty lets the interface offer every list.
+KITCHENOWL_LIST_ID = _env_text("SUPERMARKT_KITCHENOWL_LIST_ID", "")
+KITCHENOWL_VERIFY_TLS = _env_bool("SUPERMARKT_KITCHENOWL_VERIFY_TLS", True)
+KITCHENOWL_TIMEOUT_SECONDS = _env_int("SUPERMARKT_KITCHENOWL_TIMEOUT_SECONDS", 15, 3, 60)
+KITCHENOWL_MAX_ITEMS_PER_REQUEST = _env_int("SUPERMARKT_KITCHENOWL_MAX_ITEMS", 50, 1, 200)
 
 MARKTGURU_HOME = "https://www.marktguru.de/"
 MARKTGURU_SEARCH_API = "https://api.marktguru.de/api/v1/offers/search"

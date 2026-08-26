@@ -124,7 +124,7 @@ The interface includes:
 - selection of multiple loyalty programs
 - warnings for failed or incomplete sources
 - automatic loading of additional results while scrolling
-- adding offers to a Home Assistant shopping list such as Bring, individually or as a selection
+- adding offers to a KitchenOwl shopping list, individually or as a selection
 
 When exactly one retailer is selected, the redundant retailer column is hidden.
 
@@ -212,28 +212,41 @@ POST /api/v1/shopping-list/items
 
 Browser access remains unauthenticated. If `SUPERMARKT_API_KEY` is set, a bearer token protects `POST /api/v1/compare` and both shopping-list endpoints. See [`.env.example`](.env.example) for current settings.
 
-## Shopping list through Home Assistant
+## Shopping list through KitchenOwl
 
-KorbKlar can write offers to a Home Assistant todo list. Because the Bring integration exposes every Bring list as a `todo` entity, KorbKlar calls the generic `todo.add_item` service instead of a Bring-specific interface. The same path therefore also covers the built-in shopping list and other todo providers.
+KorbKlar writes offers to a list in [KitchenOwl](https://kitchenowl.org), a self-hosted grocery list with shared households. The product becomes the article and the note carries retailer, price, package size and validity, for example `famila Nordwest · 1,59 € · 250 g · bis 29.08.`. Only values the offer actually carries are written; nothing is estimated.
 
-Configure the connection with a long-lived access token from the Home Assistant user profile:
+### KitchenOwl in the stack
+
+The `proxy` profile starts KitchenOwl alongside, on its own subdomain:
 
 ```bash
-SUPERMARKT_HA_URL=http://homeassistant.local:8123
-SUPERMARKT_HA_TOKEN=your-long-lived-access-token
-SUPERMARKT_HA_TODO_ENTITY=todo.bring_einkaufsliste
+KORBKLAR_KITCHENOWL_DOMAIN=shopping.example.com
+KITCHENOWL_JWT_SECRET=a-long-random-value
+KITCHENOWL_PUBLIC_URL=https://shopping.example.com
+docker compose --profile proxy up -d
 ```
 
-The Home Assistant instance may be reachable only over LAN or VPN. Only the KorbKlar server talks to it, the token never reaches the browser, and it is not exposed through `/health`. This client deliberately does not use the SSRF guard applied to untrusted product images, because the target here is a first-party host chosen by the operator.
+`KITCHENOWL_JWT_SECRET` is required; KitchenOwl refuses to run with its placeholder. That subdomain also needs a DNS record pointing at the server, otherwise Caddy cannot obtain a certificate.
 
-`SUPERMARKT_HA_TODO_ENTITY` only preselects a list. KorbKlar reads the available `todo` entities from Home Assistant and offers them in the results interface, so several Bring lists can be used from the same instance. Entities from other domains are rejected before anything is written.
+On first visit you create the account and household inside KitchenOwl.
 
-Each offer becomes one list entry: the product name is the article, and the note holds retailer, price, package size, and validity, for example `famila Nordwest · 1,59 € · 250 g · bis 29.08.`. Only values the offer actually carries are written; nothing is estimated.
+### Connecting the two
 
-In the results interface each offer has a `+ Liste` button, and a checkbox collects several offers for one combined transfer. The browser path is protected by the same HMAC result token that already guards result data and the image proxy, so the feature is reachable only with a valid results link.
+Create the token in KitchenOwl under profile, sessions, long-lived tokens, then set:
 
-If `SUPERMARKT_HA_URL` or `SUPERMARKT_HA_TOKEN` is empty, the integration stays switched off and the interface hides the shopping-list controls.
+```bash
+SUPERMARKT_KITCHENOWL_URL=http://kitchenowl-back:5000
+SUPERMARKT_KITCHENOWL_TOKEN=your-long-lived-token
+```
 
+In the bundled stack KorbKlar reaches the backend directly on the Compose network, so those requests never leave the server. Point it elsewhere if KitchenOwl runs somewhere else.
+
+`SUPERMARKT_KITCHENOWL_LIST_ID` only preselects a list. KorbKlar reads the lists of every reachable household from KitchenOwl and offers them in the results interface. A list that does not exist is rejected before anything is written. The token stays on the server and is not exposed through `/health` either.
+
+In the results interface each offer has a `+ Liste` button, and a checkbox collects several offers for one combined transfer. The browser path is protected by the same HMAC result token that already guards result data and the image proxy.
+
+If `SUPERMARKT_KITCHENOWL_URL` or `SUPERMARKT_KITCHENOWL_TOKEN` is empty the integration stays switched off and the interface hides the controls.
 ## Running it publicly: API key and VPN
 
 Without `SUPERMARKT_API_KEY` nothing is restricted, and a private instance behaves as before.
@@ -373,12 +386,12 @@ The default setup needs no `.env`. [`.env.example`](.env.example) documents ever
 - `SUPERMARKT_IMAGE_CACHE_TTL_SECONDS`
 - `SUPERMARKT_IMAGE_CACHE_MAX_BYTES`
 - `SUPERMARKT_IMAGE_MAX_FILE_BYTES`
-- `SUPERMARKT_HA_URL`
-- `SUPERMARKT_HA_TOKEN`
-- `SUPERMARKT_HA_TODO_ENTITY`
-- `SUPERMARKT_HA_VERIFY_TLS`
-- `SUPERMARKT_HA_TIMEOUT_SECONDS`
-- `SUPERMARKT_HA_MAX_ITEMS`
+- `SUPERMARKT_KITCHENOWL_URL`
+- `SUPERMARKT_KITCHENOWL_TOKEN`
+- `SUPERMARKT_KITCHENOWL_LIST_ID`
+- `SUPERMARKT_KITCHENOWL_VERIFY_TLS`
+- `SUPERMARKT_KITCHENOWL_TIMEOUT_SECONDS`
+- `SUPERMARKT_KITCHENOWL_MAX_ITEMS`
 - `SUPERMARKT_TRUSTED_NETWORKS`
 - `SUPERMARKT_TRUSTED_PROXIES`
 - `SUPERMARKT_CHROMIUM_BINARY`
@@ -387,6 +400,9 @@ The default setup needs no `.env`. [`.env.example`](.env.example) documents ever
 - `KORBKLAR_SUBNET`
 - `KORBKLAR_DOMAIN`
 - `KORBKLAR_ACME_EMAIL`
+- `KORBKLAR_KITCHENOWL_DOMAIN`
+- `KITCHENOWL_JWT_SECRET`
+- `KITCHENOWL_PUBLIC_URL`
 
 The historical internal prefixes remain part of the current technical interface. `.env.example` is authoritative for meanings, defaults, and Docker paths.
 
@@ -447,7 +463,7 @@ src/supermarkt/
 ├── security.py          signatures and optional API key
 ├── authz.py             API key, trusted networks, proxy handling
 ├── cache_cli.py         cache status and purge command
-├── homeassistant.py     Home Assistant todo lists, for example Bring
+├── kitchenowl.py        KitchenOwl shopping lists
 ├── shopping_routes.py   shopping list routes
 ├── access.py            access and request helpers
 ├── api_routes.py        REST routes
@@ -470,7 +486,7 @@ KorbKlar does not invent missing prices or estimate unknown loyalty benefits. Co
 
 ## Roadmap
 
-The Home Assistant shopping list described above is implemented. Potential future integrations include Grocy, KitchenOwl, and further REST or OpenAPI connections for local automations, agents, and Conduit or LLM workflows such as the originally planned automatic Monday report.
+The KitchenOwl integration described above is implemented. Potential future integrations include Grocy and further REST or OpenAPI connections for local automations, agents, and Conduit or LLM workflows such as the originally planned automatic Monday report.
 
 Those remaining integrations are planned for later versions. The existing REST API can already support custom automations.
 

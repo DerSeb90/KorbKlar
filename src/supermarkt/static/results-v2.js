@@ -14,7 +14,7 @@ $("rows").addEventListener("click",async e=>{const b=e.target.closest(".shopping
 function closeLightbox(){$("lightbox").close();document.documentElement.classList.remove("modalOpen");$("lightboxImage").src="";lightboxTrigger?.focus()}$("lightboxClose").onclick=closeLightbox;$("lightbox").addEventListener("click",e=>{if(e.target===$("lightbox"))closeLightbox()});$("lightbox").addEventListener("cancel",e=>{e.preventDefault();closeLightbox()});
 $("q").addEventListener("input",()=>{clearTimeout(debounce);debounce=setTimeout(()=>query(true),300)});$("category").onchange=e=>{category=e.target.value;query(true)};$("sort").onchange=()=>query(true);document.querySelectorAll(".viewTab").forEach(b=>b.onclick=()=>{view=b.dataset.view;document.querySelectorAll(".viewTab").forEach(x=>x.classList.toggle("active",x===b));query(true)});new IntersectionObserver(es=>{if(es.some(e=>e.isIntersecting))query()},{rootMargin:"600px"}).observe($("sentinel"));query(true);
 document.querySelectorAll(".mainTab").forEach(b=>b.onclick=()=>{document.querySelectorAll(".mainTab").forEach(x=>x.classList.toggle("active",x===b));$("resultsPanel").hidden=b.dataset.panel!=="resultsPanel";$("shoppingPanel").hidden=b.dataset.panel!=="shoppingPanel"});
-/* Einkaufsliste: Angebote über Home Assistant auf eine todo-Liste schreiben, z. B. Bring. */
+/* Einkaufsliste: Angebote auf eine KitchenOwl-Liste schreiben. */
 const pickedOffers=new Map();let listReady=false;
 const offerKey=offer=>[offer.retailer,offer.product,offer.regular_price_text].join("|");
 const offerPayload=offer=>({product:offer.product||"",retailer:offer.retailer||"",price_text:offer.effective_price_text||offer.regular_price_text||"",validity:offer.validity||"",pack:offer.pack||""});

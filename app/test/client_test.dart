@@ -4,7 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:korbklar_app/api/client.dart';
 import 'package:korbklar_app/api/models.dart';
-import 'package:korbklar_app/services/bring.dart';
+import 'package:korbklar_app/services/shopping_list.dart';
 
 void main() {
   group('normalizeBaseUrl', () {
@@ -133,7 +133,7 @@ void main() {
     });
   });
 
-  group('Bring text', () {
+  group('shopping list text', () {
     test('joins only the values an offer actually carries', () {
       final full = Offer.fromJson({
         'product': 'Kerrygold Butter',
@@ -141,10 +141,10 @@ void main() {
         'effective_price_text': '1,59 €',
         'pack': '250 g',
       });
-      expect(BringShare.lineFor(full), 'Kerrygold Butter · 250 g · Combi · 1,59 €');
+      expect(ShoppingListText.lineFor(full), 'Kerrygold Butter · 250 g · Combi · 1,59 €');
 
       final sparse = Offer.fromJson({'product': 'Brot'});
-      expect(BringShare.lineFor(sparse), 'Brot');
+      expect(ShoppingListText.lineFor(sparse), 'Brot');
     });
 
     test('falls back to the regular price when no loyalty price applies', () {
@@ -152,7 +152,7 @@ void main() {
         'product': 'Brot',
         'regular_price_text': '0,99 €',
       });
-      expect(BringShare.lineFor(offer), 'Brot · 0,99 €');
+      expect(ShoppingListText.lineFor(offer), 'Brot · 0,99 €');
     });
   });
 
@@ -190,7 +190,7 @@ void main() {
       expect(restored.product, 'Kerrygold Butter');
       expect(restored.retailers, ['Combi', 'famila Nordwest']);
       expect(restored.effectivePriceText, '1,59 €');
-      expect(BringShare.lineFor(restored), BringShare.lineFor(original));
+      expect(ShoppingListText.lineFor(restored), ShoppingListText.lineFor(original));
     });
 
     test('several offers become one line each', () {
@@ -198,7 +198,7 @@ void main() {
         Offer.fromJson({'product': 'Butter', 'effective_price_text': '1,59 €'}),
         Offer.fromJson({'product': 'Brot', 'effective_price_text': '0,99 €'}),
       ];
-      expect(BringShare.textFor(offers), 'Butter · 1,59 €\nBrot · 0,99 €');
+      expect(ShoppingListText.textFor(offers), 'Butter · 1,59 €\nBrot · 0,99 €');
     });
 
     test('a merged row names every retailer it stands for', () {
@@ -210,7 +210,7 @@ void main() {
         'effective_price_text': '1,59 €',
       });
       expect(
-        BringShare.lineFor(offer),
+        ShoppingListText.lineFor(offer),
         'Butter · Combi · famila Nordwest · 1,59 €',
       );
     });

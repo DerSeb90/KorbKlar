@@ -1,20 +1,26 @@
-"""Push offers to a Home Assistant todo list, for example a Bring shopping list.
+"""Push offers to a KitchenOwl shopping list.
 
-Home Assistant's Bring integration exposes every Bring list as a ``todo``
-entity. KorbKlar therefore talks to the generic ``todo.add_item`` service
-instead of a Bring-specific interface, which also covers the built-in
-shopping list, KitchenOwl and any other todo provider.
+KitchenOwl is a self-hosted grocery list with collaborative households, which
+makes it a natural target for a comparison this service already performed. Its
+REST API needs only three calls:
 
-The configured Home Assistant instance is a first-party target chosen by the
-operator, usually reachable only over LAN or VPN. That is why this client does
-not use the SSRF guard from :mod:`.images`, which exists to protect against
-untrusted image hosts. The token never leaves the server.
+* ``GET /api/household`` for the households the token can see
+* ``GET /api/household/<id>/shoppinglist`` for that household's lists
+* ``POST /api/shoppinglist/<id>/add-item-by-name`` with ``name`` and an
+  optional ``description``
+
+Authentication is a long-lived token, created in KitchenOwl under profile,
+sessions, long-lived tokens, and sent as a bearer token.
+
+The configured instance is a first-party target chosen by the operator, often
+on the same host or a private network. That is why this client does not use
+the SSRF guard from :mod:`.images`, which exists to protect against untrusted
+image hosts. The token never leaves the server.
 """
 
 from __future__ import annotations
 
 import json
-import re
 import ssl
 import threading
 import time
@@ -25,23 +31,22 @@ from urllib.request import Request, urlopen
 
 from .common import clean_text
 from .config import (
-    HOMEASSISTANT_MAX_ITEMS_PER_REQUEST,
-    HOMEASSISTANT_TIMEOUT_SECONDS,
-    HOMEASSISTANT_TODO_ENTITY,
-    HOMEASSISTANT_TOKEN,
-    HOMEASSISTANT_URL,
-    HOMEASSISTANT_VERIFY_TLS,
+    KITCHENOWL_LIST_ID,
+    KITCHENOWL_MAX_ITEMS_PER_REQUEST,
+    KITCHENOWL_TIMEOUT_SECONDS,
+    KITCHENOWL_TOKEN,
+    KITCHENOWL_URL,
+    KITCHENOWL_VERIFY_TLS,
     USER_AGENT,
 )
 
-ENTITY_PATTERN = re.compile(r"^todo\.[a-z0-9_]{1,120}$")
-ENTITY_CACHE_TTL_SECONDS = 300
+LIST_CACHE_TTL_SECONDS = 300
 MAX_ITEM_LENGTH = 200
 MAX_DESCRIPTION_LENGTH = 300
 
 
 class ShoppingListError(RuntimeError):
-    """A configuration or transport problem while talking to Home Assistant."""
+    """A configuration or transport problem while talking to KitchenOwl."""
 
     def __init__(self, message: str, status_code: int = 502) -> None:
         super().__init__(message)
@@ -56,7 +61,7 @@ def _truncate(value: str, limit: int) -> str:
 
 
 def build_item_text(product: str, retailer: str) -> str:
-    """Return the Bring article name."""
+    """Return the shopping list article name."""
     name = _truncate(product, MAX_ITEM_LENGTH)
     if name:
         return name
@@ -65,10 +70,10 @@ def build_item_text(product: str, retailer: str) -> str:
 
 
 def build_item_description(retailer: str, price_text: str, validity: str, pack: str) -> str:
-    """Return the Bring note shown underneath the article name.
+    """Return the note shown underneath the article.
 
-    Only values that the offer actually carries are included. Nothing is
-    estimated or invented, matching how KorbKlar treats loyalty benefits.
+    Only values the offer actually carries are included. Nothing is estimated,
+    matching how this service treats loyalty benefits.
     """
     parts = [
         clean_text(retailer),
@@ -79,24 +84,24 @@ def build_item_description(retailer: str, price_text: str, validity: str, pack: 
     return _truncate(" · ".join(part for part in parts if part), MAX_DESCRIPTION_LENGTH)
 
 
-class HomeAssistantShoppingList:
+class KitchenOwlShoppingList:
     def __init__(
         self,
-        base_url: str = HOMEASSISTANT_URL,
-        token: str = HOMEASSISTANT_TOKEN,
-        default_entity: str = HOMEASSISTANT_TODO_ENTITY,
-        verify_tls: bool = HOMEASSISTANT_VERIFY_TLS,
-        timeout_seconds: int = HOMEASSISTANT_TIMEOUT_SECONDS,
-        max_items: int = HOMEASSISTANT_MAX_ITEMS_PER_REQUEST,
+        base_url: str = KITCHENOWL_URL,
+        token: str = KITCHENOWL_TOKEN,
+        default_list_id: str = KITCHENOWL_LIST_ID,
+        verify_tls: bool = KITCHENOWL_VERIFY_TLS,
+        timeout_seconds: int = KITCHENOWL_TIMEOUT_SECONDS,
+        max_items: int = KITCHENOWL_MAX_ITEMS_PER_REQUEST,
     ) -> None:
         self.base_url = clean_text(base_url).rstrip("/")
         self.token = clean_text(token)
-        self.default_entity = clean_text(default_entity).casefold()
+        self.default_list_id = clean_text(default_list_id)
         self.verify_tls = bool(verify_tls)
         self.timeout_seconds = max(3, int(timeout_seconds))
         self.max_items = max(1, int(max_items))
-        self._entities: list[dict[str, str]] = []
-        self._entities_read_at = 0.0
+        self._lists: list[dict[str, str]] = []
+        self._lists_read_at = 0.0
         self._lock = threading.Lock()
 
     @property
@@ -107,27 +112,25 @@ class HomeAssistantShoppingList:
         if not self.configured:
             raise ShoppingListError(
                 "Die Einkaufslisten-Anbindung ist nicht konfiguriert. "
-                "SUPERMARKT_HA_URL und SUPERMARKT_HA_TOKEN setzen.",
+                "SUPERMARKT_KITCHENOWL_URL und SUPERMARKT_KITCHENOWL_TOKEN setzen.",
                 status_code=503,
             )
 
     def _ssl_context(self) -> ssl.SSLContext | None:
         if urlsplit(self.base_url).scheme != "https":
             return None
-        if self.verify_tls:
-            return ssl.create_default_context()
-        # Opt-in only, for a self-signed certificate on a private instance.
         context = ssl.create_default_context()
-        context.check_hostname = False
-        context.verify_mode = ssl.CERT_NONE
+        if not self.verify_tls:
+            # Opt-in only, for a self-signed certificate on a private instance.
+            context.check_hostname = False
+            context.verify_mode = ssl.CERT_NONE
         return context
 
     def _call(self, path: str, payload: dict[str, Any] | None = None) -> Any:
         self._require_configured()
-        url = f"{self.base_url}{path}"
         body = json.dumps(payload).encode("utf-8") if payload is not None else None
         request = Request(
-            url,
+            f"{self.base_url}{path}",
             data=body,
             method="POST" if body is not None else "GET",
             headers={
@@ -143,14 +146,18 @@ class HomeAssistantShoppingList:
         except HTTPError as exc:
             if exc.code in (401, 403):
                 raise ShoppingListError(
-                    "Home Assistant hat den Zugriffstoken abgelehnt.", status_code=502
+                    "KitchenOwl hat den Zugriffstoken abgelehnt.", status_code=502
+                ) from exc
+            if exc.code == 404:
+                raise ShoppingListError(
+                    "KitchenOwl kennt diese Liste nicht.", status_code=400
                 ) from exc
             raise ShoppingListError(
-                f"Home Assistant antwortete mit HTTP {exc.code}.", status_code=502
+                f"KitchenOwl antwortete mit HTTP {exc.code}.", status_code=502
             ) from exc
         except (URLError, TimeoutError, OSError) as exc:
             raise ShoppingListError(
-                f"Home Assistant ist nicht erreichbar: {exc}", status_code=502
+                f"KitchenOwl ist nicht erreichbar: {exc}", status_code=502
             ) from exc
 
         if not raw:
@@ -159,69 +166,78 @@ class HomeAssistantShoppingList:
             return json.loads(raw.decode("utf-8", errors="replace"))
         except json.JSONDecodeError as exc:
             raise ShoppingListError(
-                "Home Assistant lieferte keine gültige JSON-Antwort.", status_code=502
+                "KitchenOwl lieferte keine gültige JSON-Antwort.", status_code=502
             ) from exc
 
     @staticmethod
-    def _entity_from_state(state: Any) -> dict[str, str] | None:
-        if not isinstance(state, dict):
-            return None
-        entity_id = clean_text(state.get("entity_id")).casefold()
-        if not ENTITY_PATTERN.match(entity_id):
-            return None
-        attributes = state.get("attributes") if isinstance(state.get("attributes"), dict) else {}
-        label = clean_text(attributes.get("friendly_name")) or entity_id
-        return {"entity_id": entity_id, "label": label}
+    def _entries(payload: Any) -> list[dict[str, Any]]:
+        return [item for item in payload if isinstance(item, dict)] if isinstance(payload, list) else []
 
     def targets(self, refresh: bool = False) -> list[dict[str, str]]:
-        """Return the todo entities Home Assistant currently exposes."""
+        """Return every shopping list the token can reach.
+
+        A household with several lists contributes each of them, labelled with
+        the household so two lists called "Einkauf" stay distinguishable.
+        """
         self._require_configured()
         with self._lock:
-            fresh = time.time() - self._entities_read_at < ENTITY_CACHE_TTL_SECONDS
-            if self._entities and fresh and not refresh:
-                return list(self._entities)
+            fresh = time.time() - self._lists_read_at < LIST_CACHE_TTL_SECONDS
+            if self._lists and fresh and not refresh:
+                return list(self._lists)
 
-        states = self._call("/api/states")
-        if not isinstance(states, list):
-            raise ShoppingListError("Home Assistant lieferte keine Entitätsliste.", status_code=502)
-        entities = [
-            entity
-            for entity in (self._entity_from_state(state) for state in states)
-            if entity is not None
-        ]
-        entities.sort(key=lambda entity: entity["label"].casefold())
+        households = self._entries(self._call("/api/household"))
+        if not households:
+            raise ShoppingListError(
+                "KitchenOwl meldet keinen Haushalt für diesen Token.", status_code=502
+            )
 
+        lists: list[dict[str, str]] = []
+        for household in households:
+            household_id = household.get("id")
+            if household_id is None:
+                continue
+            household_name = clean_text(household.get("name"))
+            for entry in self._entries(self._call(f"/api/household/{household_id}/shoppinglist")):
+                list_id = entry.get("id")
+                if list_id is None:
+                    continue
+                name = clean_text(entry.get("name")) or f"Liste {list_id}"
+                # Only qualify when it adds information.
+                label = f"{household_name} · {name}" if household_name and len(households) > 1 else name
+                lists.append({"entity_id": str(list_id), "label": label})
+
+        lists.sort(key=lambda item: item["label"].casefold())
         with self._lock:
-            self._entities = entities
-            self._entities_read_at = time.time()
-        return list(entities)
+            self._lists = lists
+            self._lists_read_at = time.time()
+        return list(lists)
 
     def resolve_entity(self, requested: str) -> str:
-        """Return a todo entity id that Home Assistant actually exposes."""
-        wanted = clean_text(requested).casefold()
-        if wanted and not ENTITY_PATTERN.match(wanted):
+        """Return a list id KitchenOwl actually exposes."""
+        wanted = clean_text(requested)
+        if wanted and not wanted.isdigit():
             raise ShoppingListError(
-                "Ungültige Ziel-Liste. Erwartet wird eine todo-Entität, z. B. todo.bring_einkaufsliste.",
+                "Ungültige Ziel-Liste. Erwartet wird die numerische KitchenOwl-Listen-ID.",
                 status_code=400,
             )
 
-        known = {entity["entity_id"] for entity in self.targets()}
-        for candidate in (wanted, self.default_entity):
+        known = {item["entity_id"] for item in self.targets()}
+        for candidate in (wanted, self.default_list_id):
             if candidate and candidate in known:
                 return candidate
         if wanted:
             raise ShoppingListError(
-                f"Home Assistant kennt die Liste {wanted} nicht.", status_code=400
+                f"KitchenOwl kennt die Liste {wanted} nicht.", status_code=400
             )
         if len(known) == 1:
             return next(iter(known))
         raise ShoppingListError(
-            "Keine Ziel-Liste ausgewählt. SUPERMARKT_HA_TODO_ENTITY setzen oder eine Liste übergeben.",
+            "Keine Ziel-Liste ausgewählt. SUPERMARKT_KITCHENOWL_LIST_ID setzen oder eine Liste übergeben.",
             status_code=400,
         )
 
     def add_items(self, entity_id: str, items: Iterable[dict[str, str]]) -> dict[str, Any]:
-        """Add offers to one todo list and report per-item success."""
+        """Add offers to one shopping list and report per-item success."""
         target = self.resolve_entity(entity_id)
         pending = [item for item in items if isinstance(item, dict)]
         if not pending:
@@ -236,7 +252,7 @@ class HomeAssistantShoppingList:
         failed: list[dict[str, str]] = []
         for item in pending:
             name = build_item_text(item.get("product", ""), item.get("retailer", ""))
-            payload: dict[str, Any] = {"entity_id": target, "item": name}
+            payload: dict[str, Any] = {"name": name}
             description = build_item_description(
                 item.get("retailer", ""),
                 item.get("price_text", ""),
@@ -246,7 +262,7 @@ class HomeAssistantShoppingList:
             if description:
                 payload["description"] = description
             try:
-                self._call("/api/services/todo/add_item", payload)
+                self._call(f"/api/shoppinglist/{target}/add-item-by-name", payload)
             except ShoppingListError as exc:
                 failed.append({"item": name, "error": str(exc)})
                 continue
@@ -264,6 +280,6 @@ class HomeAssistantShoppingList:
         return {
             "configured": self.configured,
             "host": urlsplit(self.base_url).netloc if self.base_url else "",
-            "default_entity": self.default_entity,
+            "default_list": self.default_list_id,
             "verify_tls": self.verify_tls,
         }

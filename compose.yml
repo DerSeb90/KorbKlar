@@ -31,12 +31,12 @@ services:
       SUPERMARKT_IMAGE_CACHE_TTL_SECONDS: ${SUPERMARKT_IMAGE_CACHE_TTL_SECONDS:-604800}
       SUPERMARKT_IMAGE_CACHE_MAX_BYTES: ${SUPERMARKT_IMAGE_CACHE_MAX_BYTES:-536870912}
       SUPERMARKT_IMAGE_MAX_FILE_BYTES: ${SUPERMARKT_IMAGE_MAX_FILE_BYTES:-4194304}
-      SUPERMARKT_HA_URL: ${SUPERMARKT_HA_URL:-}
-      SUPERMARKT_HA_TOKEN: ${SUPERMARKT_HA_TOKEN:-}
-      SUPERMARKT_HA_TODO_ENTITY: ${SUPERMARKT_HA_TODO_ENTITY:-}
-      SUPERMARKT_HA_VERIFY_TLS: ${SUPERMARKT_HA_VERIFY_TLS:-1}
-      SUPERMARKT_HA_TIMEOUT_SECONDS: ${SUPERMARKT_HA_TIMEOUT_SECONDS:-15}
-      SUPERMARKT_HA_MAX_ITEMS: ${SUPERMARKT_HA_MAX_ITEMS:-50}
+      SUPERMARKT_KITCHENOWL_URL: ${SUPERMARKT_KITCHENOWL_URL:-http://kitchenowl-back:5000}
+      SUPERMARKT_KITCHENOWL_TOKEN: ${SUPERMARKT_KITCHENOWL_TOKEN:-}
+      SUPERMARKT_KITCHENOWL_LIST_ID: ${SUPERMARKT_KITCHENOWL_LIST_ID:-}
+      SUPERMARKT_KITCHENOWL_VERIFY_TLS: ${SUPERMARKT_KITCHENOWL_VERIFY_TLS:-1}
+      SUPERMARKT_KITCHENOWL_TIMEOUT_SECONDS: ${SUPERMARKT_KITCHENOWL_TIMEOUT_SECONDS:-15}
+      SUPERMARKT_KITCHENOWL_MAX_ITEMS: ${SUPERMARKT_KITCHENOWL_MAX_ITEMS:-50}
       SUPERMARKT_TRUSTED_NETWORKS: ${SUPERMARKT_TRUSTED_NETWORKS:-}
       SUPERMARKT_TRUSTED_PROXIES: ${SUPERMARKT_TRUSTED_PROXIES:-}
       SUPERMARKT_CHROMIUM_BINARY: ${SUPERMARKT_CHROMIUM_BINARY:-}
@@ -76,6 +76,7 @@ services:
       # domain itself when the profile is actually used.
       KORBKLAR_DOMAIN: ${KORBKLAR_DOMAIN:-}
       KORBKLAR_ACME_EMAIL: ${KORBKLAR_ACME_EMAIL:-}
+      KORBKLAR_KITCHENOWL_DOMAIN: ${KORBKLAR_KITCHENOWL_DOMAIN:-}
     networks:
       - korbklar-net
     # Both values are unavoidably optional at the Compose level, because
@@ -88,6 +89,7 @@ services:
         missing=""
         [ -n "$${KORBKLAR_DOMAIN}" ] || missing="KORBKLAR_DOMAIN"
         [ -n "$${KORBKLAR_ACME_EMAIL}" ] || missing="$${missing:+$$missing und }KORBKLAR_ACME_EMAIL"
+        [ -n "$${KORBKLAR_KITCHENOWL_DOMAIN}" ] || missing="$${missing:+$$missing, }KORBKLAR_KITCHENOWL_DOMAIN"
         if [ -n "$$missing" ]; then
           echo "Reverse Proxy nicht gestartet: $$missing fehlt in .env" >&2
           exit 1
@@ -108,6 +110,39 @@ services:
       retries: 3
       start_period: 10s
 
+  kitchenowl-back:
+    # Self-hosted grocery list KorbKlar writes offers to. Shares the proxy
+    # profile because it is only reachable through the proxy.
+    image: tombursch/kitchenowl-backend:latest
+    container_name: korbklar-kitchenowl-back
+    restart: unless-stopped
+    init: true
+    profiles: ["proxy"]
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      # KitchenOwl refuses to run while this still holds its placeholder.
+      JWT_SECRET_KEY: ${KITCHENOWL_JWT_SECRET:-}
+      # Lets KitchenOwl build correct absolute links to its own frontend.
+      FRONT_URL: ${KITCHENOWL_PUBLIC_URL:-}
+    networks:
+      - korbklar-net
+    volumes:
+      - kitchenowl-data:/data
+
+  kitchenowl-web:
+    image: tombursch/kitchenowl-web:latest
+    container_name: korbklar-kitchenowl-web
+    restart: unless-stopped
+    init: true
+    profiles: ["proxy"]
+    security_opt:
+      - no-new-privileges:true
+    depends_on:
+      - kitchenowl-back
+    networks:
+      - korbklar-net
+
 networks:
   korbklar-net:
     # A fixed subnet so SUPERMARKT_TRUSTED_PROXIES can name the proxy without
@@ -118,5 +153,6 @@ networks:
 
 volumes:
   korbklar-data:
+  kitchenowl-data:
   caddy-data:
   caddy-config:

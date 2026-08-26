@@ -1,4 +1,4 @@
-"""Routes that push offers to a Home Assistant todo list such as Bring.
+"""Routes that push offers to a KitchenOwl shopping list.
 
 Two entry points share one handler:
 
@@ -17,14 +17,14 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from .access import require_api_auth, verify_result_token
-from .homeassistant import ShoppingListError
+from .kitchenowl import ShoppingListError
 from . import runtime
 
 router = APIRouter()
 
 
 class ShoppingListItem(BaseModel):
-    product: str = Field(default="", max_length=300, description="Produktname als Bring-Artikel")
+    product: str = Field(default="", max_length=300, description="Produktname als Listenartikel")
     retailer: str = Field(default="", max_length=80, description="Händler, erscheint in der Notiz")
     price_text: str = Field(default="", max_length=40, description="Angebotspreis, erscheint in der Notiz")
     validity: str = Field(default="", max_length=120, description="Gültigkeit, erscheint in der Notiz")
@@ -35,7 +35,7 @@ class ShoppingListRequest(BaseModel):
     entity_id: str = Field(
         default="",
         max_length=140,
-        description="todo-Entität in Home Assistant, z. B. todo.bring_einkaufsliste",
+        description="KitchenOwl-Listen-ID, z. B. 1",
     )
     items: list[ShoppingListItem] = Field(
         default_factory=list,
@@ -74,7 +74,7 @@ def _add_items(request_data: ShoppingListRequest) -> dict[str, Any]:
     "/api/v1/shopping-list/targets",
     operation_id="einkaufsliste_ziele",
     summary="Verfügbare Einkaufslisten abrufen",
-    description="Listet die todo-Entitäten der konfigurierten Home-Assistant-Instanz, etwa Bring-Listen.",
+    description="Listet die Einkaufslisten der konfigurierten KitchenOwl-Instanz.",
 )
 def shopping_list_targets(_: None = Depends(require_api_auth)) -> dict[str, Any]:
     return _targets()
@@ -85,7 +85,7 @@ def shopping_list_targets(_: None = Depends(require_api_auth)) -> dict[str, Any]
     operation_id="einkaufsliste_ergaenzen",
     summary="Angebote auf die Einkaufsliste setzen",
     description=(
-        "Schreibt Angebote über Home Assistant auf eine todo-Liste, zum Beispiel Bring. "
+        "Schreibt Angebote auf eine KitchenOwl-Einkaufsliste. "
         "Der Artikelname ist das Produkt, die Notiz enthält Händler, Preis und Gültigkeit."
     ),
 )

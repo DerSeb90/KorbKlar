@@ -6,7 +6,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../api/client.dart';
 import '../api/models.dart';
-import '../services/bring.dart';
+import '../services/shopping_list.dart';
 import '../services/settings.dart';
 import '../theme.dart';
 import '../widgets/offer_card.dart';
@@ -55,6 +55,10 @@ class _ResultsScreenState extends State<ResultsScreen> {
   int _nextPage = 1;
   bool _loading = false;
   bool _refreshing = false;
+
+  /// Warnings the user has already read. Reset per result, so a new
+  /// comparison surfaces its own problems again.
+  bool _warningsSeen = false;
   bool _done = false;
   String _error = '';
   Timer? _debounce;
@@ -118,6 +122,7 @@ class _ResultsScreenState extends State<ResultsScreen> {
   void _reload() {
     _requestSeq++;
     setState(() {
+      _warningsSeen = false;
       _offers.clear();
       _nextPage = 1;
       _done = false;
@@ -161,40 +166,17 @@ class _ResultsScreenState extends State<ResultsScreen> {
 
   /// Re-queries every source for this postal code, bypassing the server's
   /// snapshot cache, then swaps in the new result.
-  Future<void> _hardRefresh() async {
-    final postalCode = _page?.postalCode ?? '';
-    if (postalCode.isEmpty || _refreshing) return;
+  /// Re-reads the stored comparison for this result.
+  ///
+  /// Deliberately does not start a new search: the server keeps a snapshot
+  /// and re-querying every retailer takes minutes. It also used to replace
+  /// the route, which ended the caller's await in the previous screen and
+  /// closed the HTTP client this screen was still using.
+  Future<void> _refreshFromCache() async {
+    if (_refreshing) return;
     setState(() => _refreshing = true);
-    try {
-      final jobId = await widget.client.startSearch(postalCode, refresh: true);
-      SearchProgress? last;
-      await for (final progress in widget.client.watchSearch(jobId)) {
-        last = progress;
-      }
-      if (!mounted || last == null) return;
-      if (last.isFailed) {
-        _toast(last.error.isEmpty ? 'Neuladen fehlgeschlagen.' : last.error);
-        return;
-      }
-      final handle = ResultHandle.parse(last.resultPath);
-      if (handle == null) {
-        _toast('Der Server lieferte keinen gültigen Ergebnislink.');
-        return;
-      }
-      await Navigator.of(context).pushReplacement(
-        MaterialPageRoute<void>(
-          builder: (_) => ResultsScreen(
-            client: widget.client,
-            handle: handle,
-            settings: widget.settings,
-          ),
-        ),
-      );
-    } on KorbKlarException catch (exception) {
-      _toast(exception.message);
-    } finally {
-      if (mounted) setState(() => _refreshing = false);
-    }
+    _reload();
+    if (mounted) setState(() => _refreshing = false);
   }
 
   void _onSearchChanged(String _) {
@@ -214,39 +196,19 @@ class _ResultsScreenState extends State<ResultsScreen> {
     _saveCollection();
   }
 
-  // ---------------------------------------------------------------- Bring
+  // -------------------------------------------------------- Einkaufsliste
 
   Future<void> _addToList(List<Offer> offers) async {
     if (offers.isEmpty) return;
-    const share = BringShare();
-    final canShare = share.isSupported;
-    final canServer = _shoppingList.configured && _shoppingList.targets.isNotEmpty;
+    const text = ShoppingListText();
 
-    // Without a share sheet and without a configured server the clipboard is
-    // still a way out, so collecting is never a dead end.
-    final route = (canShare && canServer)
-        ? await _askRoute(offers.length)
-        : canShare
-        ? BringRoute.share
-        : canServer
-        ? BringRoute.server
-        : BringRoute.clipboard;
-    if (route == null) return;
-
-    if (route == BringRoute.clipboard) {
-      await share.copy(offers);
+    // Without a configured KitchenOwl list the clipboard is still a way out,
+    // so collecting is never a dead end.
+    if (!_shoppingList.configured || _shoppingList.targets.isEmpty) {
+      await text.copy(offers);
       if (!mounted) return;
       _clearCollection();
       _toast('In die Zwischenablage kopiert.');
-      return;
-    }
-
-    if (route == BringRoute.share) {
-      final ok = await share.share(offers);
-      if (ok && mounted) {
-        _clearCollection();
-        _toast('An die Einkaufsliste übergeben.');
-      }
       return;
     }
 
@@ -265,44 +227,6 @@ class _ResultsScreenState extends State<ResultsScreen> {
       _toast(exception.message);
     }
   }
-
-  Future<BringRoute?> _askRoute(int count) => showModalBottomSheet<BringRoute>(
-    context: context,
-    backgroundColor: context.colors.panel,
-    builder: (sheetContext) => SafeArea(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 18, 20, 6),
-            child: Text(
-              count == 1 ? 'Angebot übernehmen' : '$count Angebote übernehmen',
-              style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
-            ),
-          ),
-          ListTile(
-            leading: const Icon(Icons.ios_share),
-            title: const Text('An Bring senden'),
-            subtitle: const Text('Über das Teilen-Menü, ohne Server'),
-            onTap: () => Navigator.pop(sheetContext, BringRoute.share),
-          ),
-          ListTile(
-            leading: const Icon(Icons.dns_outlined),
-            title: const Text('Über KorbKlar-Server'),
-            subtitle: const Text('Mit Händler, Preis und Gültigkeit als Notiz'),
-            onTap: () => Navigator.pop(sheetContext, BringRoute.server),
-          ),
-          ListTile(
-            leading: const Icon(Icons.copy_all_outlined),
-            title: const Text('In die Zwischenablage'),
-            subtitle: const Text('Eine Zeile je Angebot'),
-            onTap: () => Navigator.pop(sheetContext, BringRoute.clipboard),
-          ),
-          const SizedBox(height: 8),
-        ],
-      ),
-    ),
-  );
 
   Future<String?> _resolveEntity() async {
     final targets = _shoppingList.targets;
@@ -423,6 +347,7 @@ class _ResultsScreenState extends State<ResultsScreen> {
   Future<void> _openWarnings() async {
     final warnings = _page?.warnings ?? const <String>[];
     if (warnings.isEmpty) return;
+    setState(() => _warningsSeen = true);
     await showModalBottomSheet<void>(
       context: context,
       backgroundColor: context.colors.panel,
@@ -465,8 +390,8 @@ class _ResultsScreenState extends State<ResultsScreen> {
         ),
         actions: [
           IconButton(
-            tooltip: 'Quellen neu abrufen',
-            onPressed: _refreshing || page == null ? null : _hardRefresh,
+            tooltip: 'Ergebnisse neu laden',
+            onPressed: _refreshing || page == null ? null : _refreshFromCache,
             icon: _refreshing
                 ? const SizedBox(
                     height: 18,
@@ -479,10 +404,12 @@ class _ResultsScreenState extends State<ResultsScreen> {
             IconButton(
               tooltip: 'Hinweise',
               onPressed: _openWarnings,
-              icon: Badge(
-                label: Text('${warnings.length}'),
-                child: const Icon(Icons.warning_amber_rounded),
-              ),
+              icon: _warningsSeen
+                  ? Icon(Icons.warning_amber_rounded, color: colors.muted)
+                  : Badge(
+                      label: Text('${warnings.length}'),
+                      child: const Icon(Icons.warning_amber_rounded),
+                    ),
             ),
           if ((page?.availableLoyaltyPrograms ?? []).isNotEmpty)
             IconButton(

@@ -21,32 +21,21 @@ price; it renders the values the comparison engine returns.
 - endless scrolling
 - collecting offers across searches and sending them together; the collection
   survives a reload and a restart
-- putting offers on a Bring shopping list, one at a time or as a whole collection
+- putting offers on a KitchenOwl shopping list, one at a time or as a whole collection
 - a refresh action that bypasses the server's snapshot cache and re-queries
   every source
 
 Server address, postal code, loyalty selection and target list are remembered
 on the device.
 
-## Bring
+## Shopping list
 
-Two routes, offered side by side when both are available:
+Collected offers go to the KitchenOwl list behind the KorbKlar server, which
+stores a proper article plus a note holding retailer, price, package size and
+validity. The app never sees the KitchenOwl token; the server holds it.
 
-**Share sheet.** The app hands the offer text to the platform share sheet;
-Bring registers as a receiver and adds the item. Works without a server and
-without a token, but carries only text. Android and iOS only.
-
-**KorbKlar server.** Uses the server's Home Assistant integration, which writes
-a proper article plus a note holding retailer, price, package size and
-validity. Requires that integration to be configured and the server to be
-reachable from the phone. The app never sees the Home Assistant token.
-
-**Clipboard.** Where neither applies — desktop, or a server without the
-integration — the collection is copied as one line per offer, so collecting is
-never a dead end.
-
-Bring has no documented public write API for third-party apps, so the app does
-not pretend to talk to Bring directly.
+Where no list is configured the collection is copied to the clipboard instead,
+one line per offer, so collecting is never a dead end.
 
 ## Running it
 
@@ -129,7 +118,7 @@ lib/
 │   ├── home_screen.dart      server setup, postal code, search progress
 │   └── results_screen.dart   filters, chips, loyalty, list, selection
 ├── services/
-│   ├── bring.dart       share-sheet route and its text format
+│   ├── shopping_list.dart  list route and the text format
 │   └── settings.dart    locally remembered preferences
 ├── widgets/
 │   └── offer_card.dart  one offer row

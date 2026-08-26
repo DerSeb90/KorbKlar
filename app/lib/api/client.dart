@@ -267,7 +267,7 @@ class KorbKlarClient {
         return ShoppingListInfo.fromJson(_json(response));
       });
 
-  /// Writes offers to a todo list through the server's Home Assistant link.
+  /// Writes offers to the KitchenOwl list behind the server.
   Future<int> addToShoppingList(
     ResultHandle handle, {
     required String entityId,

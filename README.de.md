@@ -147,7 +147,7 @@ Die Ergebnisansicht bietet unter anderem:
 - Hinweise zu ausgefallenen oder unvollständigen Quellen
 - eine Zeile für ein identisches Angebot, das mehrere Händler zum selben Preis führen
 - automatisches Nachladen beim Scrollen
-- Angebote einzeln oder als Auswahl auf eine Einkaufsliste in Home Assistant setzen, zum Beispiel Bring
+- Angebote einzeln oder als Auswahl auf eine KitchenOwl-Einkaufsliste setzen
 
 Packungsgröße und Referenzmenge des Grundpreises werden getrennt behandelt. Aus einer 0,33-l-Dose mit einem Grundpreis pro Liter wird deshalb beispielsweise `330 ml` als Packungsgröße und der Literpreis separat dargestellt. Alternative Größen wie `85 g oder 100 g` werden nicht zu `185 g` addiert.
 
@@ -231,28 +231,41 @@ POST /api/v1/shopping-list/items
 
 Der Browserbetrieb funktioniert ohne Schlüssel. Soll die REST-Schnittstelle zusätzlich mit Bearer-Authentifizierung geschützt werden, kann `SUPERMARKT_API_KEY` gesetzt werden; der Schlüssel gilt dann für den Vergleichsendpunkt und beide Einkaufslisten-Endpunkte. Die weiteren optionalen Einstellungen stehen in [`.env.example`](.env.example).
 
-## Einkaufsliste über Home Assistant
+## Einkaufsliste über KitchenOwl
 
-KorbKlar kann Angebote auf eine todo-Liste in Home Assistant schreiben. Die Bring-Integration von Home Assistant stellt jede Bring-Liste als `todo`-Entität bereit. KorbKlar ruft deshalb den allgemeinen Dienst `todo.add_item` auf statt einer Bring-eigenen Schnittstelle. Damit funktionieren auch die eingebaute Einkaufsliste und andere todo-Anbieter.
+KorbKlar schreibt Angebote auf eine Einkaufsliste in [KitchenOwl](https://kitchenowl.org), einer selbst gehosteten Einkaufsliste mit gemeinsamen Haushalten. Der Produktname wird der Artikel, die Notiz trägt Händler, Preis, Packungsgröße und Gültigkeit, zum Beispiel `famila Nordwest · 1,59 € · 250 g · bis 29.08.`. Geschrieben wird nur, was das Angebot wirklich hergibt; nichts wird geschätzt.
 
-Die Verbindung wird mit einem langlebigen Zugriffstoken aus dem Home-Assistant-Benutzerprofil konfiguriert:
+### KitchenOwl im Stack
+
+Das Profil `proxy` startet KitchenOwl gleich mit, auf einer eigenen Subdomain:
 
 ```bash
-SUPERMARKT_HA_URL=http://homeassistant.local:8123
-SUPERMARKT_HA_TOKEN=dein-langlebiger-zugriffstoken
-SUPERMARKT_HA_TODO_ENTITY=todo.bring_einkaufsliste
+KORBKLAR_KITCHENOWL_DOMAIN=einkauf.deine-domain.de
+KITCHENOWL_JWT_SECRET=ein-langer-zufaelliger-wert
+KITCHENOWL_PUBLIC_URL=https://einkauf.deine-domain.de
+docker compose --profile proxy up -d
 ```
 
-Die Home-Assistant-Instanz darf ausschließlich über LAN oder VPN erreichbar sein. Nur der KorbKlar-Server spricht mit ihr, der Token erreicht den Browser nicht und wird auch über `/health` nicht ausgegeben. Dieser Client nutzt bewusst nicht den SSRF-Schutz der Bildproxy-Kette, denn das Ziel ist hier ein selbst gewählter eigener Host und keine fremde Bildquelle.
+`KITCHENOWL_JWT_SECRET` ist Pflicht; KitchenOwl läuft nicht mit seinem Platzhalterwert. Auch für diese Subdomain muss ein DNS-Record auf den Server zeigen, sonst bekommt Caddy kein Zertifikat.
 
-`SUPERMARKT_HA_TODO_ENTITY` wählt eine Liste nur vor. KorbKlar liest die vorhandenen `todo`-Entitäten aus Home Assistant und bietet sie in der Ergebnisliste zur Auswahl an, sodass mehrere Bring-Listen derselben Instanz nutzbar bleiben. Entitäten aus anderen Domains werden abgelehnt, bevor irgendetwas geschrieben wird.
+Beim ersten Aufruf legst du in KitchenOwl Konto und Haushalt an.
 
-Jedes Angebot wird ein Listeneintrag: Der Produktname ist der Artikel, die Notiz enthält Händler, Preis, Packungsgröße und Gültigkeit, zum Beispiel `famila Nordwest · 1,59 € · 250 g · bis 29.08.`. Geschrieben wird nur, was das Angebot wirklich hergibt; nichts wird geschätzt.
+### Verbindung herstellen
 
-In der Ergebnisliste hat jedes Angebot einen `+ Liste`-Knopf. Eine Checkbox sammelt mehrere Angebote für eine gemeinsame Übertragung. Der Browserweg ist durch dasselbe HMAC-Ergebnistoken geschützt, das bereits Ergebnisdaten und Bildproxy absichert. Ohne gültigen Ergebnislink ist die Funktion nicht erreichbar.
+Den Token erzeugst du in KitchenOwl unter Profil, Sitzungen, Long-lived Tokens. Danach in `.env`:
 
-Bleiben `SUPERMARKT_HA_URL` oder `SUPERMARKT_HA_TOKEN` leer, ist die Anbindung abgeschaltet und die Oberfläche blendet die Einkaufslisten-Bedienung aus.
+```bash
+SUPERMARKT_KITCHENOWL_URL=http://kitchenowl-back:5000
+SUPERMARKT_KITCHENOWL_TOKEN=dein-long-lived-token
+```
 
+Im mitgelieferten Stack erreicht KorbKlar das Backend direkt im Compose-Netz; die Anfragen verlassen den Server nicht. Läuft KitchenOwl woanders, trägst du dort seine erreichbare Adresse ein.
+
+`SUPERMARKT_KITCHENOWL_LIST_ID` wählt eine Liste nur vor. KorbKlar liest die Listen aller erreichbaren Haushalte aus KitchenOwl und bietet sie in der Ergebnisliste zur Auswahl an. Nicht vorhandene Listen werden abgelehnt, bevor etwas geschrieben wird. Der Token bleibt auf dem Server und erscheint auch in `/health` nicht.
+
+In der Ergebnisliste hat jedes Angebot einen `+ Liste`-Knopf. Eine Checkbox sammelt mehrere Angebote für eine gemeinsame Übertragung. Der Browserweg ist durch dasselbe HMAC-Ergebnistoken geschützt, das bereits Ergebnisdaten und Bildproxy absichert.
+
+Bleiben `SUPERMARKT_KITCHENOWL_URL` oder `SUPERMARKT_KITCHENOWL_TOKEN` leer, ist die Anbindung abgeschaltet und die Oberfläche blendet die Bedienung aus.
 ## Öffentlich betreiben: API-Key und VPN
 
 Ohne `SUPERMARKT_API_KEY` ist nichts eingeschränkt; eine private Instanz verhält sich wie bisher.
@@ -419,7 +432,7 @@ src/supermarkt/
 ├── security.py          Signaturen und optionaler API-Key
 ├── authz.py             API-Key, vertrauenswürdige Netze, Proxy-Auswertung
 ├── cache_cli.py         Cache-Status und -Bereinigung
-├── homeassistant.py     todo-Listen in Home Assistant, zum Beispiel Bring
+├── kitchenowl.py        Einkaufslisten in KitchenOwl
 ├── shopping_routes.py   Routen der Einkaufsliste
 ├── access.py            Zugriffs- und Request-Helfer
 ├── api_routes.py        REST-Routen
@@ -467,7 +480,7 @@ SUPERMARKT_DATA_DIR=.devdata python -m supermarkt.diagnostics 26123
 
 ## Roadmap
 
-Die oben beschriebene Einkaufsliste über Home Assistant ist umgesetzt. Weitere Integrationen sind für spätere Versionen vorgesehen, darunter Grocy, KitchenOwl und zusätzliche REST-/OpenAPI-Anbindungen für lokale Automationen und Agenten.
+Die oben beschriebene Anbindung an KitchenOwl ist umgesetzt. Weitere Integrationen sind für spätere Versionen vorgesehen, darunter Grocy und zusätzliche REST-/OpenAPI-Anbindungen für lokale Automationen und Agenten.
 
 ## Neuerungen in 0.0.3
 

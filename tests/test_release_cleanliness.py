@@ -178,7 +178,7 @@ def test_release_has_only_the_base_compose_file():
 def test_all_supported_compose_environment_variables_are_documented():
     compose = (ROOT / "compose.yml").read_text(encoding="utf-8")
     env_example = (ROOT / ".env.example").read_text(encoding="utf-8")
-    names = set(re.findall(r"\$\{(SUPERMARKT_[A-Z0-9_]+|KORBKLAR_[A-Z0-9_]+)", compose))
+    names = set(re.findall(r"\$\{(SUPERMARKT_[A-Z0-9_]+|KORBKLAR_[A-Z0-9_]+|KITCHENOWL_[A-Z0-9_]+)", compose))
     names.add("SUPERMARKT_PORT")
     for name in names:
         assert f"{name}=" in env_example, name

@@ -295,7 +295,7 @@ class SearchProgress {
   bool get isFailed => status == 'failed';
 }
 
-/// A todo list exposed by the server's Home Assistant integration.
+/// A shopping list exposed by the server's KitchenOwl integration.
 class ShoppingListTarget {
   const ShoppingListTarget({required this.entityId, required this.label});
 
