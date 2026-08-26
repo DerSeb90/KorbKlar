@@ -118,7 +118,11 @@ Der aktuelle Stand enthält Adapter beziehungsweise regionale Datenwege für:
 
 REWE, EDEKA, Marktkauf, Kaufland sowie die passende ALDI-Region werden bevorzugt direkt aus den jeweiligen Händlerquellen geladen. Lidl, PENNY, Netto Marken-Discount, GLOBUS, Combi und famila Nordwest werden über regionale Marktguru-Daten eingebunden. Fällt eine direkte Händlerquelle aus, kann der vorhandene regionale Datenweg gezielt für diesen Händler einspringen. Ein erfolgreicher Direktbestand wird dabei nicht mit einem zweiten vollständigen Bestand vermischt.
 
-Combi und famila Nordwest gehören zur Bünting-Gruppe und sind nur im Nordwesten vertreten. Beide sind deshalb optional: Außerhalb ihres Vertriebsgebiets liefern sie schlicht keine Angebote, was nicht als Quellenfehler gemeldet wird. famila Nordost ist eine andere, unabhängige Handelsgruppe und wird nie als famila Nordwest erkannt.
+Combi und famila Nordwest gehören zur Bünting-Gruppe und sind nur im Nordwesten vertreten. Beide sind deshalb optional wie Marktkauf und GLOBUS: Liefern sie nichts, wird das nicht als Quellenfehler gemeldet.
+
+Ihre regionale Abdeckung im Marktguru-Bestand ist uneinheitlich und für beide Marken nicht deckungsgleich. Eine Postleitzahl im Vertriebsgebiet kann eine Marke, beide oder keine liefern. Eine Filiale in der Nähe garantiert also keine Angebote. KorbKlar zeigt, was der regionale Bestand tatsächlich hergibt, und setzt keine Daten aus einem anderen Gebiet ein.
+
+famila Nordwest und famila Nordost sind getrennte, voneinander unabhängige Handelsgruppen. Erkannt wird nur famila Nordwest; famila Nordost ist ausdrücklich ausgeschlossen und kann nie unter der Bünting-Marke erscheinen.
 
 Welche Händler tatsächlich erscheinen, hängt von Postleitzahl, Region und den aktuell erreichbaren Quelldaten ab. Händler ohne Treffer werden nicht als leere Filter angezeigt.
 
