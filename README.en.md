@@ -329,6 +329,8 @@ KorbKlar is independent and is not affiliated with any retailer or loyalty progr
 
 ## What is new in 0.0.4
 
+Revision: Zenq & Enzo
+
 ALDI Süd offer validity is now resolved from the individual product card first, its offer group second, and the general weekly range only as a fallback. Weekly, Thursday, and Friday/Saturday promotions therefore remain distinct. Redundant parser paths and expired day groups no longer create duplicate offers, while genuinely different promotions are retained.
 
 ## What is new in 0.0.3

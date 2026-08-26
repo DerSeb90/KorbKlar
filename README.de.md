@@ -303,6 +303,8 @@ Für spätere Versionen sind zusätzliche Integrationen denkbar beziehungsweise 
 
 ## Neuerungen in 0.0.4
 
+Revision: Zenq & Enzo
+
 ALDI-Süd-Angebote übernehmen ihren Gültigkeitszeitraum jetzt vorrangig aus der einzelnen Produktkarte, danach aus der zugehörigen Aktionsgruppe und nur zuletzt aus dem allgemeinen Wochenzeitraum. Dadurch werden Wochen-, Donnerstag- sowie Freitag-/Samstag-Aktionen korrekt getrennt. Redundante Parserpfade und abgelaufene Tagesgruppen erzeugen keine Doppelangebote mehr; echte unterschiedliche Aktionen bleiben erhalten.
 
 ## Neuerungen in 0.0.3
