@@ -293,6 +293,10 @@ KorbKlar erfindet keine fehlenden Preise und schätzt keine unbekannten Bonusvor
 
 Für spätere Versionen sind zusätzliche Integrationen denkbar beziehungsweise geplant, darunter Grocy, KitchenOwl und weitere REST-/OpenAPI-Anbindungen für lokale Automationen und Agenten. Diese Integrationen sind keine Voraussetzung für Version 0.1.0.
 
+## Neuerungen in 0.0.4
+
+ALDI-Süd-Angebote übernehmen ihren Gültigkeitszeitraum jetzt vorrangig aus der einzelnen Produktkarte, danach aus der zugehörigen Aktionsgruppe und nur zuletzt aus dem allgemeinen Wochenzeitraum. Dadurch werden Wochen-, Donnerstag- sowie Freitag-/Samstag-Aktionen korrekt getrennt. Redundante Parserpfade und abgelaufene Tagesgruppen erzeugen keine Doppelangebote mehr; echte unterschiedliche Aktionen bleiben erhalten.
+
 ## Neuerungen in 0.0.3
 
 Kategorien werden auf 18 feste deutsche Hauptkategorien normalisiert. HOL’AB! erscheint nur für PLZ aus der offiziellen Marktliste; sechs strukturierte Angebote sind ehrlich als Teilabdeckung markiert. Pfand und Mengenbedingungen bleiben getrennt. REWE nutzt vorhandene Karten-Deeplinks, Lidl ohne sichere Kennung eine offizielle Produktsuche. Lightbox, lokales Hintergrundmotiv und automatisches Hell-/Dunkeldesign laden keine Drittanbieter-Assets.
