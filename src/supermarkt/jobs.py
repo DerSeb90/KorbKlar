@@ -17,16 +17,16 @@ class SearchJobStore:
         self._lock = threading.Lock()
         self._pool = ThreadPoolExecutor(max_workers=2, thread_name_prefix="korbklar-search")
 
-    def start(self, postal_code: str) -> str:
+    def start(self, postal_code: str, aldi_region: str = "auto") -> str:
         job_id = uuid.uuid4().hex
         now = time.time()
         with self._lock:
             self._purge(now)
-            self._jobs[job_id] = {"job_id": job_id, "status": "waiting", "postal_code": postal_code,
+            self._jobs[job_id] = {"job_id": job_id, "status": "waiting", "postal_code": postal_code, "aldi_region": aldi_region,
                 "source": "KorbKlar", "retailer": "Alle Händler", "category": "Alle Kategorien",
                 "step": "Suche wird vorbereitet", "progress": 0, "processed_sources": 0,
                 "total_sources": 6, "processed_products": 0, "created_at": now, "updated_at": now}
-        self._pool.submit(self._run, job_id, postal_code)
+        self._pool.submit(self._run, job_id, postal_code, aldi_region)
         return job_id
 
     def get(self, job_id: str) -> dict[str, Any] | None:
@@ -39,9 +39,9 @@ class SearchJobStore:
             if job_id in self._jobs:
                 self._jobs[job_id].update(fields, updated_at=time.time())
 
-    def _run(self, job_id: str, postal_code: str) -> None:
+    def _run(self, job_id: str, postal_code: str, aldi_region: str) -> None:
         try:
-            snapshot, from_cache = self.engine.snapshot(postal_code, "auto", False,
+            snapshot, from_cache = self.engine.snapshot(postal_code, aldi_region, False,
                 progress=lambda **fields: self._progress(job_id, **fields))
             self._progress(job_id, status="completed", step="Vergleich ist bereit", progress=100,
                 source="Cache" if from_cache else "Live-Quellen", retailer="Alle Händler",

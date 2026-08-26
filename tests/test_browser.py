@@ -11,6 +11,8 @@ def test_home_and_static_assets():
     response = client.get("/")
     assert response.status_code == 200
     assert 'name="postal_code"' in response.text
+    assert 'name="aldi_region"' in response.text
+    assert 'value="both"' in response.text
     assert 'href="/static/home.css"' in response.text
     assert 'src="/static/home-v2.js"' in response.text
     assert '<progress id="statusProgress"' in response.text

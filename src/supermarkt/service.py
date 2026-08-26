@@ -87,11 +87,17 @@ class SourceLoader:
         request_errors: list[str] = []
         store_warnings: list[str] = []
 
-        resolved = normalize_aldi_region(aldi_region)
+        requested_region = normalize_aldi_region(aldi_region)
+        resolved = requested_region
         if resolved == "auto":
             resolved = self.aldi_region.detect(postal_code)
         detected_regions = getattr(self.aldi_region, "last_regions", ())
-        resolved_regions = list(detected_regions or ((resolved,) if resolved in {"nord", "sued"} else ())) if normalize_aldi_region(aldi_region) == "auto" else ([resolved] if resolved in {"nord", "sued"} else [])
+        if requested_region == "auto":
+            resolved_regions = list(detected_regions or ((resolved,) if resolved in {"nord", "sued"} else ()))
+        elif requested_region == "both":
+            resolved_regions = ["nord", "sued"]
+        else:
+            resolved_regions = [resolved] if resolved in {"nord", "sued"} else []
         aldi_names = ["ALDI Nord" if item == "nord" else "ALDI Süd" for item in resolved_regions]
         notify(total_sources=5 + len(aldi_names))
         if not aldi_names:

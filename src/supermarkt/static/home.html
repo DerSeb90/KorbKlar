@@ -19,6 +19,13 @@
 __ERROR_HTML__
 <form method="post" action="/search" id="searchForm">
 <input name="postal_code" value="__POSTAL_CODE__" inputmode="numeric" autocomplete="postal-code" pattern="[0-9]{5}" minlength="5" maxlength="5" placeholder="Postleitzahl" aria-label="Postleitzahl" required autofocus>
+<label for="aldiRegion">ALDI in deiner Nähe (optional)</label>
+<select name="aldi_region" id="aldiRegion">
+<option value="auto">Automatisch anhand der Filialen</option>
+<option value="nord">Bei mir gibt es ALDI Nord</option>
+<option value="sued">Bei mir gibt es ALDI Süd</option>
+<option value="both">Bei mir gibt es ALDI Nord und Süd</option>
+</select>
 <button type="submit" id="submitButton">Angebote suchen</button>
 </form>
 <section class="monitor" id="monitor" aria-live="polite" hidden>

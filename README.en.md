@@ -327,6 +327,10 @@ Copyright © 2026 lesecuritae for Tarnkappe.info.
 
 KorbKlar is independent and is not affiliated with any retailer or loyalty program mentioned. Brand, retailer, and product names belong to their respective owners.
 
+## What is new in 0.0.6
+
+The ALDI resolver now contains additional postcode-exact, versioned evidence from official store regions for Aachen, Düren, Heinsberg and selected Ruhr border areas. It explicitly does not classify the entire `52xxx` prefix; unknown postcodes still use bounded store-location evidence. Users who know their local stores may optionally select ALDI North, ALDI South, or both on the start page. That explicit choice overrides automatic detection and never substitutes the other region.
+
 ## What is new in 0.0.5
 
 Offer images remain visible in the browser-local shopping list through the secured local image proxy, including after reload. Explicitly published deposits from ALDI, REWE and Marktguru are stored separately and calculated by quantity. KorbKlar never guesses a deposit from packaging alone.

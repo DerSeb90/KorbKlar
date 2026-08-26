@@ -44,3 +44,15 @@ def test_region_resolver_uses_bounded_fallback_and_cache():
     assert http.calls == 2
     assert resolver.detect("01100") == "nord"
     assert http.calls == 2
+
+
+def test_unknown_52_postcode_is_not_classified_by_prefix():
+    http = FakeHttp()
+    resolver = AldiRegionResolver(http)
+    resolver.http = http
+    assert "52000" not in resolver.OFFICIAL_EVIDENCE
+    assert resolver.detect("52000") == "nord"
+    assert resolver.last_provider == "Nominatim"
+    assert http.calls == 2
+    assert resolver.detect("52000") == "nord"
+    assert http.calls == 2

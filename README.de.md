@@ -301,6 +301,10 @@ KorbKlar erfindet keine fehlenden Preise und schätzt keine unbekannten Bonusvor
 
 Für spätere Versionen sind zusätzliche Integrationen denkbar beziehungsweise geplant, darunter Grocy, KitchenOwl und weitere REST-/OpenAPI-Anbindungen für lokale Automationen und Agenten. Diese Integrationen sind keine Voraussetzung für Version 0.1.0.
 
+## Neuerungen in 0.0.6
+
+Der ALDI-Resolver enthält zusätzliche PLZ-genaue, versionierte Nachweise aus den offiziellen Filialgebieten für Aachen, Düren, Heinsberg und ausgewählte Grenzregionen im Ruhrgebiet. Eine allgemeine Zuordnung anhand von `52xxx` findet ausdrücklich nicht statt; unbekannte PLZ werden weiterhin anhand begrenzter Standortdaten geprüft. Wer die örtliche Situation kennt, kann auf der Startseite optional ALDI Nord, ALDI Süd oder beide Regionen vorgeben. Diese bewusste Auswahl hat Vorrang vor der Automatik und lädt niemals die andere Region als Ersatz.
+
 ## Neuerungen in 0.0.5
 
 Produktbilder aus Angeboten bleiben über das lokale, abgesicherte Bildproxy-Ziel in der browserlokalen Einkaufsliste sichtbar – auch nach einem Reload. Explizit veröffentlichte Pfandbeträge von ALDI, REWE und Marktguru werden getrennt gespeichert und mengenabhängig berechnet. KorbKlar erfindet weiterhin kein Pfand anhand einer Verpackungsart.

@@ -15,7 +15,13 @@ def test_category_vocabulary_is_stable_and_spelled_correctly():
     assert len(CATEGORIES)==18
     assert "Obst & Gemüse" in CATEGORIES and "Fisch & Meeresfrüchte" in CATEGORIES
 
-@pytest.mark.parametrize(("postal","regions"),[("01067",("nord",)),("28195",("nord",)),("52068",("sued",)),("52070",("sued",)),("80331",("sued",)),("51643",("nord","sued")),("57072",("nord","sued"))])
+@pytest.mark.parametrize(("postal","regions"),[
+    ("01067",("nord",)),("28195",("nord",)),("46282",("nord",)),
+    ("52062",("sued",)),("52068",("sued",)),("52070",("sued",)),
+    ("52349",("sued",)),("52525",("sued",)),("45468",("sued",)),
+    ("47179",("sued",)),("80331",("sued",)),
+    ("51643",("nord","sued")),("57072",("nord","sued")),
+])
 def test_official_aldi_regression_evidence(postal,regions):
     resolver=AldiRegionResolver(HttpClient(5));resolved=resolver.detect(postal)
     assert resolver.last_regions==regions

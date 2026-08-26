@@ -31,6 +31,8 @@ def parse_deposit_text(value: Any) -> Optional[float]:
 
 def normalize_aldi_region(value: Any) -> str:
     normalized = clean_text(value).casefold().replace("ü", "ue")
+    if normalized in {"both", "beide", "nord und sued", "nord & sued"}:
+        return "both"
     if normalized in {"nord", "aldi nord", "north"}:
         return "nord"
     if normalized in {"sued", "sud", "aldi sued", "aldi sud", "south"}:
