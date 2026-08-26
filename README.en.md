@@ -218,6 +218,8 @@ KorbKlar writes offers to a list in [KitchenOwl](https://kitchenowl.org), a self
 
 Where the household already keeps a fitting article, the offer lands there instead of as a near duplicate: "GUT&GÜNSTIG Weizenbrötchen / Schrippen" joins your existing "Brötchen" and the full offer name moves into the note. Matching works on whole words, and German compounds carry their head noun last, so "Weizenbrötchen" matches "Brötchen" while "Buttermilch" matches "Milch" rather than "Butter". Switch it off with `SUPERMARKT_KITCHENOWL_MATCH_ITEMS=0`.
 
+When no article fits yet, the new one is named short as well: shouted private labels, pack sizes and qualifiers such as "aus der Region" are dropped, so "GUT&GÜNSTIG Weizenbrötchen / Schrippen" becomes "Weizenbrötchen" and next week's differently worded offer lands on the same article. Catalogue entries of more than three words count as leaflet headlines rather than articles, because otherwise the long names earlier versions filed would beat the household's own "Brötchen" every time.
+
 The retailer becomes the category so the list groups by shop; KorbKlar creates the ones that are missing. KitchenOwl categories carry a name and no image field, so a store logo is not possible — `SUPERMARKT_KITCHENOWL_CATEGORY_PREFIX` puts an emoji in front instead, `🛒` by default.
 
 **Worth knowing:** the category belongs to the article, not to one list entry, so an article moves along as soon as a different retailer offers it more cheaply. To keep your own department ordering, set `SUPERMARKT_KITCHENOWL_RETAILER_CATEGORIES=0` and the retailer stays in the note.

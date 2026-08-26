@@ -237,6 +237,8 @@ KorbKlar schreibt Angebote auf eine Einkaufsliste in [KitchenOwl](https://kitche
 
 Ist im Haushalt bereits ein passender Artikel angelegt, landet das Angebot dort statt als beinahe gleicher Zweitartikel: „GUT&GÜNSTIG Weizenbrötchen / Schrippen" wird zu deinem vorhandenen „Brötchen", der vollständige Angebotsname rückt in die Notiz. Verglichen wird über ganze Wörter, wobei das Grundwort deutscher Komposita hinten steht — „Weizenbrötchen" trifft „Brötchen", „Buttermilch" dagegen „Milch" und nicht „Butter". Abschaltbar über `SUPERMARKT_KITCHENOWL_MATCH_ITEMS=0`.
 
+Gibt es noch keinen passenden Artikel, wird auch der neue kurz benannt: Eigenmarken in Großbuchstaben, Packungsgrößen und Zusätze wie „aus der Region“ fallen weg, aus „GUT&GÜNSTIG Weizenbrötchen / Schrippen“ wird „Weizenbrötchen“. So trifft das anders formulierte Angebot der nächsten Woche denselben Artikel. Einträge aus mehr als drei Wörtern gelten beim Abgleich als Angebotsüberschrift und nicht als Artikel — sonst gewännen die von früheren Versionen angelegten Langnamen jedes Mal gegen dein „Brötchen“.
+
 Der Händler wird zur Kategorie, damit die Liste nach Markt gruppiert; fehlende Kategorien legt KorbKlar an. KitchenOwl-Kategorien haben nur einen Namen und kein Bildfeld, ein Ladenlogo ist also nicht möglich — `SUPERMARKT_KITCHENOWL_CATEGORY_PREFIX` stellt stattdessen ein Emoji davor, standardmäßig `🛒`.
 
 **Zu bedenken:** Die Kategorie hängt am Artikel, nicht am Listeneintrag. Ein Artikel wandert also mit, sobald ein anderer Markt ihn günstiger anbietet. Wer lieber nach Abteilungen sortiert, setzt `SUPERMARKT_KITCHENOWL_RETAILER_CATEGORIES=0`; dann bleibt der Händler in der Notiz.
@@ -494,7 +496,8 @@ SUPERMARKT_DATA_DIR=.devdata python -m supermarkt.diagnostics 26123
 
 ## Roadmap
 
-Die oben beschriebene Anbindung an KitchenOwl ist umgesetzt. Weitere Integrationen sind für spätere Versionen vorgesehen, darunter Grocy und zusätzliche REST-/OpenAPI-Anbindungen für lokale Automationen und Agenten.
+Die oben beschriebene Anbindung an KitchenOwl ist umgesetzt. Weitere Integrationen sind für spätere Versionen vorgesehen, darunter Grocy und zusätzliche REST-/OpenAPI-Anbindungen für lokale Automationen und Agenten.
+
 
 ## Neuerungen in 0.0.4
 

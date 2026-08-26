@@ -11,6 +11,7 @@ from supermarkt.kitchenowl import (
     ShoppingListError,
     build_item_description,
     build_item_text,
+    shorten_offer_name,
     match_existing_item,
 )
 
@@ -325,10 +326,62 @@ def test_a_matched_article_keeps_the_offer_name_in_the_note(monkeypatch):
 
 
 def test_matching_can_be_switched_off(fake_list):
+    """Without matching the article is still the staple, not the headline."""
     fake_list.catalogue_items = ["Brötchen"]
     fake_list.match_items = False
     fake_list.add_items("4", [{"product": "GUT&GÜNSTIG Weizenbrötchen", "retailer": "EDEKA"}])
-    assert fake_list.written() == [("GUT&GÜNSTIG Weizenbrötchen", "")]
+    assert fake_list.written() == [("Weizenbrötchen", "GUT&GÜNSTIG Weizenbrötchen")]
+
+
+@pytest.mark.parametrize(
+    ("product", "expected"),
+    [
+        ("GUT&GÜNSTIG Weizenbrötchen / Schrippen", "Weizenbrötchen"),
+        ("REWE Beste Wahl Orangen 1,5 kg", "Beste Wahl Orangen"),
+        ("Bio Rinderhackfleisch aus der Region 400 g", "Bio Rinderhackfleisch"),
+        ("Joghurt mild versch. Sorten 500 g", "Joghurt mild"),
+        ("Coca-Cola 1,25 l", "Coca-Cola"),
+        # Two plain words are already an article name.
+        ("Kerrygold Butter", "Kerrygold Butter"),
+        ("Eier", "Eier"),
+    ],
+)
+def test_the_article_name_is_the_staple_not_the_leaflet_wording(product, expected):
+    assert shorten_offer_name(product) == expected
+
+
+def test_the_full_offer_wording_is_kept_in_the_note(fake_list):
+    fake_list.catalogue_items = ["Brötchen"]
+    fake_list.add_items(
+        "4",
+        [{
+            "product": "GUT&GÜNSTIG Weizenbrötchen / Schrippen",
+            "retailer": "EDEKA",
+            "price_text": "0,11 €",
+            "validity": "24.08. – 29.08.2026",
+        }],
+    )
+    name, description = fake_list.written()[0]
+    assert name == "Brötchen"
+    assert "GUT&GÜNSTIG Weizenbrötchen / Schrippen" in description
+    assert "0,11 €" in description and "24.08. – 29.08.2026" in description
+
+
+def test_an_earlier_headline_in_the_catalogue_no_longer_wins(fake_list):
+    """Offers this service filed under their full name used to capture matching.
+
+    Being the longest match for the very offer that created them, they beat the
+    household's own article every time and the duplicate outlived itself.
+    """
+    fake_list.catalogue_items = ["Brötchen", "GUT&GÜNSTIG Weizenbrötchen / Schrippen"]
+    fake_list.add_items(
+        "4", [{"product": "GUT&GÜNSTIG Weizenbrötchen / Schrippen", "retailer": "EDEKA"}]
+    )
+    assert fake_list.written()[0][0] == "Brötchen"
+
+
+def test_a_compound_still_beats_its_head_noun():
+    assert match_existing_item("ja! Buttermilch 1 l", ["Milch", "Buttermilch"]) == "Buttermilch"
 
 
 def test_the_retailer_becomes_a_category_with_an_icon(fake_list):

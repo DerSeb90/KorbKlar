@@ -4,6 +4,7 @@ Enthält alle Korrekturen aus KorbKlar 0.0.4, insbesondere die ALDI-Süd-Gültig
 
 ## Behoben
 
+- Angebote landeten in KitchenOwl unter ihrer vollen Werbeüberschrift. Der Artikel heißt jetzt nach der Ware („GUT&GÜNSTIG Weizenbrötchen / Schrippen“ wird „Weizenbrötchen“ oder trifft dein vorhandenes „Brötchen“), die vollständige Angebotsbezeichnung steht in der Notiz. Früher angelegte Langnamen zählen beim Abgleich nicht mehr als Artikel und gewinnen daher nicht länger gegen den echten.
 - In der KitchenOwl-Notiz stand der Artikelname doppelt, sobald ein früherer Versand den Artikel unter genau diesem Namen angelegt hatte. Der Angebotsname steht nur noch dort, wo der Artikel anders heißt.
 - Ein in KitchenOwl abgehakter Artikel galt in der App weiter als hinzugefügt. Die App gleicht jetzt mit dem tatsächlichen Listeninhalt ab.
 

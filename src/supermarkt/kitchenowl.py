@@ -49,6 +49,18 @@ CATALOGUE_CACHE_TTL_SECONDS = 300
 # Below this an existing article says too little to be worth matching: "Ei"
 # would swallow half a catalogue.
 MIN_MATCH_LENGTH = 4
+# A household staple is named in a word or three. Anything longer in the
+# catalogue is an offer headline, most likely one an earlier version of this
+# service filed there, and matching against it would keep every later offer
+# for the same product away from the real article.
+MAX_ARTICLE_WORDS = 3
+_TRAILING_WORDS = frozenset(
+    {"aus", "mit", "ohne", "in", "im", "von", "vom", "der", "die", "das",
+     "und", "oder", "je", "pro", "à", "a", "zum", "zur", "nach", "verschiedene",
+     "versch", "sowie", "auch", "z", "b"}
+)
+_UNIT = "g|kg|mg|ml|cl|l|stk|stück|st|x|er"
+_PACK_WORD = re.compile(rf"([0-9]+([.,][0-9]+)?\s*({_UNIT})?|{_UNIT}|packung|beutel|dose|schale)[.,]?", re.IGNORECASE)
 MAX_ITEM_LENGTH = 200
 MAX_DESCRIPTION_LENGTH = 300
 
@@ -68,9 +80,52 @@ def _truncate(value: str, limit: int) -> str:
     return text[: limit - 1].rstrip() + "…"
 
 
+def _is_brand_token(token: str) -> bool:
+    """Whether a word reads as a brand or marketing line rather than a product.
+
+    Leaflets shout their private labels: "GUT&GÜNSTIG", "JA!", "REWE BESTE
+    WAHL". Three letters keep "H-Milch" and unit letters out of this.
+    """
+    letters = [char for char in token if char.isalpha()]
+    return len(letters) >= 3 and token == token.upper() and token != token.lower()
+
+
+def shorten_offer_name(product: str) -> str:
+    """Return the staple an offer is about, without the leaflet wording.
+
+    "GUT&GÜNSTIG Weizenbrötchen / Schrippen" is a household's "Weizenbrötchen".
+    The full offer wording is not lost: it goes into the note. Keeping the
+    article short is what lets the next week's differently worded offer for the
+    same thing land on the same article instead of beside it.
+    """
+    text = clean_text(product)
+    if not text:
+        return ""
+    # An alternative spelling after a slash describes the same product.
+    head = text.split("/", 1)[0].strip()
+    if len(head) >= MIN_MATCH_LENGTH:
+        text = head
+    words = [word for word in text.split() if word]
+    # "Rinderhackfleisch aus der Region" is bought as Rinderhackfleisch; what
+    # follows such a word qualifies the offer, not the product.
+    for index, word in enumerate(words):
+        if index and word.casefold().strip(",.") in _TRAILING_WORDS:
+            words = words[:index]
+            break
+    kept = [word for word in words if not _is_brand_token(word)]
+    if not kept:
+        kept = words
+    # A pack size belongs in the note, not in the article name.
+    while len(kept) > 1 and _PACK_WORD.fullmatch(kept[-1]):
+        kept.pop()
+    # German puts the head noun last, so when trimming, the tail is the part
+    # that says what the product is.
+    return " ".join(kept[-MAX_ARTICLE_WORDS:])
+
+
 def build_item_text(product: str, retailer: str) -> str:
     """Return the shopping list article name."""
-    name = _truncate(product, MAX_ITEM_LENGTH)
+    name = _truncate(shorten_offer_name(product), MAX_ITEM_LENGTH)
     if name:
         return name
     fallback = clean_text(retailer)
@@ -121,6 +176,8 @@ def match_existing_item(product: str, catalogue: Iterable[str]) -> str:
     words = _fold(product).split()
     best = ""
     for name in catalogue:
+        if _is_offer_headline(name):
+            continue
         folded = _fold(name)
         if len(folded) < MIN_MATCH_LENGTH or len(folded) <= len(_fold(best)):
             continue
@@ -128,6 +185,20 @@ def match_existing_item(product: str, catalogue: Iterable[str]) -> str:
         if _contains_sequence(words, parts):
             best = name
     return best
+
+
+def _is_offer_headline(name: str) -> bool:
+    """Whether a catalogue entry is a leaflet headline instead of a staple.
+
+    Such entries exist because this service used to file offers under their
+    full advertised name. Left in the running they win every time, being the
+    longest match for the very offer that created them, and the household's
+    own "Brötchen" never gets used again.
+    """
+    words = clean_text(name).split()
+    return len(words) > MAX_ARTICLE_WORDS or (
+        len(words) > 1 and any(_is_brand_token(word) for word in words)
+    )
 
 
 def _contains_sequence(words: list[str], parts: list[str]) -> bool:
