@@ -145,11 +145,21 @@ Die Ergebnisansicht bietet unter anderem:
 - normale Preise und Preise mit ausgewählten Bonusprogrammen
 - Mehrfachauswahl der Bonusprogramme
 - Hinweise zu ausgefallenen oder unvollständigen Quellen
+- eine Zeile für ein identisches Angebot, das mehrere Händler zum selben Preis führen
 - automatisches Nachladen beim Scrollen
+- Angebote einzeln oder als Auswahl auf eine Einkaufsliste in Home Assistant setzen, zum Beispiel Bring
 
 Packungsgröße und Referenzmenge des Grundpreises werden getrennt behandelt. Aus einer 0,33-l-Dose mit einem Grundpreis pro Liter wird deshalb beispielsweise `330 ml` als Packungsgröße und der Literpreis separat dargestellt. Alternative Größen wie `85 g oder 100 g` werden nicht zu `185 g` addiert.
 
 Quellen-Platzhalter wie `This is no brand` werden als fehlende Marke behandelt und nicht vor den Produktnamen gesetzt. Bei Auswahl genau eines Händlers blendet die Oberfläche die dann redundante Händlerspalte aus.
+
+## Gleiche Angebote bei mehreren Händlern
+
+Handelsgruppen fahren eine Aktion über mehrere Marken, deshalb bewerben famila Nordwest und Combi in derselben Woche dasselbe Produkt zum selben Preis. Auch voneinander unabhängige Händler übernehmen gelegentlich dieselbe Herstelleraktion. Solche Zeilen sagen dasselbe.
+
+Sind Angebote bereits als vergleichbar erkannt und stimmt der Preis auf einen halben Cent überein, erscheinen sie als **eine** Zeile, die alle Händler nennt. Am Preis ändert sich nichts, Händlerfilter finden die Zeile unter jedem ihrer Händler, und die Händler-Chips zählen sie für jeden mit.
+
+Angebote, die nie einander zugeordnet wurden, bleiben getrennt, selbst wenn der Preis zufällig gleich ist. Wenn `Orangen` für `2,49 €` bei einem Händler 1500 g und beim anderen 300 g sind, sind das zwei verschiedene Angebote; sie zusammenzufassen würde das verdecken.
 
 ## Bonusprogramme
 
@@ -212,7 +222,134 @@ Beispiel mit mehreren Bonusprogrammen:
 }
 ```
 
-Der Browserbetrieb funktioniert ohne Schlüssel. Soll nur der REST-Vergleichsendpunkt zusätzlich mit Bearer-Authentifizierung geschützt werden, kann `SUPERMARKT_API_KEY` gesetzt werden. Die weiteren optionalen Einstellungen stehen in [`.env.example`](.env.example).
+Ist die Einkaufslisten-Anbindung konfiguriert, kommen zwei Endpunkte dazu:
+
+```text
+GET  /api/v1/shopping-list/targets
+POST /api/v1/shopping-list/items
+```
+
+Der Browserbetrieb funktioniert ohne Schlüssel. Soll die REST-Schnittstelle zusätzlich mit Bearer-Authentifizierung geschützt werden, kann `SUPERMARKT_API_KEY` gesetzt werden; der Schlüssel gilt dann für den Vergleichsendpunkt und beide Einkaufslisten-Endpunkte. Die weiteren optionalen Einstellungen stehen in [`.env.example`](.env.example).
+
+## Einkaufsliste über Home Assistant
+
+KorbKlar kann Angebote auf eine todo-Liste in Home Assistant schreiben. Die Bring-Integration von Home Assistant stellt jede Bring-Liste als `todo`-Entität bereit. KorbKlar ruft deshalb den allgemeinen Dienst `todo.add_item` auf statt einer Bring-eigenen Schnittstelle. Damit funktionieren auch die eingebaute Einkaufsliste und andere todo-Anbieter.
+
+Die Verbindung wird mit einem langlebigen Zugriffstoken aus dem Home-Assistant-Benutzerprofil konfiguriert:
+
+```bash
+SUPERMARKT_HA_URL=http://homeassistant.local:8123
+SUPERMARKT_HA_TOKEN=dein-langlebiger-zugriffstoken
+SUPERMARKT_HA_TODO_ENTITY=todo.bring_einkaufsliste
+```
+
+Die Home-Assistant-Instanz darf ausschließlich über LAN oder VPN erreichbar sein. Nur der KorbKlar-Server spricht mit ihr, der Token erreicht den Browser nicht und wird auch über `/health` nicht ausgegeben. Dieser Client nutzt bewusst nicht den SSRF-Schutz der Bildproxy-Kette, denn das Ziel ist hier ein selbst gewählter eigener Host und keine fremde Bildquelle.
+
+`SUPERMARKT_HA_TODO_ENTITY` wählt eine Liste nur vor. KorbKlar liest die vorhandenen `todo`-Entitäten aus Home Assistant und bietet sie in der Ergebnisliste zur Auswahl an, sodass mehrere Bring-Listen derselben Instanz nutzbar bleiben. Entitäten aus anderen Domains werden abgelehnt, bevor irgendetwas geschrieben wird.
+
+Jedes Angebot wird ein Listeneintrag: Der Produktname ist der Artikel, die Notiz enthält Händler, Preis, Packungsgröße und Gültigkeit, zum Beispiel `famila Nordwest · 1,59 € · 250 g · bis 29.08.`. Geschrieben wird nur, was das Angebot wirklich hergibt; nichts wird geschätzt.
+
+In der Ergebnisliste hat jedes Angebot einen `+ Liste`-Knopf. Eine Checkbox sammelt mehrere Angebote für eine gemeinsame Übertragung. Der Browserweg ist durch dasselbe HMAC-Ergebnistoken geschützt, das bereits Ergebnisdaten und Bildproxy absichert. Ohne gültigen Ergebnislink ist die Funktion nicht erreichbar.
+
+Bleiben `SUPERMARKT_HA_URL` oder `SUPERMARKT_HA_TOKEN` leer, ist die Anbindung abgeschaltet und die Oberfläche blendet die Einkaufslisten-Bedienung aus.
+
+## Öffentlich betreiben: API-Key und VPN
+
+Ohne `SUPERMARKT_API_KEY` ist nichts eingeschränkt; eine private Instanz verhält sich wie bisher.
+
+Ist der Schlüssel gesetzt, braucht **jede** Route außer `/health` entweder diesen Bearer-Token oder eine Quell-IP aus `SUPERMARKT_TRUSTED_NETWORKS`:
+
+```bash
+SUPERMARKT_API_KEY=ein-langer-zufaelliger-schluessel
+SUPERMARKT_TRUSTED_NETWORKS=10.8.0.0/24
+SUPERMARKT_TRUSTED_PROXIES=127.0.0.1/32
+```
+
+Damit deckt eine Instanz beide Fälle ab: Im VPN ist die Oberfläche ohne Login erreichbar, App und Skripte weisen sich von überall mit dem Token aus, alle anderen bekommen 401. Die Prüfung sitzt als Middleware vor sämtlichen Routen, damit eine neu hinzugefügte Route nicht versehentlich offen bleibt.
+
+`/health` bleibt für Container-Healthchecks erreichbar, verrät ohne Autorisierung aber nur `status` und `service`. Cache-Pfade, Quellenzuordnung und Einkaufslisten-Details erscheinen erst für autorisierte Aufrufer.
+
+### Hinter einem Reverse Proxy
+
+`X-Forwarded-For` wird ausschließlich geglaubt, wenn der direkte Peer in `SUPERMARKT_TRUSTED_PROXIES` steht. Die Kette wird von rechts gelesen und bekannte Proxys werden übersprungen, damit ein Client sich nicht durch einen vorangestellten Eintrag eine erlaubte Adresse geben kann. Ohne konfigurierte Proxys wird der Header vollständig ignoriert.
+
+**uvicorn muss dabei mit `--no-proxy-headers` laufen.** Standardmäßig wertet uvicorn `X-Forwarded-For` selbst aus und ersetzt die Client-Adresse, bevor KorbKlar sie sieht — wer den Header setzen kann, umgeht damit `SUPERMARKT_TRUSTED_NETWORKS`. Das mitgelieferte Docker-Image startet bereits korrekt; bei eigenem Start das Flag nicht vergessen.
+
+Der Reverse Proxy sollte ein vom Client mitgeschicktes `X-Forwarded-For` zusätzlich verwerfen oder überschreiben.
+
+## HTTPS und Deployment
+
+Der Compose-Stack bringt einen optionalen Reverse Proxy mit. Caddy holt und erneuert die Let's-Encrypt-Zertifikate selbst, ohne certbot-Container und ohne Cron.
+
+```bash
+KORBKLAR_DOMAIN=korbklar.deine-domain.de
+KORBKLAR_ACME_EMAIL=du@deine-domain.de
+docker compose --profile proxy up -d
+```
+
+Ohne `--profile proxy` startet der Stack unverändert wie bisher; der Proxy-Container wird dann gar nicht angelegt.
+
+Vor dem ersten Start muss ein A- beziehungsweise AAAA-Record der Domain auf den Server zeigen und Port 80 und 443 erreichbar sein — Let's Encrypt prüft darüber.
+
+### Aufteilung zwischen VPN und Internet
+
+Die Netz-Allowlist prüft die Quell-IP, **wie der Server sie sieht**. Wer über das Internet auf die öffentliche Domain zugeht, erscheint mit der IP seines Providers, nicht mit der VPN-Adresse. Deshalb sind es zwei getrennte Wege:
+
+| Weg | Adresse | Autorisierung |
+| --- | --- | --- |
+| Oberfläche im VPN | `http://VPN-IP:8000` | Quell-IP aus `SUPERMARKT_TRUSTED_NETWORKS`, kein Login |
+| App und Skripte | `https://korbklar.deine-domain.de` | Bearer-Token |
+
+`KORBKLAR_BIND_ADDRESS` legt fest, auf welcher Schnittstelle Port 8000 veröffentlicht wird. Hinter dem Proxy gehört dort die VPN-Adresse hin, damit die Oberfläche nicht zusätzlich öffentlich hängt:
+
+```bash
+KORBKLAR_BIND_ADDRESS=10.8.0.1
+```
+
+`SUPERMARKT_TRUSTED_PROXIES` muss das Compose-Netz enthalten, in dem Caddy läuft, sonst wird sein `X-Forwarded-For` ignoriert. Beide Werte stehen standardmäßig auf `172.28.0.0/24`.
+
+Caddy **überschreibt** ein vom Client mitgeschicktes `X-Forwarded-For` mit der tatsächlichen Gegenstelle, statt es zu ergänzen. Die Allowlist bekommt so nie eine Adresse zu sehen, die der Client selbst gewählt hat.
+
+### Eigenes Image aus der CI
+
+Der Workflow baut bei jedem Push auf `main` und veröffentlicht nach GHCR im Namensraum des Repository-Eigentümers. In einem Fork ist das automatisch der eigene. Auf dem Server danach nur noch:
+
+```bash
+docker compose pull && docker compose up -d --no-build
+```
+
+Damit `pull` das eigene Image zieht, in `.env` setzen:
+
+```bash
+KORBKLAR_IMAGE=ghcr.io/DEIN-NAME/korbklar:latest
+```
+
+In einem frisch geforkten Repository sind GitHub Actions deaktiviert; einmal im Reiter „Actions" freigeben. Das erzeugte Paket ist zunächst privat — entweder unter „Packages" auf öffentlich stellen, oder auf dem Server einmal `docker login ghcr.io` mit einem Token, das `read:packages` erlaubt.
+
+## Cache steuern
+
+KorbKlar hält mehrere Caches mit unterschiedlichen Lebensdauern:
+
+| Was | Schlüssel | Frisch | Danach |
+| --- | --- | --- | --- |
+| Angebots-Snapshot | PLZ und ALDI-Region | `SUPERMARKT_CACHE_TTL_MINUTES`, Standard 30 Minuten | wird neu geladen |
+| Ergebnislink | `search_id` | — | bleibt `SUPERMARKT_RESULT_RETENTION_HOURS` lang öffenbar, auch veraltet |
+| REWE- und Kaufland-Filialzuordnung | PLZ | 24 Stunden | wird neu ermittelt |
+| Bildcache | Bild-URL | 7 Tage, 512 MiB | wird verworfen |
+
+Innerhalb der Frische liefert jede Suche derselben Postleitzahl denselben Snapshot. Ein Neuabruf lässt sich auf drei Wegen erzwingen:
+
+- der Knopf **Neu laden** auf der Ergebnisseite und in der App
+- `"refresh": true` im Rumpf von `POST /api/v1/compare`
+- das Kommandozeilenwerkzeug, das auch die übrigen Caches leert
+
+```bash
+docker exec korbklar python -m supermarkt.cache_cli status
+docker exec korbklar python -m supermarkt.cache_cli purge --postal-code 26188
+docker exec korbklar python -m supermarkt.cache_cli purge --all
+```
+
+`purge` löscht Snapshots, optional zusätzlich Bildcache (`--images`) und Filialzuordnungen (`--stores`); `--all` umfasst beides. Der Signierschlüssel bleibt unangetastet, damit bereits verschickte Ergebnislinks anderer Suchen gültig bleiben.
 
 ## Daten, Cache und Bildproxy
 
@@ -280,6 +417,10 @@ src/supermarkt/
 ├── presentation.py      Ausgabefelder
 ├── images.py            Bilddownload, Cache und SSRF-Schutz
 ├── security.py          Signaturen und optionaler API-Key
+├── authz.py             API-Key, vertrauenswürdige Netze, Proxy-Auswertung
+├── cache_cli.py         Cache-Status und -Bereinigung
+├── homeassistant.py     todo-Listen in Home Assistant, zum Beispiel Bring
+├── shopping_routes.py   Routen der Einkaufsliste
 ├── access.py            Zugriffs- und Request-Helfer
 ├── api_routes.py        REST-Routen
 ├── browser_routes.py    Browser-Routen
@@ -295,8 +436,35 @@ Die Händleradapter kennen die jeweiligen Datenquellen. Die Oberfläche berechne
 
 Händlerseiten und nicht dokumentierte Webschnittstellen können sich ändern. Ein einzelner Adapter kann deshalb zeitweise ausfallen, obwohl KorbKlar selbst läuft. Wo ein geeigneter regionaler Ersatzdatenweg vorhanden ist, kann dieser händlerspezifisch einspringen. Ansonsten bleibt der Vergleich mit den übrigen erreichbaren Quellen nutzbar.
 
+Der Kaufland-Adapter benötigt einen Chromium-kompatiblen Browser. Das Docker-Image bringt ihn mit; bei lokaler Installation werden die üblichen Namen und Installationspfade von Chromium, Chrome und Edge gesucht, alternativ setzt `SUPERMARKT_CHROMIUM_BINARY` den Pfad. Ohne Browser fällt nur dieser eine Adapter aus und Marktguru springt für ihn ein.
+
 KorbKlar erfindet keine fehlenden Preise und schätzt keine unbekannten Bonusvorteile. Die Ergebnisse sind nur so vollständig und aktuell wie die erreichbaren Quelldaten.
+
+## Lokal entwickeln und debuggen
+
+```bash
+python -m venv .venv
+. .venv/bin/activate
+pip install -e '.[dev]'
+pytest -m 'not live'
+```
+
+Unter Windows wird statt des Aktivierungsskripts `.venv\Scripts\python.exe` verwendet. Das `dev`-Extra installiert dort zusätzlich `tzdata`, weil Windows keine IANA-Zeitzonendatenbank mitbringt und `Europe/Berlin` sonst schon beim Import fehlschlägt.
+
+Zum Debuggen gegen echte Quellen wird die Anwendung direkt gestartet, mit Laufzeitdaten außerhalb des Benutzerverzeichnisses:
+
+```bash
+SUPERMARKT_DATA_DIR=.devdata uvicorn supermarkt.asgi:app --host 127.0.0.1 --port 8000 --reload
+```
+
+Der Kaufland-Adapter steuert ein Headless-Chromium, das im Docker-Image enthalten ist. Ohne lokal installiertes Chromium fällt genau dieser Adapter aus und Marktguru springt für ihn ein; alle übrigen Quellen arbeiten unverändert.
+
+Die Live-Diagnose einer Postleitzahl läuft auch ohne Container:
+
+```bash
+SUPERMARKT_DATA_DIR=.devdata python -m supermarkt.diagnostics 26123
+```
 
 ## Roadmap
 
-Für spätere Versionen sind zusätzliche Integrationen denkbar beziehungsweise geplant, darunter Grocy, KitchenOwl und weitere REST-/OpenAPI-Anbindungen für lokale Automationen und Agenten. Diese Integrationen sind keine Voraussetzung für Version 0.1.0.
+Die oben beschriebene Einkaufsliste über Home Assistant ist umgesetzt. Für spätere Versionen sind weitere Integrationen denkbar beziehungsweise geplant, darunter Grocy, KitchenOwl und zusätzliche REST-/OpenAPI-Anbindungen für lokale Automationen und Agenten. Diese Integrationen sind keine Voraussetzung für Version 0.1.0.

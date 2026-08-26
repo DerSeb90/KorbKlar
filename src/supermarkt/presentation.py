@@ -11,7 +11,7 @@ from .common import (
     normalize_base_unit,
 )
 from .loyalty import benefit_label
-from .models import Offer, RetailerContext
+from .models import Offer, RetailerContext, offer_retailers
 
 
 def resolve_retailer_name(
@@ -93,8 +93,13 @@ def offer_for_response(
         else regular
     )
 
+    retailers = offer_retailers(offer)
     result = {
         "retailer": offer.retailer,
+        # Every retailer this row stands for. One entry unless equally priced
+        # identical offers were folded together.
+        "retailers": list(retailers),
+        "retailer_label": " · ".join(retailers),
         "category": offer.category,
         "product": offer.name,
         "description": offer.description,

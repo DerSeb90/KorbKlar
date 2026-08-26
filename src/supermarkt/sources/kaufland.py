@@ -16,7 +16,10 @@ from urllib.parse import parse_qs, quote, urlsplit, urlunsplit
 
 from bs4 import BeautifulSoup
 
+from functools import lru_cache
+
 from ..common import build_match_key, clean_text, normalize_pack, parse_base_price_text, parse_number, strip_html, today_berlin
+from ..config import CHROMIUM_BINARY
 from ..http import HttpClient, PostalCodeLocator
 from ..images import is_rejected_image_url, normalize_image_url
 from ..models import LoyaltyBenefit, Offer, ToolError
@@ -100,6 +103,50 @@ class KauflandOfficialAnchorParser(HTMLParser):
     def page_text(self) -> str:
         return clean_text(" ".join(self.page_text_parts))
 
+# Names and locations a Chromium-compatible browser is commonly installed
+# under. The Docker image ships "chromium"; local checkouts on macOS or Windows
+# usually have Chrome or Edge instead. SUPERMARKT_CHROMIUM_BINARY overrides all
+# of this.
+CHROMIUM_NAMES = (
+    "chromium",
+    "chromium-browser",
+    "chrome",
+    "google-chrome",
+    "google-chrome-stable",
+    "msedge",
+)
+CHROMIUM_PATHS = (
+    r"C:\Program Files\Google\Chrome\Application\chrome.exe",
+    r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
+    r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
+    r"C:\Program Files\Microsoft\Edge\Application\msedge.exe",
+    "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+    "/Applications/Chromium.app/Contents/MacOS/Chromium",
+    "/usr/bin/chromium",
+    "/usr/bin/chromium-browser",
+    "/usr/bin/google-chrome",
+    "/snap/bin/chromium",
+)
+
+
+@lru_cache(maxsize=1)
+def find_chromium() -> str:
+    """Return a usable Chromium-compatible executable, or an empty string."""
+    configured = clean_text(CHROMIUM_BINARY)
+    if configured:
+        # An explicit setting is honoured as given; a wrong path should fail
+        # loudly rather than be silently replaced by another browser.
+        return configured
+    for name in CHROMIUM_NAMES:
+        found = shutil.which(name)
+        if found:
+            return found
+    for candidate in CHROMIUM_PATHS:
+        if Path(candidate).exists():
+            return candidate
+    return ""
+
+
 class OfficialKauflandSource:
     STORE_HOST = "filiale.kaufland.de"
     SITEMAP_URLS = (
@@ -141,8 +188,15 @@ class OfficialKauflandSource:
         profile_dir: str = "",
     ) -> str:
         errors: list[str] = []
+        binary = find_chromium()
+        if not binary:
+            raise ToolError(
+                "Kein Chromium gefunden. Der Kaufland-Adapter benötigt einen "
+                "Chromium-kompatiblen Browser; Pfad über SUPERMARKT_CHROMIUM_BINARY "
+                "setzen."
+            )
         base = [
-            "chromium",
+            binary,
             "--no-sandbox",
             "--disable-gpu",
             "--disable-dev-shm-usage",
@@ -154,7 +208,26 @@ class OfficialKauflandSource:
             url,
         ]
         required = tuple(item.casefold() for item in required_any if item)
-        profile_arg = f"--user-data-dir={profile_dir}" if profile_dir else ""
+        # Chromium locks its user data directory. Without an explicit one it
+        # would fall back to the machine's default profile, which collides
+        # with a browser the operator has open and with any concurrent call,
+        # and the process then exits without producing a page. A throwaway
+        # directory keeps every invocation independent.
+        scratch_profile = tempfile.mkdtemp(prefix="korbklar-chromium-") if not profile_dir else ""
+        profile_arg = f"--user-data-dir={profile_dir or scratch_profile}"
+        try:
+            return self._run_chromium(base, profile_arg, required, errors)
+        finally:
+            if scratch_profile:
+                shutil.rmtree(scratch_profile, ignore_errors=True)
+
+    def _run_chromium(
+        self,
+        base: list[str],
+        profile_arg: str,
+        required: tuple[str, ...],
+        errors: list[str],
+    ) -> str:
         for headless in ("--headless=new", "--headless"):
             command = [base[0], headless]
             if profile_arg:

@@ -118,13 +118,23 @@ The interface includes:
 - regular price and unit-price comparisons
 - a view containing only the cheapest safe comparison matches
 - an all-results view including more expensive duplicates
+- one row for an identical offer sold at several retailers for the same price
 - product images through the local image proxy
 - loyalty prices and specifically quantified euro benefits
 - selection of multiple loyalty programs
 - warnings for failed or incomplete sources
 - automatic loading of additional results while scrolling
+- adding offers to a Home Assistant shopping list such as Bring, individually or as a selection
 
 When exactly one retailer is selected, the redundant retailer column is hidden.
+
+## Identical offers at several retailers
+
+Retail groups run one campaign across their brands, so famila Nordwest and Combi advertise the same product at the same price in the same week, and unrelated retailers sometimes carry the same manufacturer promotion. Those rows say the same thing.
+
+When offers are already proven comparable and their price matches to within half a cent, they are shown as a single row listing every retailer that sells it. Nothing about the price changes, retailer filters still find the row under each of its retailers, and the retailer chips still count it for each of them.
+
+Offers that were never matched to one another are left alone, even when their prices happen to be equal. A postal code returning `Orangen` for `2,49 €` as a 1500 g pack at one retailer and a 300 g pack at another describes two different deals, and merging them would hide that.
 
 ## Package sizes and data cleaning
 
@@ -193,7 +203,134 @@ Optional fields include loyalty programs, product or brand filters, retailer, pa
 }
 ```
 
-Browser access remains unauthenticated. If `SUPERMARKT_API_KEY` is set, a bearer token protects only `POST /api/v1/compare`. See [`.env.example`](.env.example) for current settings.
+Two further endpoints exist once the shopping-list integration is configured:
+
+```text
+GET  /api/v1/shopping-list/targets
+POST /api/v1/shopping-list/items
+```
+
+Browser access remains unauthenticated. If `SUPERMARKT_API_KEY` is set, a bearer token protects `POST /api/v1/compare` and both shopping-list endpoints. See [`.env.example`](.env.example) for current settings.
+
+## Shopping list through Home Assistant
+
+KorbKlar can write offers to a Home Assistant todo list. Because the Bring integration exposes every Bring list as a `todo` entity, KorbKlar calls the generic `todo.add_item` service instead of a Bring-specific interface. The same path therefore also covers the built-in shopping list and other todo providers.
+
+Configure the connection with a long-lived access token from the Home Assistant user profile:
+
+```bash
+SUPERMARKT_HA_URL=http://homeassistant.local:8123
+SUPERMARKT_HA_TOKEN=your-long-lived-access-token
+SUPERMARKT_HA_TODO_ENTITY=todo.bring_einkaufsliste
+```
+
+The Home Assistant instance may be reachable only over LAN or VPN. Only the KorbKlar server talks to it, the token never reaches the browser, and it is not exposed through `/health`. This client deliberately does not use the SSRF guard applied to untrusted product images, because the target here is a first-party host chosen by the operator.
+
+`SUPERMARKT_HA_TODO_ENTITY` only preselects a list. KorbKlar reads the available `todo` entities from Home Assistant and offers them in the results interface, so several Bring lists can be used from the same instance. Entities from other domains are rejected before anything is written.
+
+Each offer becomes one list entry: the product name is the article, and the note holds retailer, price, package size, and validity, for example `famila Nordwest · 1,59 € · 250 g · bis 29.08.`. Only values the offer actually carries are written; nothing is estimated.
+
+In the results interface each offer has a `+ Liste` button, and a checkbox collects several offers for one combined transfer. The browser path is protected by the same HMAC result token that already guards result data and the image proxy, so the feature is reachable only with a valid results link.
+
+If `SUPERMARKT_HA_URL` or `SUPERMARKT_HA_TOKEN` is empty, the integration stays switched off and the interface hides the shopping-list controls.
+
+## Running it publicly: API key and VPN
+
+Without `SUPERMARKT_API_KEY` nothing is restricted, and a private instance behaves as before.
+
+With the key set, **every** route except `/health` requires either that bearer token or a source address inside `SUPERMARKT_TRUSTED_NETWORKS`:
+
+```bash
+SUPERMARKT_API_KEY=a-long-random-key
+SUPERMARKT_TRUSTED_NETWORKS=10.8.0.0/24
+SUPERMARKT_TRUSTED_PROXIES=127.0.0.1/32
+```
+
+One instance then covers both halves: the browser interface stays usable without a login for anyone on the VPN, scripts and the mobile client authenticate with the key from anywhere, and everyone else receives 401. The check runs as middleware in front of all routes, so a newly added route cannot be left open by accident.
+
+`/health` stays reachable for container health checks but reveals only `status` and `service` to an unauthorised caller. Cache paths, source wiring and shopping-list details appear only for an authorised one.
+
+### Behind a reverse proxy
+
+`X-Forwarded-For` is believed only when the immediate peer is listed in `SUPERMARKT_TRUSTED_PROXIES`. The chain is read from the right with known proxies skipped, so a client cannot grant itself an allowed address by prepending an entry. With no proxies configured the header is ignored entirely.
+
+**uvicorn must run with `--no-proxy-headers`.** By default uvicorn parses `X-Forwarded-For` itself and replaces the client address before KorbKlar sees it, which lets anyone able to set that header bypass `SUPERMARKT_TRUSTED_NETWORKS`. The bundled Docker image already starts correctly; keep the flag when starting uvicorn yourself.
+
+The reverse proxy should additionally drop or overwrite any `X-Forwarded-For` supplied by the client.
+
+## HTTPS and deployment
+
+The Compose stack ships an optional reverse proxy. Caddy obtains and renews Let's Encrypt certificates on its own, with no certbot container and no cron job.
+
+```bash
+KORBKLAR_DOMAIN=korbklar.example.com
+KORBKLAR_ACME_EMAIL=you@example.com
+docker compose --profile proxy up -d
+```
+
+Without `--profile proxy` the stack starts exactly as before and the proxy container is never created.
+
+Before the first start an A or AAAA record must point at the server and ports 80 and 443 must be reachable, because Let's Encrypt validates over them.
+
+### Splitting VPN from internet
+
+The network allowlist checks the source address **as the server sees it**. Anyone reaching the public domain over the internet appears with their provider's address, not their VPN one, so these are two separate paths:
+
+| Path | Address | Authorisation |
+| --- | --- | --- |
+| Browser over VPN | `http://VPN-IP:8000` | source address in `SUPERMARKT_TRUSTED_NETWORKS`, no login |
+| App and scripts | `https://korbklar.example.com` | bearer token |
+
+`KORBKLAR_BIND_ADDRESS` selects the interface the published port binds to. Behind the proxy that is the VPN address, so the browser interface is not additionally exposed:
+
+```bash
+KORBKLAR_BIND_ADDRESS=10.8.0.1
+```
+
+`SUPERMARKT_TRUSTED_PROXIES` must contain the Compose network Caddy runs in, otherwise its `X-Forwarded-For` is ignored. Both default to `172.28.0.0/24`.
+
+Caddy **overwrites** a client-supplied `X-Forwarded-For` with the actual peer rather than appending to it, so the allowlist never sees an address the client chose.
+
+### Publishing your own image
+
+The workflow builds on every push to `main` and publishes to GHCR under the repository owner's namespace, which in a fork is that fork's own. The server then only needs:
+
+```bash
+docker compose pull && docker compose up -d --no-build
+```
+
+Point `KORBKLAR_IMAGE` at it:
+
+```bash
+KORBKLAR_IMAGE=ghcr.io/your-name/korbklar:latest
+```
+
+A freshly forked repository has GitHub Actions disabled; enable them once under the Actions tab. The resulting package starts out private: either make it public under Packages, or run `docker login ghcr.io` on the server with a token that grants `read:packages`.
+
+## Controlling the cache
+
+KorbKlar keeps several caches with different lifetimes:
+
+| What | Key | Fresh for | Afterwards |
+| --- | --- | --- | --- |
+| Offer snapshot | postal code and ALDI region | `SUPERMARKT_CACHE_TTL_MINUTES`, 30 minutes by default | reloaded |
+| Result link | `search_id` | — | stays openable for `SUPERMARKT_RESULT_RETENTION_HOURS`, even when stale |
+| REWE and Kaufland store mapping | postal code | 24 hours | re-resolved |
+| Image cache | image URL | 7 days, 512 MiB | discarded |
+
+Within the freshness window every search for the same postal code returns the same snapshot. A reload can be forced three ways:
+
+- the **Neu laden** button on the results page and in the app
+- `"refresh": true` in the body of `POST /api/v1/compare`
+- the command line tool, which also clears the other caches
+
+```bash
+docker exec korbklar python -m supermarkt.cache_cli status
+docker exec korbklar python -m supermarkt.cache_cli purge --postal-code 26188
+docker exec korbklar python -m supermarkt.cache_cli purge --all
+```
+
+`purge` drops snapshots, optionally the image cache (`--images`) and the store mappings (`--stores`); `--all` covers both. The signing key is never touched, so result links from other searches stay valid.
 
 ## Cache and data
 
@@ -234,6 +371,20 @@ The default setup needs no `.env`. [`.env.example`](.env.example) documents ever
 - `SUPERMARKT_IMAGE_CACHE_TTL_SECONDS`
 - `SUPERMARKT_IMAGE_CACHE_MAX_BYTES`
 - `SUPERMARKT_IMAGE_MAX_FILE_BYTES`
+- `SUPERMARKT_HA_URL`
+- `SUPERMARKT_HA_TOKEN`
+- `SUPERMARKT_HA_TODO_ENTITY`
+- `SUPERMARKT_HA_VERIFY_TLS`
+- `SUPERMARKT_HA_TIMEOUT_SECONDS`
+- `SUPERMARKT_HA_MAX_ITEMS`
+- `SUPERMARKT_TRUSTED_NETWORKS`
+- `SUPERMARKT_TRUSTED_PROXIES`
+- `SUPERMARKT_CHROMIUM_BINARY`
+- `KORBKLAR_IMAGE`
+- `KORBKLAR_BIND_ADDRESS`
+- `KORBKLAR_SUBNET`
+- `KORBKLAR_DOMAIN`
+- `KORBKLAR_ACME_EMAIL`
 
 The historical internal prefixes remain part of the current technical interface. `.env.example` is authoritative for meanings, defaults, and Docker paths.
 
@@ -259,6 +410,16 @@ pip install -e '.[dev]'
 pytest -m 'not live'
 ```
 
+On Windows use `.venv\Scripts\python.exe` instead of the activation script. The `dev` extra pulls in `tzdata` there, because Windows ships no IANA time-zone database and `Europe/Berlin` would otherwise fail at import time.
+
+To debug against live sources, run the app directly and keep runtime data out of the user state directory:
+
+```bash
+SUPERMARKT_DATA_DIR=.devdata uvicorn supermarkt.asgi:app --host 127.0.0.1 --port 8000 --reload
+```
+
+The Kaufland adapter drives a headless Chromium, which the Docker image provides. Without a local Chromium that one adapter fails and Marktguru serves as its fallback; every other source works unchanged.
+
 Live retailer tests are deliberately opt-in:
 
 ```bash
@@ -282,6 +443,10 @@ src/supermarkt/
 ├── presentation.py      response fields
 ├── images.py            downloads, image cache, and SSRF protection
 ├── security.py          signatures and optional API key
+├── authz.py             API key, trusted networks, proxy handling
+├── cache_cli.py         cache status and purge command
+├── homeassistant.py     Home Assistant todo lists, for example Bring
+├── shopping_routes.py   shopping list routes
 ├── access.py            access and request helpers
 ├── api_routes.py        REST routes
 ├── browser_routes.py    browser routes
@@ -297,13 +462,15 @@ The internal Python package name `supermarkt` remains for technical reasons. Ada
 
 Retailer websites and undocumented interfaces may change at any time. An individual adapter may fail temporarily without making KorbKlar unusable as a whole. Where suitable regional fallback data exists, it can replace only the affected retailer; other reachable sources remain usable.
 
+The Kaufland adapter needs a Chromium-compatible browser. The Docker image ships one; a local checkout probes the usual names and install locations for Chromium, Chrome and Edge, and `SUPERMARKT_CHROMIUM_BINARY` sets the path explicitly. Without a browser only that one adapter fails and Marktguru stands in for it.
+
 KorbKlar does not invent missing prices or estimate unknown loyalty benefits. Completeness and freshness depend on reachable regional source data.
 
 ## Roadmap
 
-Potential future integrations include Grocy, KitchenOwl, and further REST or OpenAPI connections for local automations, agents, and Conduit or LLM workflows such as the originally planned automatic Monday report.
+The Home Assistant shopping list described above is implemented. Potential future integrations include Grocy, KitchenOwl, and further REST or OpenAPI connections for local automations, agents, and Conduit or LLM workflows such as the originally planned automatic Monday report.
 
-These integrations are not part of version 0.1.0. The existing REST API can already support custom automations.
+Those remaining integrations are not part of version 0.1.0. The existing REST API can already support custom automations.
 
 ## Support the project
 

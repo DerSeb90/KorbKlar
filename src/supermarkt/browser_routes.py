@@ -45,11 +45,16 @@ def browser_search(postal_code_input: Annotated[str, Form(alias="postal_code")] 
 
 
 @router.post("/search/jobs", include_in_schema=False)
-def start_search_job(postal_code_input: Annotated[str, Form(alias="postal_code")] = "") -> dict[str, str]:
+def start_search_job(
+    postal_code_input: Annotated[str, Form(alias="postal_code")] = "",
+    refresh_input: Annotated[str, Form(alias="refresh")] = "",
+) -> dict[str, str]:
     postal_code = validate_postal_code(clean_text(postal_code_input))
     if postal_code is None:
         raise HTTPException(status_code=400, detail="Bitte eine gültige fünfstellige deutsche Postleitzahl eingeben.")
-    return {"job_id": runtime.get_jobs().start(postal_code)}
+    # A refresh skips the snapshot cache and re-queries every source.
+    refresh = clean_text(refresh_input).casefold() in {"1", "true", "yes", "on", "ja"}
+    return {"job_id": runtime.get_jobs().start(postal_code, refresh)}
 
 
 @router.get("/search/jobs/{job_id}", include_in_schema=False)
@@ -66,8 +71,12 @@ def search_job(job_id: str) -> dict:
 def results_page(search_id: str, token: str = Query(default=""), loyalty: str = Query(default="", max_length=500)) -> HTMLResponse:
     verify_result_token(search_id, token)
     try:
-        runtime.get_engine().by_id(search_id)
+        snapshot = runtime.get_engine().by_id(search_id)
     except ToolError as exc:
         raise HTTPException(status_code=410, detail=str(exc)) from exc
     selected = normalize_program_ids(loyalty.split(","))
-    return HTMLResponse(build_results_html(search_id, token, selected), headers={"Cache-Control": "no-store"})
+    postal_code = clean_text(snapshot.get("postal_code"))
+    return HTMLResponse(
+        build_results_html(search_id, token, selected, postal_code),
+        headers={"Cache-Control": "no-store"},
+    )

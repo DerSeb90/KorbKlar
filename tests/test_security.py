@@ -1,3 +1,4 @@
+import os
 import stat
 
 from supermarkt import security
@@ -12,7 +13,9 @@ def test_signing_secret_is_generated_once_and_persisted(monkeypatch, tmp_path):
     first = security.signing_secret()
     assert len(first) >= 32
     assert secret_file.exists()
-    assert stat.S_IMODE(secret_file.stat().st_mode) == 0o600
+    if os.name == "posix":
+        # Windows has no POSIX mode bits; chmod(0o600) is a no-op there.
+        assert stat.S_IMODE(secret_file.stat().st_mode) == 0o600
 
     monkeypatch.setattr(security, "_CACHED_SECRET", None)
     second = security.signing_secret()

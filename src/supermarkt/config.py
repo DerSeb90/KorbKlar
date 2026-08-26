@@ -28,7 +28,10 @@ def _env_text(name: str, default: str) -> str:
 
 
 def _env_path(name: str, default: Path) -> Path:
-    return Path(_env_text(name, str(default))).expanduser()
+    # Resolved to an absolute path: a relative data directory would otherwise
+    # be interpreted against the current working directory, and Chromium
+    # refuses a relative --user-data-dir outright.
+    return Path(_env_text(name, str(default))).expanduser().resolve()
 
 
 def _env_int(name: str, default: int, minimum: int, maximum: int | None = None) -> int:
@@ -71,6 +74,43 @@ RESULT_RETENTION_HOURS = _env_int("SUPERMARKT_RESULT_RETENTION_HOURS", 168, 1, 2
 TIMEOUT_SECONDS = _env_int("SUPERMARKT_TIMEOUT_SECONDS", 25, 5, 120)
 MARKTGURU_PAGE_SIZE = _env_int("SUPERMARKT_MARKTGURU_PAGE_SIZE", 500, 100, 1000)
 MAX_WORKERS = _env_int("SUPERMARKT_MAX_WORKERS", 8, 2, 24)
+
+def _env_bool(name: str, default: bool) -> bool:
+    raw = os.getenv(name)
+    if raw is None or not raw.strip():
+        return default
+    return raw.strip().casefold() in {"1", "true", "yes", "on", "ja"}
+
+
+def _env_list(name: str) -> tuple[str, ...]:
+    raw = os.getenv(name, "")
+    return tuple(item.strip() for item in raw.replace(";", ",").split(",") if item.strip())
+
+
+# Access control. Both lists are empty by default, which keeps a private
+# instance working exactly as before.
+#
+# TRUSTED_NETWORKS holds the client networks that may use the service without
+# a bearer token, typically a VPN subnet. TRUSTED_PROXIES holds the reverse
+# proxies whose X-Forwarded-For header may be believed; without it the header
+# is ignored entirely, because anyone could otherwise claim a VPN address.
+TRUSTED_NETWORKS = _env_list("SUPERMARKT_TRUSTED_NETWORKS")
+TRUSTED_PROXIES = _env_list("SUPERMARKT_TRUSTED_PROXIES")
+
+# Path to a Chromium-compatible browser for the Kaufland adapter. Empty means
+# the well-known names and install locations are probed.
+CHROMIUM_BINARY = _env_text("SUPERMARKT_CHROMIUM_BINARY", "")
+
+# Home Assistant shopping-list integration. Disabled unless a base URL and a
+# long-lived access token are configured. The target instance is normally a
+# private or VPN address, so this client deliberately does not share the
+# SSRF guard used for untrusted product images.
+HOMEASSISTANT_URL = _env_text("SUPERMARKT_HA_URL", "").rstrip("/")
+HOMEASSISTANT_TOKEN = _env_text("SUPERMARKT_HA_TOKEN", "")
+HOMEASSISTANT_TODO_ENTITY = _env_text("SUPERMARKT_HA_TODO_ENTITY", "")
+HOMEASSISTANT_VERIFY_TLS = _env_bool("SUPERMARKT_HA_VERIFY_TLS", True)
+HOMEASSISTANT_TIMEOUT_SECONDS = _env_int("SUPERMARKT_HA_TIMEOUT_SECONDS", 15, 3, 60)
+HOMEASSISTANT_MAX_ITEMS_PER_REQUEST = _env_int("SUPERMARKT_HA_MAX_ITEMS", 50, 1, 200)
 
 MARKTGURU_HOME = "https://www.marktguru.de/"
 MARKTGURU_SEARCH_API = "https://api.marktguru.de/api/v1/offers/search"

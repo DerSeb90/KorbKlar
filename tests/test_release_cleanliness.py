@@ -90,11 +90,17 @@ def test_standalone_docker_defaults_use_the_persistent_volume():
 
 def test_compose_is_one_self_contained_service():
     compose = (ROOT / "compose.yml").read_text(encoding="utf-8")
-    assert compose.count("  korbklar:\n") == 1
+    # Anchored and scoped to the services block: a network or a depends_on
+    # entry of the same name must not count as a second service.
+    services = compose.split("\nnetworks:")[0].split("\nvolumes:")[0]
+    assert len(re.findall(r"^  korbklar:$", services, re.M)) == 1
     assert "korbklar-data:/data" in compose
-    assert '"${SUPERMARKT_PORT:-8000}:8000"' in compose
+    assert "${SUPERMARKT_PORT:-8000}:8000" in compose
     assert "healthcheck:" in compose
     assert "SUPERMARKT_DATA_DIR: ${SUPERMARKT_DATA_DIR:-/data}" in compose
+    # The TLS terminator must stay optional so a plain deployment is
+    # unchanged by its presence.
+    assert 'profiles: ["proxy"]' in compose
 
 
 def test_legacy_configuration_names_are_gone():
@@ -120,9 +126,25 @@ def test_runtime_version_matches_package_metadata():
 def test_default_host_port_is_configurable_without_changing_container_port():
     compose = (ROOT / "compose.yml").read_text(encoding="utf-8")
     env_example = (ROOT / ".env.example").read_text(encoding="utf-8")
-    assert '"${SUPERMARKT_PORT:-8000}:8000"' in compose
+    assert "${SUPERMARKT_PORT:-8000}:8000" in compose
+    assert "${KORBKLAR_BIND_ADDRESS:-0.0.0.0}" in compose
     assert "SUPERMARKT_PORT=8000" in env_example
-    assert 'EXPOSE 8000' in (ROOT / "Dockerfile").read_text(encoding="utf-8")
+    assert "EXPOSE 8000" in (ROOT / "Dockerfile").read_text(encoding="utf-8")
+
+
+def test_the_proxy_never_forwards_a_client_supplied_source_address():
+    caddyfile = (ROOT / "Caddyfile").read_text(encoding="utf-8")
+    # Overwriting rather than appending is what keeps the network allowlist
+    # from ever seeing an address the client chose.
+    assert "header_up X-Forwarded-For {remote_host}" in caddyfile
+    assert "{$KORBKLAR_DOMAIN}" in caddyfile
+    assert "{$KORBKLAR_ACME_EMAIL}" in caddyfile
+
+
+def test_uvicorn_does_not_parse_forwarding_headers_itself():
+    # With uvicorn's own proxy handling the application would never see the
+    # real peer, and SUPERMARKT_TRUSTED_NETWORKS could be bypassed.
+    assert "--no-proxy-headers" in (ROOT / "Dockerfile").read_text(encoding="utf-8")
 
 
 def test_release_contains_no_runtime_state_or_patch_residue():
@@ -156,7 +178,7 @@ def test_release_has_only_the_base_compose_file():
 def test_all_supported_compose_environment_variables_are_documented():
     compose = (ROOT / "compose.yml").read_text(encoding="utf-8")
     env_example = (ROOT / ".env.example").read_text(encoding="utf-8")
-    names = set(re.findall(r"\$\{(SUPERMARKT_[A-Z0-9_]+)", compose))
+    names = set(re.findall(r"\$\{(SUPERMARKT_[A-Z0-9_]+|KORBKLAR_[A-Z0-9_]+)", compose))
     names.add("SUPERMARKT_PORT")
     for name in names:
         assert f"{name}=" in env_example, name

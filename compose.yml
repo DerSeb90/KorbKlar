@@ -2,7 +2,8 @@ name: korbklar
 
 services:
   korbklar:
-    image: ghcr.io/lesecuritae/korbklar:latest
+    # A fork deploying its own build sets KORBKLAR_IMAGE to its namespace.
+    image: ${KORBKLAR_IMAGE:-ghcr.io/lesecuritae/korbklar:latest}
     build: .
     container_name: korbklar
     restart: unless-stopped
@@ -30,10 +31,24 @@ services:
       SUPERMARKT_IMAGE_CACHE_TTL_SECONDS: ${SUPERMARKT_IMAGE_CACHE_TTL_SECONDS:-604800}
       SUPERMARKT_IMAGE_CACHE_MAX_BYTES: ${SUPERMARKT_IMAGE_CACHE_MAX_BYTES:-536870912}
       SUPERMARKT_IMAGE_MAX_FILE_BYTES: ${SUPERMARKT_IMAGE_MAX_FILE_BYTES:-4194304}
+      SUPERMARKT_HA_URL: ${SUPERMARKT_HA_URL:-}
+      SUPERMARKT_HA_TOKEN: ${SUPERMARKT_HA_TOKEN:-}
+      SUPERMARKT_HA_TODO_ENTITY: ${SUPERMARKT_HA_TODO_ENTITY:-}
+      SUPERMARKT_HA_VERIFY_TLS: ${SUPERMARKT_HA_VERIFY_TLS:-1}
+      SUPERMARKT_HA_TIMEOUT_SECONDS: ${SUPERMARKT_HA_TIMEOUT_SECONDS:-15}
+      SUPERMARKT_HA_MAX_ITEMS: ${SUPERMARKT_HA_MAX_ITEMS:-50}
+      SUPERMARKT_TRUSTED_NETWORKS: ${SUPERMARKT_TRUSTED_NETWORKS:-}
+      SUPERMARKT_TRUSTED_PROXIES: ${SUPERMARKT_TRUSTED_PROXIES:-}
+      SUPERMARKT_CHROMIUM_BINARY: ${SUPERMARKT_CHROMIUM_BINARY:-}
     volumes:
       - korbklar-data:/data
+    networks:
+      - korbklar-net
     ports:
-      - "${SUPERMARKT_PORT:-8000}:8000"
+      # KORBKLAR_BIND_ADDRESS pins the published port to a single interface.
+      # Behind the reverse proxy set it to the VPN address; the container port
+      # stays 8000 either way.
+      - "${KORBKLAR_BIND_ADDRESS:-0.0.0.0}:${SUPERMARKT_PORT:-8000}:8000"
     healthcheck:
       test: ["CMD", "curl", "--fail", "--silent", "http://127.0.0.1:8000/health"]
       interval: 10s
@@ -41,5 +56,52 @@ services:
       retries: 12
       start_period: 20s
 
+  caddy:
+    # Optional. Start with: docker compose --profile proxy up -d
+    # Obtains and renews Let's Encrypt certificates on its own.
+    image: caddy:2-alpine
+    container_name: korbklar-caddy
+    restart: unless-stopped
+    init: true
+    profiles: ["proxy"]
+    security_opt:
+      - no-new-privileges:true
+    depends_on:
+      korbklar:
+        condition: service_healthy
+    environment:
+      # Deliberately not marked required: Compose interpolates every service
+      # regardless of the active profile, so ":?" here would break the plain
+      # deployment that never starts this container. Caddy reports a missing
+      # domain itself when the profile is actually used.
+      KORBKLAR_DOMAIN: ${KORBKLAR_DOMAIN:-}
+      KORBKLAR_ACME_EMAIL: ${KORBKLAR_ACME_EMAIL:-}
+    networks:
+      - korbklar-net
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    healthcheck:
+      test: ["CMD", "caddy", "version"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+networks:
+  korbklar-net:
+    # A fixed subnet so SUPERMARKT_TRUSTED_PROXIES can name the proxy without
+    # depending on whatever Docker would otherwise allocate.
+    ipam:
+      config:
+        - subnet: ${KORBKLAR_SUBNET:-172.28.0.0/24}
+
 volumes:
   korbklar-data:
+  caddy-data:
+  caddy-config:

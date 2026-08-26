@@ -15,3 +15,4 @@ build/
 
 # Laufzeitdaten
 data/
+.devdata/
