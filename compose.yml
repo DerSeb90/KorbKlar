@@ -152,6 +152,12 @@ services:
       JWT_SECRET_KEY: ${KITCHENOWL_JWT_SECRET:-}
       # Lets KitchenOwl build correct absolute links to its own frontend.
       FRONT_URL: ${KITCHENOWL_PUBLIC_URL:-}
+      # Stated rather than inherited: the signup route only exists when this
+      # is true, and an upstream default is not a guarantee.
+      OPEN_REGISTRATION: "false"
+      # Onboarding closes itself once the first account exists, but saying so
+      # keeps a wiped data volume from reopening it unnoticed.
+      DISABLE_ONBOARDING: ${KITCHENOWL_DISABLE_ONBOARDING:-false}
     networks:
       - korbklar-net
     volumes:

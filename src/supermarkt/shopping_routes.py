@@ -52,7 +52,8 @@ def _targets() -> dict[str, Any]:
         return {
             "configured": True,
             "targets": service.targets(),
-            "default_entity": service.default_entity,
+            # Wire name kept stable for existing clients.
+            "default_entity": service.default_list_id,
         }
     except ShoppingListError as exc:
         raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc

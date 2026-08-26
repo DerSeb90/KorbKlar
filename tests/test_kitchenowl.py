@@ -154,6 +154,23 @@ def test_unconfigured_service_reports_disabled_instead_of_failing(monkeypatch, c
     assert response.json() == {"configured": False, "targets": [], "default_entity": ""}
 
 
+def test_targets_route_answers_for_a_configured_service(fake_list, client):
+    # The unconfigured branch alone left the configured one untested, which is
+    # how a renamed attribute reached the route unnoticed.
+    response = client.get(f"/results/{SEARCH_ID}/shopping-list/targets?token={_token()}")
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["configured"] is True
+    assert [target["entity_id"] for target in payload["targets"]] == ["4", "7"]
+    assert payload["default_entity"] == ""
+
+
+def test_targets_route_reports_the_preselected_list(fake_list, client):
+    fake_list.default_list_id = "7"
+    payload = client.get(f"/results/{SEARCH_ID}/shopping-list/targets?token={_token()}").json()
+    assert payload["default_entity"] == "7"
+
+
 def test_browser_route_requires_a_valid_result_token(fake_list, client):
     response = client.post(
         f"/results/{SEARCH_ID}/shopping-list/items?token=wrong",
