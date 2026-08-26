@@ -1,4 +1,8 @@
-"""Home Assistant todo-list integration used for Bring shopping lists."""
+"""Home Assistant todo-list integration used for Bring shopping lists.
+
+Named after the integration rather than the feature, because the browser
+also has an unrelated in-page shopping basket with its own tests.
+"""
 
 import pytest
 from fastapi.testclient import TestClient
