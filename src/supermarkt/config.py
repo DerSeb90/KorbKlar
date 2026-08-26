@@ -112,6 +112,16 @@ KITCHENOWL_LIST_ID = _env_text("SUPERMARKT_KITCHENOWL_LIST_ID", "")
 KITCHENOWL_VERIFY_TLS = _env_bool("SUPERMARKT_KITCHENOWL_VERIFY_TLS", True)
 KITCHENOWL_TIMEOUT_SECONDS = _env_int("SUPERMARKT_KITCHENOWL_TIMEOUT_SECONDS", 15, 3, 60)
 KITCHENOWL_MAX_ITEMS_PER_REQUEST = _env_int("SUPERMARKT_KITCHENOWL_MAX_ITEMS", 50, 1, 200)
+# Reuse an article the household already keeps instead of creating a near
+# duplicate for every offer name.
+KITCHENOWL_MATCH_EXISTING_ITEMS = _env_bool("SUPERMARKT_KITCHENOWL_MATCH_ITEMS", True)
+# File the article under its retailer so the list groups by shop. Off by
+# choice: a category belongs to the article, not to one list entry, so an
+# article moves when another retailer offers it more cheaply.
+KITCHENOWL_RETAILER_CATEGORIES = _env_bool("SUPERMARKT_KITCHENOWL_RETAILER_CATEGORIES", True)
+# KitchenOwl categories carry a name and nothing else, so an icon can only
+# be an emoji in front of it. Empty disables the prefix.
+KITCHENOWL_CATEGORY_PREFIX = _env_text("SUPERMARKT_KITCHENOWL_CATEGORY_PREFIX", "🛒 ")
 
 MARKTGURU_HOME = "https://www.marktguru.de/"
 MARKTGURU_SEARCH_API = "https://api.marktguru.de/api/v1/offers/search"

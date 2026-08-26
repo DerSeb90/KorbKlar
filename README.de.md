@@ -233,7 +233,15 @@ Der Browserbetrieb funktioniert ohne Schlüssel. Soll die REST-Schnittstelle zus
 
 ## Einkaufsliste über KitchenOwl
 
-KorbKlar schreibt Angebote auf eine Einkaufsliste in [KitchenOwl](https://kitchenowl.org), einer selbst gehosteten Einkaufsliste mit gemeinsamen Haushalten. Der Produktname wird der Artikel, die Notiz trägt Händler, Preis, Packungsgröße und Gültigkeit, zum Beispiel `famila Nordwest · 1,59 € · 250 g · bis 29.08.`. Geschrieben wird nur, was das Angebot wirklich hergibt; nichts wird geschätzt.
+KorbKlar schreibt Angebote auf eine Einkaufsliste in [KitchenOwl](https://kitchenowl.org), einer selbst gehosteten Einkaufsliste mit gemeinsamen Haushalten.
+
+Ist im Haushalt bereits ein passender Artikel angelegt, landet das Angebot dort statt als beinahe gleicher Zweitartikel: „GUT&GÜNSTIG Weizenbrötchen / Schrippen" wird zu deinem vorhandenen „Brötchen", der vollständige Angebotsname rückt in die Notiz. Verglichen wird über ganze Wörter, wobei das Grundwort deutscher Komposita hinten steht — „Weizenbrötchen" trifft „Brötchen", „Buttermilch" dagegen „Milch" und nicht „Butter". Abschaltbar über `SUPERMARKT_KITCHENOWL_MATCH_ITEMS=0`.
+
+Der Händler wird zur Kategorie, damit die Liste nach Markt gruppiert; fehlende Kategorien legt KorbKlar an. KitchenOwl-Kategorien haben nur einen Namen und kein Bildfeld, ein Ladenlogo ist also nicht möglich — `SUPERMARKT_KITCHENOWL_CATEGORY_PREFIX` stellt stattdessen ein Emoji davor, standardmäßig `🛒`.
+
+**Zu bedenken:** Die Kategorie hängt am Artikel, nicht am Listeneintrag. Ein Artikel wandert also mit, sobald ein anderer Markt ihn günstiger anbietet. Wer lieber nach Abteilungen sortiert, setzt `SUPERMARKT_KITCHENOWL_RETAILER_CATEGORIES=0`; dann bleibt der Händler in der Notiz.
+
+In die Notiz kommt nur, was das Angebot wirklich hergibt: Menge, Angebotsname bei Treffer, Preis, Packungsgröße und Gültigkeit. Nichts wird geschätzt.
 
 ### KitchenOwl im Stack
 

@@ -21,6 +21,7 @@ image hosts. The token never leaves the server.
 from __future__ import annotations
 
 import json
+import re
 import ssl
 import threading
 import time
@@ -31,9 +32,12 @@ from urllib.request import Request, urlopen
 
 from .common import clean_text
 from .config import (
+    KITCHENOWL_CATEGORY_PREFIX,
     KITCHENOWL_LIST_ID,
+    KITCHENOWL_MATCH_EXISTING_ITEMS,
     KITCHENOWL_MAX_ITEMS_PER_REQUEST,
     KITCHENOWL_TIMEOUT_SECONDS,
+    KITCHENOWL_RETAILER_CATEGORIES,
     KITCHENOWL_TOKEN,
     KITCHENOWL_URL,
     KITCHENOWL_VERIFY_TLS,
@@ -41,6 +45,10 @@ from .config import (
 )
 
 LIST_CACHE_TTL_SECONDS = 300
+CATALOGUE_CACHE_TTL_SECONDS = 300
+# Below this an existing article says too little to be worth matching: "Ei"
+# would swallow half a catalogue.
+MIN_MATCH_LENGTH = 4
 MAX_ITEM_LENGTH = 200
 MAX_DESCRIPTION_LENGTH = 300
 
@@ -75,6 +83,7 @@ def build_item_description(
     validity: str,
     pack: str,
     quantity: int = 1,
+    product: str = "",
 ) -> str:
     """Return the note shown underneath the article.
 
@@ -85,12 +94,58 @@ def build_item_description(
     """
     parts = [
         f"{quantity}×" if quantity > 1 else "",
+        # Only when the article was matched to a shorter household name, so
+        # the offer it came from stays readable.
+        clean_text(product),
         clean_text(retailer),
         clean_text(price_text),
         clean_text(pack),
         clean_text(validity),
     ]
     return _truncate(" · ".join(part for part in parts if part), MAX_DESCRIPTION_LENGTH)
+
+
+def _fold(value: str) -> str:
+    """Reduce a name to comparable words."""
+    return re.sub(r"[^0-9a-zäöüß]+", " ", clean_text(value).casefold()).strip()
+
+
+def match_existing_item(product: str, catalogue: Iterable[str]) -> str:
+    """Return the household's own article name for this offer, if any.
+
+    An offer is called "GUT&GÜNSTIG Weizenbrötchen / Schrippen" while the
+    household keeps a plain "Brötchen". Matching on whole words lets the offer
+    land on the article that already exists instead of creating a near
+    duplicate, and the longest match wins so "Bio Butter" beats "Butter".
+    """
+    words = _fold(product).split()
+    best = ""
+    for name in catalogue:
+        folded = _fold(name)
+        if len(folded) < MIN_MATCH_LENGTH or len(folded) <= len(_fold(best)):
+            continue
+        parts = folded.split()
+        if _contains_sequence(words, parts):
+            best = name
+    return best
+
+
+def _contains_sequence(words: list[str], parts: list[str]) -> bool:
+    """Whether the article's words appear in the offer, compounds included.
+
+    German puts the head noun last, so an article named "Brötchen" is what
+    "Weizenbrötchen" is. Only the final word may match as a suffix; matching
+    the front would turn "Buttermilch" into butter.
+    """
+    if not parts:
+        return False
+    last = len(parts) - 1
+    for start in range(len(words) - last):
+        if all(words[start + offset] == part for offset, part in enumerate(parts[:last])):
+            candidate = words[start + last]
+            if candidate == parts[last] or candidate.endswith(parts[last]):
+                return True
+    return False
 
 
 class KitchenOwlShoppingList:
@@ -102,6 +157,9 @@ class KitchenOwlShoppingList:
         verify_tls: bool = KITCHENOWL_VERIFY_TLS,
         timeout_seconds: int = KITCHENOWL_TIMEOUT_SECONDS,
         max_items: int = KITCHENOWL_MAX_ITEMS_PER_REQUEST,
+        match_items: bool = KITCHENOWL_MATCH_EXISTING_ITEMS,
+        retailer_categories: bool = KITCHENOWL_RETAILER_CATEGORIES,
+        category_prefix: str = KITCHENOWL_CATEGORY_PREFIX,
     ) -> None:
         self.base_url = clean_text(base_url).rstrip("/")
         self.token = clean_text(token)
@@ -109,7 +167,12 @@ class KitchenOwlShoppingList:
         self.verify_tls = bool(verify_tls)
         self.timeout_seconds = max(3, int(timeout_seconds))
         self.max_items = max(1, int(max_items))
+        self.match_items = bool(match_items)
+        self.retailer_categories = bool(retailer_categories)
+        self.category_prefix = str(category_prefix)
         self._lists: list[dict[str, str]] = []
+        self._catalogue: dict[str, tuple[float, list[str]]] = {}
+        self._categories: dict[str, dict[str, int]] = {}
         self._lists_read_at = 0.0
         self._lock = threading.Lock()
 
@@ -213,13 +276,63 @@ class KitchenOwlShoppingList:
                 name = clean_text(entry.get("name")) or f"Liste {list_id}"
                 # Only qualify when it adds information.
                 label = f"{household_name} · {name}" if household_name and len(households) > 1 else name
-                lists.append({"entity_id": str(list_id), "label": label})
+                lists.append({"entity_id": str(list_id), "label": label, "household_id": str(household_id)})
 
         lists.sort(key=lambda item: item["label"].casefold())
         with self._lock:
             self._lists = lists
             self._lists_read_at = time.time()
-        return list(lists)
+        return [
+            {"entity_id": item["entity_id"], "label": item["label"]}
+            for item in lists
+        ]
+
+    def _household_of(self, list_id: str) -> str:
+        self.targets()
+        with self._lock:
+            for item in self._lists:
+                if item["entity_id"] == list_id:
+                    return item["household_id"]
+        return ""
+
+    def catalogue(self, household_id: str) -> list[str]:
+        """Article names the household already keeps."""
+        with self._lock:
+            cached = self._catalogue.get(household_id)
+            if cached and time.time() - cached[0] < CATALOGUE_CACHE_TTL_SECONDS:
+                return list(cached[1])
+        names = [
+            clean_text(entry.get("name"))
+            for entry in self._entries(self._call(f"/api/household/{household_id}/item"))
+            if clean_text(entry.get("name"))
+        ]
+        with self._lock:
+            self._catalogue[household_id] = (time.time(), names)
+        return list(names)
+
+    def _category_id(self, household_id: str, retailer: str) -> int | None:
+        """Return the category for this retailer, creating it when missing."""
+        name = f"{self.category_prefix}{clean_text(retailer)}".strip()
+        if not clean_text(retailer):
+            return None
+        with self._lock:
+            known = self._categories.get(household_id)
+        if known is None:
+            known = {
+                clean_text(entry.get("name")).casefold(): entry["id"]
+                for entry in self._entries(self._call(f"/api/household/{household_id}/category"))
+                if entry.get("id") is not None and clean_text(entry.get("name"))
+            }
+            with self._lock:
+                self._categories[household_id] = known
+        existing = known.get(name.casefold())
+        if existing is not None:
+            return existing
+        created = self._call(f"/api/household/{household_id}/category", {"name": name})
+        if not isinstance(created, dict) or created.get("id") is None:
+            return None
+        known[name.casefold()] = created["id"]
+        return created["id"]
 
     def resolve_entity(self, requested: str) -> str:
         """Return a list id KitchenOwl actually exposes."""
@@ -257,29 +370,57 @@ class KitchenOwlShoppingList:
                 status_code=400,
             )
 
+        household_id = self._household_of(target)
+        catalogue = (
+            self.catalogue(household_id)
+            if self.match_items and household_id
+            else []
+        )
+
         added: list[str] = []
         failed: list[dict[str, str]] = []
         for item in pending:
-            name = build_item_text(item.get("product", ""), item.get("retailer", ""))
-            payload: dict[str, Any] = {"name": name}
+            product = item.get("product", "")
+            retailer = item.get("retailer", "")
+            name = build_item_text(product, retailer)
+            # Land on the article the household already keeps; the full offer
+            # name stays readable in the note.
+            matched = match_existing_item(product, catalogue) if catalogue else ""
+            if matched:
+                name = matched
+
             try:
                 quantity = max(1, int(item.get("quantity") or 1))
             except (TypeError, ValueError):
                 quantity = 1
+
+            use_category = self.retailer_categories and bool(household_id)
             description = build_item_description(
-                item.get("retailer", ""),
+                "" if use_category else retailer,
                 item.get("price_text", ""),
                 item.get("validity", ""),
                 item.get("pack", ""),
                 quantity,
+                product if matched else "",
             )
+            payload: dict[str, Any] = {"name": name}
             if description:
                 payload["description"] = description
+
             try:
-                self._call(f"/api/shoppinglist/{target}/add-item-by-name", payload)
+                created = self._call(f"/api/shoppinglist/{target}/add-item-by-name", payload)
             except ShoppingListError as exc:
                 failed.append({"item": name, "error": str(exc)})
                 continue
+
+            if use_category and isinstance(created, dict) and created.get("id") is not None:
+                try:
+                    category_id = self._category_id(household_id, retailer)
+                    if category_id is not None:
+                        self._call(f"/api/item/{created['id']}", {"category": {"id": category_id}})
+                except ShoppingListError:
+                    # The article is on the list; filing it is a nicety.
+                    pass
             added.append(name)
 
         return {

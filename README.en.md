@@ -214,7 +214,15 @@ Browser access remains unauthenticated. If `SUPERMARKT_API_KEY` is set, a bearer
 
 ## Shopping list through KitchenOwl
 
-KorbKlar writes offers to a list in [KitchenOwl](https://kitchenowl.org), a self-hosted grocery list with shared households. The product becomes the article and the note carries retailer, price, package size and validity, for example `famila Nordwest · 1,59 € · 250 g · bis 29.08.`. Only values the offer actually carries are written; nothing is estimated.
+KorbKlar writes offers to a list in [KitchenOwl](https://kitchenowl.org), a self-hosted grocery list with shared households.
+
+Where the household already keeps a fitting article, the offer lands there instead of as a near duplicate: "GUT&GÜNSTIG Weizenbrötchen / Schrippen" joins your existing "Brötchen" and the full offer name moves into the note. Matching works on whole words, and German compounds carry their head noun last, so "Weizenbrötchen" matches "Brötchen" while "Buttermilch" matches "Milch" rather than "Butter". Switch it off with `SUPERMARKT_KITCHENOWL_MATCH_ITEMS=0`.
+
+The retailer becomes the category so the list groups by shop; KorbKlar creates the ones that are missing. KitchenOwl categories carry a name and no image field, so a store logo is not possible — `SUPERMARKT_KITCHENOWL_CATEGORY_PREFIX` puts an emoji in front instead, `🛒` by default.
+
+**Worth knowing:** the category belongs to the article, not to one list entry, so an article moves along as soon as a different retailer offers it more cheaply. To keep your own department ordering, set `SUPERMARKT_KITCHENOWL_RETAILER_CATEGORIES=0` and the retailer stays in the note.
+
+The note carries only what the offer actually has: quantity, the offer name where an article was matched, price, package size and validity. Nothing is estimated.
 
 ### KitchenOwl in the stack
 
@@ -396,6 +404,9 @@ The default setup needs no `.env`. [`.env.example`](.env.example) documents ever
 - `SUPERMARKT_KITCHENOWL_VERIFY_TLS`
 - `SUPERMARKT_KITCHENOWL_TIMEOUT_SECONDS`
 - `SUPERMARKT_KITCHENOWL_MAX_ITEMS`
+- `SUPERMARKT_KITCHENOWL_MATCH_ITEMS`
+- `SUPERMARKT_KITCHENOWL_RETAILER_CATEGORIES`
+- `SUPERMARKT_KITCHENOWL_CATEGORY_PREFIX`
 - `SUPERMARKT_TRUSTED_NETWORKS`
 - `SUPERMARKT_TRUSTED_PROXIES`
 - `SUPERMARKT_CHROMIUM_BINARY`
