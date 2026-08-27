@@ -32,7 +32,7 @@ def _dependency_names() -> set[str]:
     metadata = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
     result = set()
     for requirement in metadata["project"]["dependencies"]:
-        name = re.split(r"[<>=!~\[\s]", requirement, maxsplit=1)[0]
+        name = re.split(r"[<>=!~;\[\s]", requirement, maxsplit=1)[0]
         result.add(name.replace("_", "-").casefold())
     return result
 
@@ -60,11 +60,11 @@ def test_source_root_contains_only_the_package():
 
 
 def test_declared_runtime_dependencies_are_intentional_and_small():
-    assert _dependency_names() == {"fastapi", "pydantic", "curl-cffi", "beautifulsoup4", "uvicorn", "python-multipart"}
+    assert _dependency_names() == {"fastapi", "pydantic", "curl-cffi", "beautifulsoup4", "uvicorn", "python-multipart", "tzdata", "certifi"}
 
 
 def test_external_python_imports_match_declared_runtime_components():
-    assert _external_imports() == {"fastapi", "pydantic", "curl_cffi", "bs4"}
+    assert _external_imports() == {"fastapi", "pydantic", "curl_cffi", "bs4", "certifi"}
 
 
 def test_docker_system_dependencies_are_actually_used():
@@ -120,7 +120,7 @@ def test_runtime_version_matches_package_metadata():
     metadata = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
     assert metadata["project"]["version"] == __version__
     assert USER_AGENT == f"korb-klar/{__version__}"
-    assert __version__ == "0.1.3"
+    assert __version__ == "0.1.4"
 
 
 def test_default_host_port_is_configurable_without_changing_container_port():

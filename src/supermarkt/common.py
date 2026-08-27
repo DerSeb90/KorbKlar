@@ -15,8 +15,24 @@ def validate_postal_code(value: Any) -> Optional[str]:
     postal_code = clean_text(value)
     return postal_code if re.fullmatch(r"\d{5}", postal_code) else None
 
+
+def parse_deposit_text(value: Any) -> Optional[float]:
+    """Parse only an explicitly published deposit, never infer it from packaging."""
+    text = clean_text(value)
+    patterns = (
+        r"(?:zzgl\.?|zuz(?:ü|ue)glich|\+)\s*(\d{1,4}(?:[.,]\d{1,2})?)\s*€?\s*pfand\b",
+        r"\bpfand(?:\s*/\s*\w+)?\s*(?:je\s*)?(\d{1,4}(?:[.,]\d{1,2})?)\s*€?",
+    )
+    for pattern in patterns:
+        match = re.search(pattern, text, flags=re.IGNORECASE)
+        if match:
+            return parse_number(match.group(1))
+    return None
+
 def normalize_aldi_region(value: Any) -> str:
     normalized = clean_text(value).casefold().replace("ü", "ue")
+    if normalized in {"both", "beide", "nord und sued", "nord & sued"}:
+        return "both"
     if normalized in {"nord", "aldi nord", "north"}:
         return "nord"
     if normalized in {"sued", "sud", "aldi sued", "aldi sud", "south"}:

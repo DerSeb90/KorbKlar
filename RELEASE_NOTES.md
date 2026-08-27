@@ -1,3 +1,21 @@
+# 0.1.4
+
+Enthält alles aus KorbKlar 0.0.5, 0.0.6 und 0.0.7.
+
+## Übernommen aus dem Hauptprojekt
+
+- ALDI-Region wird für das westliche NRW richtig gewählt, und Leverkusener Postleitzahlen sind als ALDI-Süd-Gebiet belegt.
+- REWE-Bonus wird bei ausdrücklich ausgewiesenen Rabatten korrekt gerechnet.
+- Bilder und ausgewiesenes Pfand in der Einkaufsliste korrigiert.
+- HTTPS-Prüfung funktioniert auch, wenn der Zertifikatsspeicher des Systems nicht erreichbar ist.
+- Die Suchmaske hat einen eigenen Schalter, der den Snapshot-Cache übergeht.
+
+## Geändert
+
+- Die Browsersuche für Kaufland kommt jetzt aus `sources/browser.py`, dem geteilten Modul des Hauptprojekts, statt aus einer zweiten Fassung im Kaufland-Adapter. `SUPERMARKT_CHROMIUM` ist der Name dafür; `SUPERMARKT_CHROMIUM_BINARY` funktioniert weiter, weil es in bestehenden `.env`-Dateien steht.
+
+---
+
 # 0.1.3
 
 ## Behoben
@@ -77,7 +95,34 @@ Erste eigene Version dieses Forks. Enthält alles aus 0.0.3 und darüber hinaus:
 - Die Marktguru-Slug-Zuordnung war ein unbedingter Dict-Zugriff und warf `KeyError` für jeden Aggregator-Händler ohne Eintrag.
 
 ---
+# 0.0.7
+
+KorbKlar 0.0.7 integriert die geprüften Änderungen aus dem Fork von Claudia Dietrich:
+
+- Native Windows-Einrichtung mit lokal gebundener Anwendung und automatischer Suche nach Chromium, Chrome oder Edge. Linux- und Docker-Aufrufe verwenden dieselbe portable Browserauflösung.
+- Ein bewusster Schalter auf der Startseite kann den Angebotscache für eine Suche umgehen. Ohne Auswahl bleibt das bisherige Cacheverhalten unverändert.
+- Die exakten Leverkusener PLZ 51371, 51373, 51375, 51377, 51379 und 51381 sind anhand offizieller ALDI-Süd-Filialnachweise ergänzt. Es wird weiterhin keine Präfixschätzung verwendet.
+- HTTPS-Verbindungen behalten Zertifikats- und Hostnamenprüfung bei und verwenden zusätzlich den reproduzierbaren certifi-Vertrauensspeicher; lokale Systemzertifikate werden weiterhin ergänzt.
+- Explizite Euro-Beträge aus REWE-Zusatztexten wie „MIT APP 0,10 € REWE BONUS“ werden bei ausgewähltem REWE Bonus korrekt vom effektiven Preis abgezogen. Prozent-, Punkte- oder unbezifferte Vorteile werden nicht geschätzt.
+
+Die browserlokale Einkaufsliste, Combi/famila Nordwest, die getrennten ALDI-Regionen, Containerhärtung und GHCR-Veröffentlichung bleiben unverändert erhalten.
+
+# 0.0.6
+
+KorbKlar 0.0.6 erweitert den versionierten, PLZ-genauen offiziellen ALDI-Regionsnachweis für Aachen, den Kreis Düren, den nördlichen Kreis Heinsberg, Mülheim an der Ruhr, Duisburg-Walsum und Dorsten. Die Zuordnung verwendet keine pauschale `52xxx`- oder Präfixregel. Unbekannte PLZ bleiben dem begrenzten Standort-Fallback vorbehalten; Gummersbach und Siegen bleiben ausdrücklich als Grenzfälle mit beiden Regionen erhalten. Auf der Startseite kann der Nutzer die automatische Erkennung optional durch „ALDI Nord“, „ALDI Süd“ oder „Nord und Süd“ ersetzen; die Auswahl wird bis in den getrennten regionalen Quellenabruf weitergereicht.
+
+# 0.0.5
+
+KorbKlar 0.0.5 behebt zwei Datenverluste auf dem Weg vom Angebot in die browserlokale Einkaufsliste:
+
+- Das bereits abgesicherte lokale Bildproxy-Ziel wird im kanonischen IndexedDB-Modell gespeichert und als Produktbild in der Einkaufsliste dargestellt. Es bleibt nach Reload sowie im JSON-Backup erhalten. Fremde, direkte oder ausführbare Bildziele werden nicht gerendert.
+- Ausdrücklich von ALDI, REWE oder Marktguru veröffentlichte Pfandbeträge werden in das Angebotsmodell übernommen, getrennt als Integer-Cent gespeichert und mengenabhängig in Position, Händlergruppe und Gesamtsumme eingerechnet. Aus Verpackungsbezeichnungen wie „Dose“ oder „Flasche“ wird kein Pfandwert geraten.
+
+Die übrigen Hinweise aus Issue #8 – insbesondere der ohne ungeschwärzte PLZ und Filialangabe nicht reproduzierbare REWE-/Kaufland-Fall sowie zusätzliche Featurewünsche – bleiben getrennt dokumentiert und werden nicht als erledigt ausgegeben.
+
 # 0.0.4
+
+Revision: Zenq & Enzo
 
 KorbKlar 0.0.4 korrigiert die Verarbeitung der offiziellen ALDI-Süd-Wochenangebote. Gültigkeiten werden nun mit der Priorität Produktkarte, Angebotsgruppe und Wochenzeitraum ermittelt. Montag-, Donnerstag-, Freitag-/Samstag- und weitere ausdrücklich genannte Aktionstage bleiben dadurch erhalten.
 

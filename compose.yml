@@ -43,6 +43,8 @@ services:
       SUPERMARKT_IMAGE_CACHE_TTL_SECONDS: ${SUPERMARKT_IMAGE_CACHE_TTL_SECONDS:-604800}
       SUPERMARKT_IMAGE_CACHE_MAX_BYTES: ${SUPERMARKT_IMAGE_CACHE_MAX_BYTES:-536870912}
       SUPERMARKT_IMAGE_MAX_FILE_BYTES: ${SUPERMARKT_IMAGE_MAX_FILE_BYTES:-4194304}
+      SUPERMARKT_CHROMIUM: ${SUPERMARKT_CHROMIUM:-}
+      # Older spelling, still honoured so a deployed .env keeps working.
       SUPERMARKT_CHROMIUM_BINARY: ${SUPERMARKT_CHROMIUM_BINARY:-}
       # Access control. Empty means the instance is open, which is only safe
       # on a private network. See docs/access-control.md.

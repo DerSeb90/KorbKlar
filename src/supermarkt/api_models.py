@@ -10,7 +10,7 @@ from .loyalty import PROGRAMS, VALID_PROGRAM_IDS, normalize_program_ids
 
 class SupermarketRequest(BaseModel):
     postal_code: str = Field(description="Deutsche Postleitzahl mit fünf Ziffern")
-    aldi_region: Literal["auto", "nord", "sued"] = Field(
+    aldi_region: Literal["auto", "nord", "sued", "both"] = Field(
         default="auto",
         description="ALDI-Region. Explizite Nutzerangaben übernehmen, sonst auto.",
     )

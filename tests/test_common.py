@@ -9,6 +9,15 @@ def test_postal_code_is_required_shape():
     assert validate_postal_code("") is None
 
 
+def test_deposit_is_parsed_only_when_explicitly_published():
+    from supermarkt.common import parse_deposit_text
+
+    assert parse_deposit_text("je 0,33-l-Dose zzgl. 0.25 Pfand") == 0.25
+    assert parse_deposit_text("12 x 0,75 l + 3,30 € Pfand/Kiste") == 3.3
+    assert parse_deposit_text("Pfand je 0,15 €") == 0.15
+    assert parse_deposit_text("Energy Drink in der Dose") is None
+
+
 def test_number_and_base_price():
     assert parse_number("1,99 €") == 1.99
     assert parse_base_price_text("1 kg = 3,98") == (3.98, "kg")

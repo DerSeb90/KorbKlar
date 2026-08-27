@@ -12,9 +12,10 @@ import uuid
 from typing import Any, Optional
 from urllib.parse import urljoin, urlsplit
 
-from ..common import build_match_key, clean_text, deduplicate_offers, normalize_pack, offer_reference_date, parse_base_price_text, parse_number, today_berlin
+from ..common import build_match_key, clean_text, deduplicate_offers, normalize_pack, offer_reference_date, parse_base_price_text, parse_deposit_text, parse_number, today_berlin
 from ..http import PostalCodeLocator
 from ..models import LoyaltyBenefit, Offer, ToolError
+from .browser import chromium_command
 
 class OfficialReweSource:
     BASE = "https://www.rewe.de"
@@ -281,7 +282,7 @@ class OfficialReweSource:
             try:
                 completed = subprocess.run(
                     [
-                        "chromium", headless, "--no-sandbox", "--disable-gpu",
+                        chromium_command(), headless, "--no-sandbox", "--disable-gpu",
                         "--disable-dev-shm-usage", "--lang=de-DE",
                         "--virtual-time-budget=12000", "--dump-dom", market_url,
                     ],
@@ -459,16 +460,35 @@ class OfficialReweSource:
         title = clean_text(" ".join(parts))
         return re.sub(r"[¹²³⁴⁵⁶⁷⁸⁹⁰]+$", "", title).strip()
 
+    @classmethod
+    def _bonus_amount(cls, card: Any, description: str = "") -> Optional[float]:
+        """Return only an explicitly published Euro REWE Bonus amount.
+
+        REWE currently renders the amount either in its loyalty badge or in an
+        additional line such as ``MIT APP 0,10 € REWE BONUS``. Percentages,
+        points and unspecified app benefits deliberately remain unpriced.
+        """
+        badge = cls._money(card.select_one(".cor-loyalty-badge") if card is not None else None)
+        if badge is not None and badge > 0:
+            return badge
+        text = clean_text(description)
+        for pattern in (
+            r"(?:mit\s+app\s+)?(\d+[,.]\d{2})\s*€\s*rewe\s*bonus\b",
+            r"\brewe\s*bonus\b[^\d]{0,24}(\d+[,.]\d{2})\s*€",
+        ):
+            match = re.search(pattern, text, flags=re.IGNORECASE)
+            if match:
+                amount = parse_number(match.group(1))
+                if amount is not None and amount > 0:
+                    return amount
+        return None
+
     def _parse_card(self, card: Any, *, nan: str, category: str, market_id: str, market_url: str) -> tuple[Optional[Offer], bool]:
         title_node = card.select_one(".cor-offer-information__title") if card is not None else None
         title = self._offer_title(title_node)
         price = self._money(card.select_one(".cor-offer-price__tag-price") if card is not None else None)
-        bonus = self._money(card.select_one(".cor-loyalty-badge") if card is not None else None)
-
         if not title:
             return None, False
-        if price is None or price <= 0:
-            return None, bonus is not None and bonus > 0
 
         details = [
             clean_text(node.get_text(" ", strip=True))
@@ -476,6 +496,9 @@ class OfficialReweSource:
             if clean_text(node.get_text(" ", strip=True))
         ]
         description = " ".join(details)
+        bonus = self._bonus_amount(card, description)
+        if price is None or price <= 0:
+            return None, bonus is not None and bonus > 0
         base_price, base_unit = parse_base_price_text(description)
         pack = normalize_pack(f"{title} {description}")
         image_url = self._product_image(card, market_url)
@@ -507,6 +530,7 @@ class OfficialReweSource:
             product_url=product_url or market_url,
             retailer_url=market_url,
             image_url=image_url,
+            deposit=parse_deposit_text(description),
             benefits=(LoyaltyBenefit("rewe_bonus", "cashback", float(bonus), "REWE Bonus"),)
             if bonus is not None and bonus > 0
             else (),

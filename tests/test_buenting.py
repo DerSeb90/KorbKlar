@@ -73,3 +73,11 @@ def test_buenting_offers_do_not_claim_loyalty_benefits():
         offer = OfferMapper().map_one(_raw(advertiser), contexts)
         assert offer is not None
         assert offer.benefits == ()
+
+
+def test_marktguru_explicit_deposit_reaches_the_offer_model():
+    raw = _raw("Netto")
+    raw["description"] = "je 0,33-l-Dose zzgl. 0.25 Pfand"
+    offer = OfferMapper().map_one(raw, _contexts())
+    assert offer is not None
+    assert offer.deposit == 0.25

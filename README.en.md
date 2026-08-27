@@ -374,7 +374,7 @@ The default setup needs no `.env`. [`.env.example`](.env.example) documents ever
 - `SUPERMARKT_KITCHENOWL_CATEGORY_PREFIX`
 - `SUPERMARKT_TRUSTED_NETWORKS`
 - `SUPERMARKT_TRUSTED_PROXIES`
-- `SUPERMARKT_CHROMIUM_BINARY`
+- `SUPERMARKT_CHROMIUM`
 - `KORBKLAR_IMAGE`
 - `KORBKLAR_BIND_ADDRESS`
 - `KORBKLAR_SUBNET`
@@ -460,7 +460,7 @@ The internal Python package name `supermarkt` remains for technical reasons. Ada
 
 Retailer websites and undocumented interfaces may change at any time. An individual adapter may fail temporarily without making KorbKlar unusable as a whole. Where suitable regional fallback data exists, it can replace only the affected retailer; other reachable sources remain usable.
 
-The Kaufland adapter needs a Chromium-compatible browser. The Docker image ships one; a local checkout probes the usual names and install locations for Chromium, Chrome and Edge, and `SUPERMARKT_CHROMIUM_BINARY` sets the path explicitly. Without a browser only that one adapter fails and Marktguru stands in for it.
+The Kaufland adapter needs a Chromium-compatible browser. The Docker image ships one; a local checkout probes the usual names and install locations for Chromium, Chrome and Edge, and `SUPERMARKT_CHROMIUM` sets the path explicitly. Without a browser only that one adapter fails and Marktguru stands in for it.
 
 KorbKlar does not invent missing prices or estimate unknown loyalty benefits. Completeness and freshness depend on reachable regional source data.
 
@@ -492,7 +492,21 @@ Copyright © 2026 lesecuritae for Tarnkappe.info.
 
 KorbKlar is independent and is not affiliated with any retailer or loyalty program mentioned. Brand, retailer, and product names belong to their respective owners.
 
+## What is new in 0.0.7
+
+Version 0.0.7 adds native Windows setup and portable discovery of Chromium, Chrome, and Edge. An optional control deliberately refreshes offers by bypassing the server-side offer cache for that search only. Leverkusen postcodes are recorded as exact ALDI South evidence while prefix-based guesses remain excluded. HTTPS verification uses a reproducible CA bundle while certificate and hostname verification remain enabled. Explicit euro-denominated REWE Bonus amounts are now reflected in the effective price when REWE Bonus is selected.
+
+## What is new in 0.0.6
+
+The ALDI resolver now contains additional postcode-exact, versioned evidence from official store regions for Aachen, Düren, Heinsberg and selected Ruhr border areas. It explicitly does not classify the entire `52xxx` prefix; unknown postcodes still use bounded store-location evidence. Users who know their local stores may optionally select ALDI North, ALDI South, or both on the start page. That explicit choice overrides automatic detection and never substitutes the other region.
+
+## What is new in 0.0.5
+
+Offer images remain visible in the browser-local shopping list through the secured local image proxy, including after reload. Explicitly published deposits from ALDI, REWE and Marktguru are stored separately and calculated by quantity. KorbKlar never guesses a deposit from packaging alone.
+
 ## What is new in 0.0.4
+
+Revision: Zenq & Enzo
 
 ALDI Süd offer validity is now resolved from the individual product card first, its offer group second, and the general weekly range only as a fallback. Weekly, Thursday, and Friday/Saturday promotions therefore remain distinct. Redundant parser paths and expired day groups no longer create duplicate offers, while genuinely different promotions are retained.
 

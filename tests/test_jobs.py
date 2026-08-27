@@ -24,6 +24,24 @@ def test_search_job_reports_real_progress_and_completion():
     assert job["search_id"] == "job-result"
 
 
+def test_search_job_forwards_manual_aldi_choice():
+    class RecordingEngine(ProgressEngine):
+        seen = None
+
+        def snapshot(self, postal_code, aldi_region, refresh, progress=None):
+            self.seen = (postal_code, aldi_region)
+            return super().snapshot(postal_code, aldi_region, refresh, progress)
+
+    engine = RecordingEngine()
+    jobs = SearchJobStore(engine)
+    job_id = jobs.start("51643", "both")
+    for _ in range(100):
+        if jobs.get(job_id)["status"] == "completed":
+            break
+        time.sleep(0.01)
+    assert engine.seen == ("51643", "both")
+
+
 def test_search_job_reports_failures():
     class BrokenEngine:
         def snapshot(self, *args, **kwargs):
@@ -38,3 +56,23 @@ def test_search_job_reports_failures():
         time.sleep(0.01)
     assert job["status"] == "failed"
     assert job["error"] == "synthetic failure"
+
+
+def test_search_job_forwards_refresh_request():
+    """Der Haken auf der Startseite muss den Servercache wirklich übergehen."""
+    class RecordingEngine(ProgressEngine):
+        seen = None
+
+        def snapshot(self, postal_code, aldi_region, refresh, progress=None):
+            self.seen = refresh
+            return super().snapshot(postal_code, aldi_region, refresh, progress)
+
+    for requested in (True, False):
+        engine = RecordingEngine()
+        jobs = SearchJobStore(engine)
+        job_id = jobs.start("51377", "auto", requested)
+        for _ in range(100):
+            if jobs.get(job_id)["status"] == "completed":
+                break
+            time.sleep(0.01)
+        assert engine.seen is requested

@@ -77,12 +77,47 @@ def test_text_parser_checkbox_quantity_prices_crlf_and_plain_text():
     assert result["valid"][2]["price_cents"] is None
 
 
+def test_copy_and_share_text_is_complete_readable_and_html_free():
+    items = [
+        {"name": "Milch", "quantity": 2, "retailer": "ALDI Nord", "price_cents": 129},
+        {"name": "Energy Drink", "quantity": 4, "retailer": "REWE", "price_cents": 79, "deposit_cents": 25},
+        {"name": "Brot", "quantity": 1, "price_cents": None},
+    ]
+    text = js(f"m.exportText({json.dumps(items)},new Date('2026-08-26T00:00:00Z'))")
+    readable = text.replace("\xa0", " ")
+    assert "☐ 2× Milch | 1,29 € je" in readable
+    assert "☐ 4× Energy Drink | 0,79 € je | +0,25 € Pfand je" in readable
+    assert "☐ 1× Brot | Preis nicht bekannt" in readable
+    assert "Waren: 5,74 €" in readable
+    assert "Pfand: 1,00 €" in readable
+    assert "Bekannte Gesamtsumme: 6,74 €" in readable
+    assert "1 Artikel ohne Preis" in readable
+    assert "<" not in readable and ">" not in readable
+    assert "\n" in readable and "\ufffd" not in readable
+
+
 def test_json_roundtrip_schema_and_separate_ids():
     result = js("m.validateDocument(m.exportDocument([{name:'Milch',quantity:2,unit:'Stück',pack:'1 l',offer_id:'offer-1',source_product_id:'source-2',ean:null,external_ids:{grocy:null}}]))[0]")
     assert result["local_item_id"] != result["offer_id"]
     assert result["offer_id"] == "offer-1"
     assert result["source_product_id"] == "source-2"
     assert result["ean"] is None
+
+
+def test_offer_image_uses_only_the_local_proxy_and_survives_json_roundtrip():
+    result = js("""(()=>{
+      const item=m.offerToItem({offer_id:'energy-1',product:'Energy',retailer:'REWE',regular_price:0.79,deposit:0.25,image_url:'/image?src=https%3A%2F%2Fexample.invalid%2Fenergy.jpg&sig=signed'});
+      const restored=m.validateDocument(m.exportDocument([item]))[0];
+      return {item,restored,resolved:m.resolvedImageUrl(restored.image_url,'https://korbklar.example')};
+    })()""")
+    assert result["item"]["image_url"].startswith("/image?")
+    assert result["restored"]["image_url"] == result["item"]["image_url"]
+    assert result["resolved"].startswith("https://korbklar.example/image?")
+
+
+def test_shopping_image_rejects_external_and_script_urls():
+    assert js("m.canonicalItem({name:'A',image_url:'javascript:alert(1)'}).image_url") is None
+    assert js("m.resolvedImageUrl('https://tracker.invalid/image?x=1','https://korbklar.example')") is None
 
 
 def test_import_limits_and_future_schema_are_rejected():

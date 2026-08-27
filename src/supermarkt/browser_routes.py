@@ -7,13 +7,17 @@ from fastapi.responses import HTMLResponse, RedirectResponse, Response
 
 from .access import build_result_path, verify_result_token
 from .assets import FAVICON_SVG
-from .common import clean_text, validate_postal_code
+from .common import clean_text, normalize_aldi_region, validate_postal_code
 from .loyalty import normalize_program_ids
 from .models import ToolError
 from . import runtime
 from .ui import build_home_html, build_results_html, build_shopping_html
 
 router = APIRouter()
+
+
+def _wants_refresh(value: str) -> bool:
+    return clean_text(value).casefold() in {"1", "on", "true", "ja", "yes"}
 
 
 @router.get("/favicon.svg", include_in_schema=False)
@@ -37,29 +41,24 @@ def shopping() -> HTMLResponse:
 
 
 @router.post("/search", include_in_schema=False)
-def browser_search(postal_code_input: Annotated[str, Form(alias="postal_code")] = "") -> Response:
+def browser_search(postal_code_input: Annotated[str, Form(alias="postal_code")] = "", aldi_region_input: Annotated[str, Form(alias="aldi_region")] = "auto", refresh_input: Annotated[str, Form(alias="refresh")] = "") -> Response:
     raw_postal_code = clean_text(postal_code_input)
     postal_code = validate_postal_code(raw_postal_code)
     if postal_code is None:
         return HTMLResponse(build_home_html(error="Bitte eine gültige fünfstellige deutsche Postleitzahl eingeben.", postal_code=raw_postal_code), status_code=400, headers={"Cache-Control": "no-store"})
     try:
-        snapshot, _ = runtime.get_engine().snapshot(postal_code, "auto", False)
+        snapshot, _ = runtime.get_engine().snapshot(postal_code, normalize_aldi_region(aldi_region_input), _wants_refresh(refresh_input))
     except ToolError as exc:
         return HTMLResponse(build_home_html(error=str(exc), postal_code=postal_code), status_code=502, headers={"Cache-Control": "no-store"})
     return RedirectResponse(build_result_path(snapshot["search_id"]), status_code=303)
 
 
 @router.post("/search/jobs", include_in_schema=False)
-def start_search_job(
-    postal_code_input: Annotated[str, Form(alias="postal_code")] = "",
-    refresh_input: Annotated[str, Form(alias="refresh")] = "",
-) -> dict[str, str]:
+def start_search_job(postal_code_input: Annotated[str, Form(alias="postal_code")] = "", aldi_region_input: Annotated[str, Form(alias="aldi_region")] = "auto", refresh_input: Annotated[str, Form(alias="refresh")] = "") -> dict[str, str]:
     postal_code = validate_postal_code(clean_text(postal_code_input))
     if postal_code is None:
         raise HTTPException(status_code=400, detail="Bitte eine gültige fünfstellige deutsche Postleitzahl eingeben.")
-    # A refresh skips the snapshot cache and re-queries every source.
-    refresh = clean_text(refresh_input).casefold() in {"1", "true", "yes", "on", "ja"}
-    return {"job_id": runtime.get_jobs().start(postal_code, refresh)}
+    return {"job_id": runtime.get_jobs().start(postal_code, normalize_aldi_region(aldi_region_input), _wants_refresh(refresh_input))}
 
 
 @router.get("/search/jobs/{job_id}", include_in_schema=False)
@@ -76,12 +75,8 @@ def search_job(job_id: str) -> dict:
 def results_page(search_id: str, token: str = Query(default=""), loyalty: str = Query(default="", max_length=500)) -> HTMLResponse:
     verify_result_token(search_id, token)
     try:
-        snapshot = runtime.get_engine().by_id(search_id)
+        runtime.get_engine().by_id(search_id)
     except ToolError as exc:
         raise HTTPException(status_code=410, detail=str(exc)) from exc
     selected = normalize_program_ids(loyalty.split(","))
-    postal_code = clean_text(snapshot.get("postal_code"))
-    return HTMLResponse(
-        build_results_html(search_id, token, selected, postal_code),
-        headers={"Cache-Control": "no-store"},
-    )
+    return HTMLResponse(build_results_html(search_id, token, selected), headers={"Cache-Control": "no-store"})

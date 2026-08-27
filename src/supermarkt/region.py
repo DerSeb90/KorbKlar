@@ -25,15 +25,32 @@ class AldiRegionResolver:
         self.last_regions: tuple[str, ...] = ()
         self.last_confidence = ""
 
-    # Versioned, deliberately postcode-exact official evidence for release
-    # regression and border handling. Source: ALDI Nord Filialnetz-Geographie
-    # (2025-07-14) and the retailers' official store detail pages. This is not
-    # a prefix heuristic; unknown postcodes still go through geocoding.
-    SCHEMA_VERSION = 2
+    # Versioned, deliberately postcode-exact evidence from the retailers'
+    # official store pages. Ranges below are expanded into exact postcodes;
+    # this is not a 52xxx/prefix heuristic. Unknown codes still use bounded
+    # geocoding, while genuinely split cities remain explicit border cases.
+    SCHEMA_VERSION = 4
     OFFICIAL_EVIDENCE: dict[str, tuple[str, ...]] = {
         "01067": ("nord",),
         "28195": ("nord",),
-        "52068": ("sued",), "52070": ("sued",), "80331": ("sued",),
+        **{str(code): ("sued",) for code in range(52062, 52081)},
+        "52134": ("sued",), "52146": ("sued",), "52152": ("sued",),
+        "52156": ("sued",), "52159": ("sued",), "52222": ("sued",),
+        "52249": ("sued",),
+        **{str(code): ("sued",) for code in range(52349, 52356)},
+        "52372": ("sued",), "52379": ("sued",), "52382": ("sued",),
+        "52385": ("sued",), "52388": ("sued",), "52391": ("sued",),
+        "52393": ("sued",), "52396": ("sued",), "52399": ("sued",),
+        "52428": ("sued",), "52441": ("sued",), "52445": ("sued",),
+        "52457": ("sued",), "52459": ("sued",), "52477": ("sued",),
+        "52499": ("sued",), "52511": ("sued",), "52525": ("sued",),
+        "52531": ("sued",), "52538": ("sued",),
+        **{str(code): ("sued",) for code in range(45468, 45482)},
+        "47179": ("sued",), "46282": ("nord",), "80331": ("sued",),
+        # Leverkusen: ALDI Süd führt 14 Filialen im Stadtgebiet, ALDI Nord keine.
+        # Nachbarschaft ohne verwertbare OSM-Merkmale, daher PLZ-genau belegt.
+        "51371": ("sued",), "51373": ("sued",), "51375": ("sued",),
+        "51377": ("sued",), "51379": ("sued",), "51381": ("sued",),
         "51643": ("nord", "sued"), "57072": ("nord", "sued"),
     }
 

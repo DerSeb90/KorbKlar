@@ -381,6 +381,22 @@ pip install -e .
 uvicorn supermarkt.asgi:app --host 0.0.0.0 --port 8000
 ```
 
+### Windows mit Startsymbol
+
+Für den Alltagsbetrieb auf einem Windows-PC liegt ein fertiger Weg ohne Docker bei. Voraussetzung ist Python 3.12 oder neuer, zu bekommen über `winget install Python.Python.3.13` oder von [python.org](https://www.python.org/downloads/windows/) - im Setup den Haken bei "Add python.exe to PATH" setzen.
+
+1. Dieses Verzeichnis an einen dauerhaften Ort legen, zum Beispiel `C:\KorbKlar`.
+2. `windows\install.cmd` per Doppelklick starten. Das legt die virtuelle Umgebung an, installiert alles Nötige und erzeugt eine Verknüpfung **KorbKlar** auf dem Desktop.
+3. Ab jetzt genügt ein Doppelklick auf das Desktop-Symbol. KorbKlar startet und der Browser öffnet sich nach wenigen Sekunden auf <http://127.0.0.1:8000/>.
+
+Das schwarze Fenster gehört dazu und zeigt an, dass KorbKlar läuft. Es zu schließen beendet das Programm. Ein anderer Port lässt sich über die Umgebungsvariable `SUPERMARKT_PORT` vorgeben.
+
+Die Angebote von ALDI Süd, Kaufland und REWE werden über einen Browser im Hintergrund geladen. KorbKlar sucht dafür selbstständig nach Chromium, Google Chrome oder dem auf Windows vorinstallierten Microsoft Edge. Nur wenn keiner davon gefunden wird, muss `SUPERMARKT_CHROMIUM` auf die passende `.exe` zeigen. Alle übrigen Händler brauchen keinen Browser.
+
+KorbKlar hört bewusst nur auf `127.0.0.1` und ist damit ausschließlich auf diesem PC erreichbar. Wer die Oberfläche auch am Handy im eigenen WLAN nutzen möchte, startet stattdessen mit `--host 0.0.0.0` und öffnet den Port in der Windows-Firewall. Da die Oberfläche keine eigene Anmeldung hat, ist das nur im vertrauenswürdigen Heimnetz sinnvoll.
+
+Nach einem Update des Verzeichnisses `windows\install.cmd` erneut starten.
+
 ## Entwicklung und Tests
 
 ```bash
@@ -432,7 +448,7 @@ Die Händleradapter kennen die jeweiligen Datenquellen. Die Oberfläche berechne
 
 Händlerseiten und nicht dokumentierte Webschnittstellen können sich ändern. Ein einzelner Adapter kann deshalb zeitweise ausfallen, obwohl KorbKlar selbst läuft. Wo ein geeigneter regionaler Ersatzdatenweg vorhanden ist, kann dieser händlerspezifisch einspringen. Ansonsten bleibt der Vergleich mit den übrigen erreichbaren Quellen nutzbar.
 
-Der Kaufland-Adapter benötigt einen Chromium-kompatiblen Browser. Das Docker-Image bringt ihn mit; bei lokaler Installation werden die üblichen Namen und Installationspfade von Chromium, Chrome und Edge gesucht, alternativ setzt `SUPERMARKT_CHROMIUM_BINARY` den Pfad. Ohne Browser fällt nur dieser eine Adapter aus und Marktguru springt für ihn ein.
+Der Kaufland-Adapter benötigt einen Chromium-kompatiblen Browser. Das Docker-Image bringt ihn mit; bei lokaler Installation werden die üblichen Namen und Installationspfade von Chromium, Chrome und Edge gesucht, alternativ setzt `SUPERMARKT_CHROMIUM` den Pfad. Ohne Browser fällt nur dieser eine Adapter aus und Marktguru springt für ihn ein.
 
 KorbKlar erfindet keine fehlenden Preise und schätzt keine unbekannten Bonusvorteile. Die Ergebnisse sind nur so vollständig und aktuell wie die erreichbaren Quelldaten.
 
@@ -466,7 +482,21 @@ SUPERMARKT_DATA_DIR=.devdata python -m supermarkt.diagnostics 26123
 Die oben beschriebene Anbindung an KitchenOwl ist umgesetzt. Weitere Integrationen sind für spätere Versionen vorgesehen, darunter Grocy und zusätzliche REST-/OpenAPI-Anbindungen für lokale Automationen und Agenten.
 
 
+## Neuerungen in 0.0.7
+
+Version 0.0.7 ergänzt eine native Windows-Einrichtung und erkennt Chromium, Chrome sowie Edge portabel. Ein optionaler Schalter lädt Angebote bewusst neu und umgeht nur für diese Suche den serverseitigen Angebotscache. Leverkusener PLZ sind als exakte ALDI-Süd-Nachweise ergänzt; Präfixschätzungen bleiben ausgeschlossen. Die HTTPS-Prüfung nutzt einen reproduzierbaren CA-Satz bei weiterhin aktiver Zertifikats- und Hostnamenprüfung. Explizit in Euro ausgewiesene REWE-Bonusbeträge werden nun bei ausgewähltem REWE Bonus im effektiven Preis berücksichtigt.
+
+## Neuerungen in 0.0.6
+
+Der ALDI-Resolver enthält zusätzliche PLZ-genaue, versionierte Nachweise aus den offiziellen Filialgebieten für Aachen, Düren, Heinsberg und ausgewählte Grenzregionen im Ruhrgebiet. Eine allgemeine Zuordnung anhand von `52xxx` findet ausdrücklich nicht statt; unbekannte PLZ werden weiterhin anhand begrenzter Standortdaten geprüft. Wer die örtliche Situation kennt, kann auf der Startseite optional ALDI Nord, ALDI Süd oder beide Regionen vorgeben. Diese bewusste Auswahl hat Vorrang vor der Automatik und lädt niemals die andere Region als Ersatz.
+
+## Neuerungen in 0.0.5
+
+Produktbilder aus Angeboten bleiben über das lokale, abgesicherte Bildproxy-Ziel in der browserlokalen Einkaufsliste sichtbar – auch nach einem Reload. Explizit veröffentlichte Pfandbeträge von ALDI, REWE und Marktguru werden getrennt gespeichert und mengenabhängig berechnet. KorbKlar erfindet weiterhin kein Pfand anhand einer Verpackungsart.
+
 ## Neuerungen in 0.0.4
+
+Revision: Zenq & Enzo
 
 ALDI-Süd-Angebote übernehmen ihren Gültigkeitszeitraum jetzt vorrangig aus der einzelnen Produktkarte, danach aus der zugehörigen Aktionsgruppe und nur zuletzt aus dem allgemeinen Wochenzeitraum. Dadurch werden Wochen-, Donnerstag- sowie Freitag-/Samstag-Aktionen korrekt getrennt. Redundante Parserpfade und abgelaufene Tagesgruppen erzeugen keine Doppelangebote mehr; echte unterschiedliche Aktionen bleiben erhalten.
 

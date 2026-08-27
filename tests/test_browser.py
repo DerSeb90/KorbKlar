@@ -11,6 +11,8 @@ def test_home_and_static_assets():
     response = client.get("/")
     assert response.status_code == 200
     assert 'name="postal_code"' in response.text
+    assert 'name="aldi_region"' in response.text
+    assert 'value="both"' in response.text
     assert 'href="/static/home.css"' in response.text
     assert 'src="/static/home-v2.js"' in response.text
     assert '<progress id="statusProgress"' in response.text
@@ -58,3 +60,31 @@ def test_ui_javascript_keeps_expected_behaviour():
     assert 'classList.toggle("single-retailer",Boolean(retailer))' in script
     assert 'category_counts' in script
     assert '.table.single-retailer .retailer{display:none}' in css
+
+
+def test_home_offers_a_refresh_toggle():
+    client = TestClient(app)
+    response = client.get("/")
+    assert response.status_code == 200
+    assert 'name="refresh"' in response.text
+    assert 'type="checkbox"' in response.text
+
+
+def test_search_job_route_passes_refresh_to_the_job_store(monkeypatch):
+    from supermarkt import runtime
+
+    recorded = {}
+
+    class RecordingJobs:
+        def start(self, postal_code, aldi_region="auto", refresh=False):
+            recorded["value"] = refresh
+            return "job-id"
+
+    monkeypatch.setattr(runtime, "get_jobs", lambda: RecordingJobs())
+    client = TestClient(app)
+
+    client.post("/search/jobs", data={"postal_code": "01067"})
+    assert recorded["value"] is False
+
+    client.post("/search/jobs", data={"postal_code": "01067", "refresh": "1"})
+    assert recorded["value"] is True
