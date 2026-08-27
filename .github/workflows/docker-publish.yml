@@ -1,15 +1,14 @@
 name: Publish Docker image
 
 on:
+  # Lets a fork publish without waiting for the next push. GitHub only offers
+  # the manual run when this trigger exists on the default branch.
   workflow_dispatch:
   push:
     branches:
       - main
     tags:
       - "v*.*.*"
-  # Lets a fork publish without waiting for the next push. GitHub only offers
-  # the manual run when this trigger exists on the default branch.
-  workflow_dispatch:
 
 permissions:
   contents: read

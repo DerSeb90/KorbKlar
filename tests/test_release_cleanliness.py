@@ -3,6 +3,8 @@ import re
 import subprocess
 import sys
 import tomllib
+
+import pytest
 from pathlib import Path
 
 
@@ -282,3 +284,33 @@ def test_every_relative_documentation_link_resolves():
             if not (page.parent / target).resolve().is_file():
                 broken.append(f"{page.name} -> {target}")
     assert not broken, broken
+
+
+def test_workflow_files_define_each_key_once():
+    """A repeated key makes GitHub reject the whole workflow.
+
+    Merging a fork is exactly how one arrives twice: the same trigger added
+    upstream and here lands in two places, and YAML itself does not object.
+    """
+    yaml = pytest.importorskip("yaml")
+
+    class _Strict(yaml.SafeLoader):
+        pass
+
+    def _reject_duplicates(loader, node, deep=False):
+        seen = set()
+        for key_node, _ in node.value:
+            key = loader.construct_object(key_node, deep=deep)
+            assert key not in seen, f"{key!r} defined twice"
+            seen.add(key)
+        return yaml.SafeLoader.construct_mapping(loader, node, deep)
+
+    _Strict.add_constructor(
+        yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG, _reject_duplicates
+    )
+
+    workflows = sorted((ROOT / ".github/workflows").glob("*.yml"))
+    assert workflows
+    for path in workflows:
+        with path.open(encoding="utf-8") as handle:
+            yaml.load(handle, _Strict)
