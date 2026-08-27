@@ -228,7 +228,8 @@ def test_partial_broad_marktguru_result_is_completed_by_retailer_queries(monkeyp
     assert counts["Netto"] == 1
     assert marketguru.queries
     queried = set(marketguru.queries[0])
-    assert {"Lidl", "PENNY", "Netto", "Globus", "REWE", "EDEKA", "Kaufland"} <= queried
+    assert {"Lidl", "PENNY", "Netto", "REWE", "EDEKA", "Kaufland"} <= queried
+    assert "Globus" not in queried
 
 
 def test_official_catalogue_wins_over_marktguru_for_direct_retailer(monkeypatch):

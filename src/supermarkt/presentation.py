@@ -77,6 +77,13 @@ def _benefit_text(offer: Offer) -> str:
     return " · ".join(parts)
 
 
+def _cashback_credit(offer: Offer) -> tuple[float, str]:
+    benefits = [benefit for benefit in offer.applied_benefits if benefit.kind == "cashback" and benefit.value > 0]
+    total = sum(benefit.value for benefit in benefits)
+    labels = ", ".join(dict.fromkeys(benefit_label(benefit) for benefit in benefits))
+    return total, f"+ {format_euro(total)} {labels}" if total > 0 and labels else ""
+
+
 def offer_for_response(
     offer: Offer,
     include_image_urls: bool,
@@ -93,6 +100,7 @@ def offer_for_response(
         else regular
     )
 
+    cashback_credit, cashback_note = _cashback_credit(offer)
     result = {
         "offer_id": offer.offer_id,
         "retailer": offer.retailer,
@@ -117,6 +125,9 @@ def offer_for_response(
             else ""
         ),
         "loyalty_benefit": _benefit_text(offer),
+        "cashback_credit": cashback_credit,
+        "cashback_credit_text": format_euro(cashback_credit) if cashback_credit > 0 else "",
+        "cashback_credit_note": cashback_note,
         "pack": format_pack(offer.pack_signature) if offer.pack_signature else "",
         "unit_price": _unit_price_label(offer, regular),
         "selected_unit_price": (

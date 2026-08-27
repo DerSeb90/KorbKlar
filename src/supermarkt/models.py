@@ -56,6 +56,28 @@ SPEC_BY_NAME = {spec.name: spec for spec in RETAILER_SPECS}
 AGGREGATOR_RETAILERS = frozenset({"Lidl", "PENNY", "Netto", "Globus", "Combi", "famila Nordwest"})
 
 
+def resolve_retailer_names(values: list[str] | tuple[str, ...]) -> tuple[tuple[str, ...], tuple[str, ...]]:
+    """Return canonical retailer names and unknown inputs, preserving user order."""
+    aliases = {
+        alias.casefold(): spec.name
+        for spec in RETAILER_SPECS
+        for alias in (spec.name, *spec.aliases)
+    }
+    resolved: list[str] = []
+    unknown: list[str] = []
+    for value in values:
+        raw = str(value or "").strip()
+        if not raw:
+            continue
+        canonical = aliases.get(raw.casefold())
+        if canonical is None:
+            if raw not in unknown:
+                unknown.append(raw)
+        elif canonical not in resolved:
+            resolved.append(canonical)
+    return tuple(resolved), tuple(unknown)
+
+
 @dataclass(frozen=True)
 class RetailerContext:
     name: str

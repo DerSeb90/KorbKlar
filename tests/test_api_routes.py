@@ -29,6 +29,21 @@ def test_request_rejects_unknown_loyalty_program():
         SupermarketRequest(postal_code="01067", loyalty_programs=["nicht_echt"])
 
 
+def test_request_accepts_one_or_multiple_known_retailers():
+    one = SupermarketRequest(postal_code="01067", retailers=["REWE"])
+    several = SupermarketRequest(postal_code="01067", retailers=["rewe", "Kaufland", "Globus"])
+    all_retailers = SupermarketRequest(postal_code="01067")
+    assert one.retailers == ["REWE"]
+    assert several.retailers == ["REWE", "Kaufland", "Globus"]
+    assert all_retailers.retailers == []
+    assert SupermarketRequest(postal_code="01067", rewe_market_id="123456").rewe_market_id == "123456"
+
+
+def test_request_rejects_unknown_retailer():
+    with pytest.raises(ValidationError, match="Unbekannte Händler"):
+        SupermarketRequest(postal_code="01067", retailers=["REWE", "Nicht Echt"])
+
+
 def test_openapi_exposes_only_compare_operation():
     operations=[]
     for path, methods in app.openapi()["paths"].items():

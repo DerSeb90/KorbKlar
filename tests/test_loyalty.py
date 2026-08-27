@@ -26,8 +26,8 @@ def test_multiple_programs_can_be_selected_together():
     )
     checkout, effective, savings, applied = apply_selected_programs(item, ("edeka_app", "payback"))
     assert checkout == 1.80
-    assert effective == 1.70
-    assert savings == pytest.approx(0.30)
+    assert effective == 1.80
+    assert savings == pytest.approx(0.20)
     assert {benefit.program_id for benefit in applied} == {"edeka_app", "payback"}
 
 
@@ -156,6 +156,38 @@ def test_regular_and_selected_unit_prices_are_kept_separate():
     response = offer_for_response(compared, include_image_urls=False)
 
     assert response["unit_price"] == "4,00 €/kg"
-    assert response["selected_unit_price"] == "3,60 €/kg"
+    assert response["selected_unit_price"] == ""
     assert response["checkout_price_text"] == "2,00 €"
-    assert response["effective_price_text"] == "1,80 €"
+    assert response["effective_price_text"] == "2,00 €"
+    assert response["cashback_credit_text"] == "0,20 €"
+
+
+def test_rewe_bonus_cashback_is_credit_not_a_reduced_product_price():
+    from supermarkt.presentation import offer_for_response
+
+    item = Offer(
+        offer_id="rewe-cashback",
+        retailer="REWE",
+        category="Test",
+        name="Joghurt",
+        brand="",
+        description="500 g",
+        price=2.99,
+        base_price=5.98,
+        base_unit="kg",
+        pack_signature="500g",
+        validity_label="Aktuell",
+        match_key="joghurt|500g",
+        source_url="https://www.rewe.de/",
+        benefits=(LoyaltyBenefit("rewe_bonus", "cashback", 0.50, "REWE Bonus"),),
+    )
+
+    compared = OfferComparator().compare([item], ("rewe_bonus",), "all").offers[0]
+    response = offer_for_response(compared, include_image_urls=False)
+
+    assert response["checkout_price"] == 2.99
+    assert response["effective_price"] == 2.99
+    assert response["loyalty_savings"] == 0.0
+    assert response["cashback_credit"] == 0.50
+    assert response["cashback_credit_text"] == "0,50 €"
+    assert response["loyalty_benefit"] == "REWE Bonus: 0,50 € Guthaben"

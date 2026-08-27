@@ -4,7 +4,7 @@ from supermarkt.jobs import SearchJobStore
 
 
 class ProgressEngine:
-    def snapshot(self, postal_code, aldi_region, refresh, progress=None):
+    def snapshot(self, postal_code, aldi_region, refresh, progress=None, retailers=(), rewe_market_id=""):
         progress(status="loading", progress=35, source="Testquelle", retailer="Lidl",
                  category="Backwaren", step="Laden", processed_sources=2,
                  total_sources=6, processed_products=42)
@@ -28,9 +28,9 @@ def test_search_job_forwards_manual_aldi_choice():
     class RecordingEngine(ProgressEngine):
         seen = None
 
-        def snapshot(self, postal_code, aldi_region, refresh, progress=None):
+        def snapshot(self, postal_code, aldi_region, refresh, progress=None, retailers=(), rewe_market_id=""):
             self.seen = (postal_code, aldi_region)
-            return super().snapshot(postal_code, aldi_region, refresh, progress)
+            return super().snapshot(postal_code, aldi_region, refresh, progress, retailers)
 
     engine = RecordingEngine()
     jobs = SearchJobStore(engine)
@@ -63,9 +63,9 @@ def test_search_job_forwards_refresh_request():
     class RecordingEngine(ProgressEngine):
         seen = None
 
-        def snapshot(self, postal_code, aldi_region, refresh, progress=None):
+        def snapshot(self, postal_code, aldi_region, refresh, progress=None, retailers=(), rewe_market_id=""):
             self.seen = refresh
-            return super().snapshot(postal_code, aldi_region, refresh, progress)
+            return super().snapshot(postal_code, aldi_region, refresh, progress, retailers)
 
     for requested in (True, False):
         engine = RecordingEngine()
@@ -76,3 +76,21 @@ def test_search_job_forwards_refresh_request():
                 break
             time.sleep(0.01)
         assert engine.seen is requested
+
+
+def test_search_job_forwards_retailer_selection():
+    class RecordingEngine(ProgressEngine):
+        seen = None
+
+        def snapshot(self, postal_code, aldi_region, refresh, progress=None, retailers=(), rewe_market_id=""):
+            self.seen = retailers
+            return super().snapshot(postal_code, aldi_region, refresh, progress, retailers)
+
+    engine = RecordingEngine()
+    jobs = SearchJobStore(engine)
+    job_id = jobs.start("50677", retailers=("REWE", "Globus"))
+    for _ in range(100):
+        if jobs.get(job_id)["status"] == "completed":
+            break
+        time.sleep(0.01)
+    assert engine.seen == ("REWE", "Globus")

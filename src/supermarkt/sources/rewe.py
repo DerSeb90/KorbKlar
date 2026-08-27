@@ -366,17 +366,11 @@ class OfficialReweSource:
             kind = 2
         return kind, folded_label, folded_url
 
-    def _find_market(self, postal_code: str, *, use_cache: bool = True) -> tuple[Any, str, str, str]:
+    def _find_markets(self, postal_code: str) -> tuple[Any, list[tuple[str, str, str]]]:
         try:
             from bs4 import BeautifulSoup
         except Exception as exc:
             raise ToolError(f"REWE benötigt BeautifulSoup: {exc}") from exc
-
-        if use_cache:
-            cached = self._cached_market(postal_code)
-            if cached is not None:
-                market_id, market_url, label = cached
-                return self._session(), market_id, market_url, label
 
         locality = clean_text(self.locator.locality(postal_code))
         if not locality:
@@ -420,12 +414,40 @@ class OfficialReweSource:
         if not exact:
             raise ToolError(f"REWE fand in {locality} keinen Markt mit exakt PLZ {postal_code}")
 
+        exact.sort(key=self._market_rank)
+        return session, exact
+
+    def markets(self, postal_code: str) -> list[dict[str, str]]:
+        """Return every exact-postcode REWE market available for manual selection."""
+        _session, exact = self._find_markets(postal_code)
+        return [
+            {"market_id": market_id, "market_url": market_url, "label": label}
+            for market_id, market_url, label in exact
+        ]
+
+    def _find_market(self, postal_code: str, *, use_cache: bool = True, market_id: str = "") -> tuple[Any, str, str, str]:
+        requested_market_id = clean_text(market_id)
+        if use_cache and not requested_market_id:
+            cached = self._cached_market(postal_code)
+            if cached is not None:
+                cached_id, market_url, label = cached
+                return self._session(), cached_id, market_url, label
+
+        session, exact = self._find_markets(postal_code)
+        if requested_market_id:
+            selected = next((item for item in exact if item[0] == requested_market_id), None)
+            if selected is None:
+                raise ToolError(f"Der gewählte REWE-Markt gehört nicht zur PLZ {postal_code}")
+        else:
+            selected = exact[0]
+
         # A postcode can contain several REWE stores. Keep the choice deterministic
         # instead of depending on the order of links in the market-search page.
-        market_id, market_url, label = min(exact, key=self._market_rank)
-        self._cache_market(postal_code, market_id, market_url, label)
+        selected_id, market_url, label = selected
+        if not requested_market_id:
+            self._cache_market(postal_code, selected_id, market_url, label)
         self.last_discovery = "REWE Marktsuche"
-        return session, market_id, market_url, label
+        return session, selected_id, market_url, label
 
     @staticmethod
     def _offer_title(title_node: Any) -> str:
@@ -536,17 +558,18 @@ class OfficialReweSource:
             else (),
         ), False
 
-    def load(self, postal_code: str) -> list[Offer]:
+    def load(self, postal_code: str, market_id: str = "") -> list[Offer]:
         try:
             from bs4 import BeautifulSoup
         except Exception as exc:
             raise ToolError(f"REWE benötigt BeautifulSoup: {exc}") from exc
 
-        session, market_id, market_url, market_label = self._find_market(postal_code)
+        requested_market_id = clean_text(market_id)
+        session, market_id, market_url, market_label = self._find_market(postal_code, market_id=requested_market_id)
         target_week = self._target_week()
         request_url = self._market_week_url(market_url)
         response = session.get(request_url, timeout=self.timeout_seconds)
-        if response.status_code != 200 and self.last_discovery == "24h-Marktcache":
+        if response.status_code != 200 and self.last_discovery == "24h-Marktcache" and not requested_market_id:
             self._drop_cached_market(postal_code)
             session, market_id, market_url, market_label = self._find_market(postal_code, use_cache=False)
             request_url = self._market_week_url(market_url)

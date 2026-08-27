@@ -504,6 +504,9 @@ class OfficialAldiSource:
         if is_rejected_image_url(image_url):
             image_url = ""
         identifier = product_url.rstrip("/").rsplit("-", 1)[-1] or str(index)
+        suffix = clean_text(card.get("offer_id_suffix"))
+        if suffix:
+            identifier = f"{identifier}:{suffix}"
         return Offer(
             offer_id=f"aldi-sued:{identifier}", retailer="ALDI Süd",
             category=clean_text(category) or "Wochenangebote", name=name, brand="", description="",
@@ -515,6 +518,53 @@ class OfficialAldiSource:
             valid_from=resolved_start.isoformat() if resolved_start else None,
             valid_until=resolved_end.isoformat() if resolved_end else None,
         )
+
+    def _south_card_to_offers(
+        self,
+        card: dict[str, Any],
+        start: Optional[date],
+        end: Optional[date],
+        index: int,
+        category: str = "Wochenangebote",
+    ) -> list[Offer]:
+        """Expand a visual ALDI frame containing several separately priced products."""
+        parts = [clean_text(part) for part in card.get("text_parts") or [] if clean_text(part)]
+        segments: list[list[str]] = []
+        current: list[str] = []
+        for part in parts:
+            current.append(part)
+            price_matches = re.findall(r"\d{1,4}[,.]\d{2}\s*€", part)
+            is_base_price = bool(re.search(r"(?:1\s*(?:kg|l)|100\s*(?:g|ml))\s*=", part, re.I))
+            if price_matches and not is_base_price:
+                segments.append(current)
+                current = []
+        if current and segments:
+            segments[-1].extend(current)
+
+        # A normal card remains on the long-established single-offer path.
+        if len(segments) < 2:
+            offer = self._south_card_to_offer(card, start, end, index, category)
+            return [offer] if offer is not None else []
+
+        offers: list[Offer] = []
+        parent_label = clean_text(card.get("label"))
+        for product_index, segment in enumerate(segments, start=1):
+            label = next(
+                (
+                    part for part in segment
+                    if "€" not in part
+                    and not re.search(r"^(?:aktion|nur|ab|je|verschiedene\s+sorten)\b", part, re.I)
+                ),
+                parent_label if product_index == 1 else "",
+            )
+            child = dict(card)
+            child["label"] = label
+            child["text_parts"] = segment
+            child["offer_id_suffix"] = str(product_index)
+            offer = self._south_card_to_offer(child, start, end, index, category)
+            if offer is not None:
+                offers.append(offer)
+        return deduplicate_offers(offers)
 
     def _south_dom_offers(self, page: str, source_url: str) -> list[Offer]:
         parser = AldiSouthWeeklyParser(source_url)
@@ -531,12 +581,12 @@ class OfficialAldiSource:
                 end = date.fromordinal(week_start.toordinal() + 5)
         offers: list[Offer] = []
         for index, card in enumerate(parser.cards, start=1):
-            offer = self._south_card_to_offer(card, start, end, index)
-            if offer is None:
+            card_offers = self._south_card_to_offers(card, start, end, index)
+            if not card_offers:
                 path = urlsplit(clean_text(card.get("url"))).path
                 LOGGER.warning("ALDI Süd Produktkarte %d konnte nicht verarbeitet werden (%s)", index, path[:240])
                 continue
-            offers.append(offer)
+            offers.extend(card_offers)
         return deduplicate_offers(offers)
 
     def _south_page_offers(self, page: str, source_url: str) -> list[Offer]:

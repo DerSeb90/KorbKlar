@@ -327,9 +327,13 @@ Copyright © 2026 lesecuritae for Tarnkappe.info.
 
 KorbKlar is independent and is not affiliated with any retailer or loyalty program mentioned. Brand, retailer, and product names belong to their respective owners.
 
+## What is new in 0.1.0
+
+Version 0.1.0 adds a native Globus adapter, optional retailer filters in the API and start page, and manual REWE store selection when several stores exactly match the entered postcode. Multi-product ALDI South cards are fully expanded. REWE Bonus credits are shown separately and no longer treated as a reduced sale price.
+
 ## What is new in 0.0.7
 
-Version 0.0.7 adds native Windows setup and portable discovery of Chromium, Chrome, and Edge. An optional control deliberately refreshes offers by bypassing the server-side offer cache for that search only. Leverkusen postcodes are recorded as exact ALDI South evidence while prefix-based guesses remain excluded. HTTPS verification uses a reproducible CA bundle while certificate and hostname verification remain enabled. Explicit euro-denominated REWE Bonus amounts are now reflected in the effective price when REWE Bonus is selected.
+Version 0.0.7 adds native Windows setup and portable discovery of Chromium, Chrome, and Edge. An optional control deliberately refreshes offers by bypassing the server-side offer cache for that search only. Leverkusen postcodes are recorded as exact ALDI South evidence while prefix-based guesses remain excluded. HTTPS verification uses a reproducible CA bundle while certificate and hostname verification remain enabled. Explicit euro-denominated REWE Bonus amounts were first captured structurally; since 0.1.0 credits are clearly separated from the sale price.
 
 ## What is new in 0.0.6
 

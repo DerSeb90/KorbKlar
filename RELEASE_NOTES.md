@@ -1,3 +1,13 @@
+# 0.1.0
+
+KorbKlar 0.1.0 erweitert den Vergleich um eine gespeicherte Händlerauswahl und eine manuelle REWE-Filialauswahl bei mehreren exakten PLZ-Treffern. Die Vergleichs-API akzeptiert optional `retailers`; jede Händler- und REWE-Marktauswahl erhält einen getrennten Cache-Schlüssel.
+
+Globus wird über den offiziellen Markt- und Prospektdatenstrom geladen. Für PLZ 93073 wird der Markt Neutraubling aufgelöst; die offizielle Quelle gewinnt vollständig, Marktguru dient nur bei Fehlern oder leeren offiziellen Daten als ungemischter Fallback.
+
+ALDI-Süd-Karten mit mehreren separat bepreisten Produkten werden in einzelne Angebote aufgeteilt, ohne Zeitraum oder Dublettenlogik zu verlieren. REWE-Bonusgutschriften bleiben vom Verkaufspreis getrennt und erscheinen beispielsweise als „+ 0,50 € REWE Bonus“, ohne Preis- oder Grundpreisranking zu verfälschen.
+
+Die reproduzierbare Suite umfasst 207 bestandene Tests. Live geprüft wurden Globus Neutraubling (477 Angebote), die REWE-Mehrmarkt-PLZ 26123 einschließlich manueller Auswahl sowie Kaufland 44791. Die Startseite wurde bei 390×844, 412×915 und 1440×1000 geprüft. Issue #8 bleibt für den nicht reproduzierbaren historischen Kaufland-Datensatz, eine frei wählbare Datumsspanne und zusätzliche Händler offen.
+
 # 0.0.7
 
 KorbKlar 0.0.7 integriert die geprüften Änderungen aus dem Fork von Claudia Dietrich:

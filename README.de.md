@@ -317,9 +317,13 @@ KorbKlar erfindet keine fehlenden Preise und schätzt keine unbekannten Bonusvor
 
 Für spätere Versionen sind zusätzliche Integrationen denkbar beziehungsweise geplant, darunter Grocy, KitchenOwl und weitere REST-/OpenAPI-Anbindungen für lokale Automationen und Agenten. Diese Integrationen sind keine Voraussetzung für Version 0.1.0.
 
+## Neuerungen in 0.1.0
+
+Version 0.1.0 ergänzt einen nativen Globus-Adapter, optionale Händlerfilter in API und Startseite sowie eine manuelle REWE-Marktauswahl, wenn mehrere Märkte exakt zur eingegebenen PLZ gehören. ALDI-Süd-Mehrproduktkarten werden vollständig aufgeteilt. REWE-Bonusgutschriften werden separat angezeigt und nicht mehr als reduzierter Verkaufspreis bewertet.
+
 ## Neuerungen in 0.0.7
 
-Version 0.0.7 ergänzt eine native Windows-Einrichtung und erkennt Chromium, Chrome sowie Edge portabel. Ein optionaler Schalter lädt Angebote bewusst neu und umgeht nur für diese Suche den serverseitigen Angebotscache. Leverkusener PLZ sind als exakte ALDI-Süd-Nachweise ergänzt; Präfixschätzungen bleiben ausgeschlossen. Die HTTPS-Prüfung nutzt einen reproduzierbaren CA-Satz bei weiterhin aktiver Zertifikats- und Hostnamenprüfung. Explizit in Euro ausgewiesene REWE-Bonusbeträge werden nun bei ausgewähltem REWE Bonus im effektiven Preis berücksichtigt.
+Version 0.0.7 ergänzt eine native Windows-Einrichtung und erkennt Chromium, Chrome sowie Edge portabel. Ein optionaler Schalter lädt Angebote bewusst neu und umgeht nur für diese Suche den serverseitigen Angebotscache. Leverkusener PLZ sind als exakte ALDI-Süd-Nachweise ergänzt; Präfixschätzungen bleiben ausgeschlossen. Die HTTPS-Prüfung nutzt einen reproduzierbaren CA-Satz bei weiterhin aktiver Zertifikats- und Hostnamenprüfung. Explizit in Euro ausgewiesene REWE-Bonusbeträge wurden erstmals strukturiert erfasst; seit 0.1.0 werden Gutschriften klar vom Verkaufspreis getrennt.
 
 ## Neuerungen in 0.0.6
 

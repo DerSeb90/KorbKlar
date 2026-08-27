@@ -160,12 +160,9 @@ def apply_selected_programs(
     ]
     checkout = min([regular, *direct_prices]) if direct_prices else regular
 
-    cashback = sum(
-        benefit.value
-        for benefit in applicable
-        if benefit.kind == "cashback" and benefit.value > 0
-    )
-    effective = max(0.0, checkout - cashback)
+    # Cashback is credited to an account after checkout. It is not a lower
+    # product price and must not participate in price or unit-price ranking.
+    effective = checkout
     savings = max(0.0, regular - effective)
     return checkout, effective, savings, applicable
 
