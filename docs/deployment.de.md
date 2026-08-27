@@ -29,6 +29,8 @@ dann genügt wieder `docker compose up -d`:
 COMPOSE_FILE=compose.yml:compose.kitchenowl.yml:compose.proxy.yml
 ```
 
+Das Trennzeichen ist `:` unter Linux und macOS und `;` unter Windows.
+
 Ein fehlender Pflichtwert bricht bereits `docker compose config` ab und nennt
 den Namen. Ohne das jeweilige Overlay wird er gar nicht gelesen — eine
 Installation ohne HTTPS braucht keine Domain zu setzen.

@@ -28,6 +28,8 @@ combination you keep, state it once and `docker compose up -d` is enough again:
 COMPOSE_FILE=compose.yml:compose.kitchenowl.yml:compose.proxy.yml
 ```
 
+The separator is `:` on Linux and macOS, `;` on Windows.
+
 A missing required value fails `docker compose config` already and names the
 variable. Without its overlay it is never read at all, so an installation
 without HTTPS needs no domain.
