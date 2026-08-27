@@ -155,6 +155,35 @@ im Reiter „Actions" freigeben. Das erzeugte Paket ist zunächst privat —
 entweder unter „Packages" auf öffentlich stellen, oder auf dem Server einmal
 `docker login ghcr.io` mit einem Token, das `read:packages` erlaubt.
 
+## Umstieg von `--profile proxy`
+
+Bis einschließlich 0.1.2 lagen Reverse Proxy und KitchenOwl als Dienste in
+`compose.yml` und wurden mit `docker compose --profile proxy up -d`
+gestartet. Nach dem Update startet ein blankes `docker compose up -d` nur
+noch KorbKlar — die beiden anderen Container werden nicht angelegt, ohne
+dass etwas fehlschlägt.
+
+Zwei Zeilen in `.env` stellen das her:
+
+```bash
+COMPOSE_FILE=compose.yml:compose.kitchenowl.yml:compose.proxy.yml
+KORBKLAR_CADDYFILE=./deploy/caddy/Caddyfile.kitchenowl
+```
+
+Die zweite ist nötig, sobald KitchenOwl eine eigene Domain hat: die
+Standard-Caddy-Konfiguration kennt nur KorbKlar, und die KitchenOwl-Domain
+bekäme sonst keinen Site-Block.
+
+Danach wie gewohnt:
+
+```bash
+docker compose up -d --remove-orphans
+```
+
+Die Volumes behalten ihre Namen, weil der Projektname unverändert
+`korbklar` bleibt. KitchenOwl-Daten und die Let's-Encrypt-Zertifikate
+überleben den Umstieg also.
+
 ## Aktualisieren
 
 ```bash

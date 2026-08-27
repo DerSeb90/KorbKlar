@@ -92,9 +92,11 @@ services:
     networks:
       - korbklar-net
     ports:
-      # Without the reverse proxy this is how KitchenOwl is reached. Behind
-      # compose.proxy.yml, set KITCHENOWL_BIND_ADDRESS to 127.0.0.1.
-      - "${KITCHENOWL_BIND_ADDRESS:-0.0.0.0}:${KITCHENOWL_PORT:-8080}:80"
+      # Bound to the loopback interface, because the common case is a reverse
+      # proxy in front and a household list has no business facing the
+      # internet by default. Reaching it from another machine without a proxy
+      # means setting KITCHENOWL_BIND_ADDRESS to 0.0.0.0 deliberately.
+      - "${KITCHENOWL_BIND_ADDRESS:-127.0.0.1}:${KITCHENOWL_PORT:-8080}:80"
 
 volumes:
   kitchenowl-data:

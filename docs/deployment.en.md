@@ -151,6 +151,33 @@ the Actions tab. The resulting package starts out private — either make it
 public under Packages, or run `docker login ghcr.io` once on the server with a
 token that allows `read:packages`.
 
+## Moving off `--profile proxy`
+
+Up to 0.1.2 the reverse proxy and KitchenOwl were services in `compose.yml`
+started with `docker compose --profile proxy up -d`. After the update a bare
+`docker compose up -d` starts KorbKlar only — the other two containers are
+never created, and nothing fails to say so.
+
+Two lines in `.env` restore it:
+
+```bash
+COMPOSE_FILE=compose.yml:compose.kitchenowl.yml:compose.proxy.yml
+KORBKLAR_CADDYFILE=./deploy/caddy/Caddyfile.kitchenowl
+```
+
+The second is needed as soon as KitchenOwl has its own domain: the default
+Caddy configuration knows about KorbKlar only, so that domain would get no
+site block.
+
+Then as before:
+
+```bash
+docker compose up -d --remove-orphans
+```
+
+Volume names are unchanged, because the project is still called `korbklar`.
+KitchenOwl's data and the Let's Encrypt certificates survive the move.
+
 ## Updating
 
 ```bash
