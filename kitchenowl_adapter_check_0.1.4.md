@@ -4,12 +4,10 @@ Stand: 28. August 2026
 
 ## Installierter Stand
 
-Auf der VM existiert bereits genau ein KitchenOwl-Stack unter
-`/srv/docker/kitchenowl`. Der Anwendungscontainer ist gesund; sein Tailscale-
-Sidecar ist online. Die Oberfläche antwortet im gemeinsamen Netzwerk auf Port
-8080 und ist für das Tailnet als `kitchenowl.barking-hake.ts.net` eingerichtet.
-Offene Registrierung ist deaktiviert. Der bestehende Stack, seine Volumes und
-Nutzerdaten wurden nicht verändert.
+Auf der geprüften VM existiert bereits genau ein KitchenOwl-Stack. Der
+Anwendungscontainer ist gesund und die Oberfläche antwortet über den intern
+konfigurierten Zugriff. Offene Registrierung ist deaktiviert. Der bestehende
+Stack, seine Volumes und Nutzerdaten wurden nicht verändert.
 
 ## API-Grenze
 
@@ -26,7 +24,7 @@ Preis- oder Mengenfelder besitzt.
 
 ## Teststatus
 
-Die Weboberfläche, Container-Health und Tailscale-Anbindung sind erreichbar.
+Die Weboberfläche, Container-Health und interne Anbindung sind erreichbar.
 Das Schema wurde mit FUNNY-FRISCH Pom-Bär, Menge 1, Kategorie Snacks, ALDI Nord
 und 0,99 € als automatisierter KorbKlar-Test geprüft. Ein schreibender Test in
 eine bestehende persönliche Liste wurde bewusst nicht ausgeführt: Im Projekt
