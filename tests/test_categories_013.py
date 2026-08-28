@@ -53,3 +53,7 @@ def test_audited_cross_domain_products_are_normalized():
     assert normalize_category("Grundnahrung", name="Pain au chocolat") == "Backwaren"
     assert normalize_category("Rabatt-Monat", name="LANGNESE Calippo Cola", description="Wassereis") == "Tiefkühl / Eis & Dessert"
     assert normalize_category("Tiefkühlpizza & -flammkuchen", name="Dr. Oetker Ristorante Pizza") == "Tiefkühl / Eis & Dessert"
+    assert normalize_category("Rabatt-Monat", name="WERA NOVA Sahneeis") == "Tiefkühl / Eis & Dessert"
+    assert normalize_category("Drogerie, Tiernahrung", name="AJAX Allzweckreiniger") == "Haushalt & Reinigung"
+    assert normalize_category("Feinkost, Konserven", name="TYMBARK Frucht-Mischsaft") == "Getränke"
+    assert normalize_category("Grundnahrungsmittel", name="Franzbrötchen") == "Backwaren"

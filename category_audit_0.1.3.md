@@ -16,6 +16,7 @@ Pfandwerte.
 | Calippo/Pirulo Cola | Getränke | Tiefkühl / Eis & Dessert | Geschmackswort `Cola` dominierte | eindeutige Eisproduktnamen haben Vorrang |
 | Tiefkühlpizza | Backwaren | Tiefkühl / Eis & Dessert | `Pizza`/Backwaren-Quelltext wurde fehlgedeutet | Tiefkühl-Quellgruppe wird kanonisch abgebildet |
 | WC-Reiniger | Getränke/Weitere Angebote | Haushalt & Reinigung | Quelle fehlte oder war falsch | konkrete Reinigerbegriffe gewinnen |
+| Sahneeis/Allzweckreiniger/Frucht-Mischsaft | generische oder falsche Quellgruppe | jeweilige Produktkategorie | deutsche Kompositwörter wurden nicht vollständig erkannt | abgesicherte Wortendungen ergänzt |
 
 Konflikte werden als `category_conflict` zusammen mit `source_category` und
 `detected_category` am internen Angebot festgehalten und protokolliert.

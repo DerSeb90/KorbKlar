@@ -18,12 +18,12 @@ CATEGORIES = (
 
 # Concrete product kinds precede terms which can merely describe a flavour.
 _PRODUCT_RULES = (
-    ("Tiefkühl / Eis & Dessert", r"\b(?:ice cream|eiscreme|speiseeis|stieleis|wassereis|gelato|calippo|pirulo|dessert|mousse|eis)\b"),
-    ("Haushalt & Reinigung", r"\b(?:bodenkehrer|kehrmaschine|besen|wischmopp|staubsauger|wc reiniger|reiniger|grillanzuender|grillanzünder)\b"),
+    ("Tiefkühl / Eis & Dessert", r"\b(?:ice cream|eiscreme|speiseeis|stieleis|wassereis|gelato|calippo|pirulo|dessert|mousse|\w*eis)\b"),
+    ("Haushalt & Reinigung", r"\b(?:bodenkehrer|kehrmaschine|besen|wischmopp|staubsauger|wc reiniger|\w*reiniger|grillanzuender|grillanzünder)\b"),
     ("Tierbedarf", r"\b(?:katzenfutter|hundefutter|katzenstreu|tierzubehoer|tierzubehör|tierfutter)\b"),
     ("Snacks", r"\b(?:pom bär|pom baer|chips|flips|knabber\w*|snacks?|smarties|chocolate|schokolade)\b"),
-    ("Backwaren", r"\b(?:brot|broetchen|brötchen|kuchen|croissant|pain au chocolat|gebaeck|gebäck)\b"),
-    ("Getränke", r"\b(?:cola|limonade|wasser|saft|bier|wein|spirituose|kaffee|tee)\b"),
+    ("Backwaren", r"\b(?:brot|\w*broetchen|\w*brötchen|kuchen|croissant|breze\w*|pain au chocolat|gebaeck|gebäck)\b"),
+    ("Getränke", r"\b(?:cola|limonade|wasser|\w*saft|bier|wein|spirituose|kaffee|tee)\b"),
     ("Obst & Gemüse", r"\b(?:obst|gemuese|gemüse|salat|rucola|kartoffel\w*|tomat\w*|apfel|banane\w*)\b"),
     ("Fleisch & Wurst", r"\b(?:fleisch|wurst|schinken|salami|gefluegel|geflügel|hackfleisch)\b"),
     ("Fisch & Meeresfrüchte", r"\b(?:fisch|lachs|thunfisch|meeresfr\w*|garnele\w*)\b"),
