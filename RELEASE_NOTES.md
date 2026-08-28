@@ -1,3 +1,7 @@
+# 0.1.2
+
+KorbKlar 0.1.2 präzisiert die Pfandanzeige für Mehrfachgebinde. Beim BLACK-CAT-Energy-Viererpack wird jetzt ausdrücklich „0,25 € je Dose · 1,00 € gesamt für 4“ angezeigt. Der Gesamtpfandwert des Verkaufspacks bleibt für Warenkorb und Einkaufsliste erhalten; eine einzelne Dose wird weiterhin mit 0,25 € Pfand geführt.
+
 # 0.1.1
 
 KorbKlar 0.1.1 führt „Netto schwarz“ als eigenständigen Händler neben Netto Marken-Discount ein. Die offizielle Netto-Angebotsseite liefert reguläre Wochenangebote und öffentlich ausgewiesene Netto+-Mitgliederpreise. Die offizielle Marktsuche ordnet eine exakte PLZ bevorzugt zu und begrenzt den Nächstmarkt-Fallback auf 15 km. Beide Netto-Unternehmen und ihre Programme bleiben technisch getrennt; persönliche Coupons, Stempelkarten und nicht bezifferte Vorteile werden nicht geschätzt.

@@ -317,6 +317,10 @@ KorbKlar erfindet keine fehlenden Preise und schätzt keine unbekannten Bonusvor
 
 Für spätere Versionen sind zusätzliche Integrationen denkbar beziehungsweise geplant, darunter Grocy, KitchenOwl und weitere REST-/OpenAPI-Anbindungen für lokale Automationen und Agenten. Diese Integrationen sind keine Voraussetzung für Version 0.1.0.
 
+## Neuerungen in 0.1.2
+
+Version 0.1.2 zeigt bei Mehrfachgebinden sowohl das Pfand je Behälter als auch das Gesamtpfand des Verkaufspacks. Beim BLACK-CAT-Energy-Viererpack erscheint damit klar „0,25 € je Dose · 1,00 € gesamt für 4“.
+
 ## Neuerungen in 0.1.1
 
 Version 0.1.1 ergänzt „Netto schwarz“ als vom rot-gelben Netto Marken-Discount getrennten Händler sowie offizielle Rossmann-Werbeangebote und klar als online gekennzeichnete Müller-Angebote. Öffentlich ausgewiesene Netto+-Mitgliederpreise sind ein eigenes Bonusprogramm; unbekannte Normalpreise werden nicht erfunden. Explizite Pfandangaben wie beim BLACK-CAT-Energy-Angebot bleiben getrennt vom Warenpreis erhalten. Die bestehende lokale Einkaufsliste kann offene Artikel optional und ohne gespeicherte Zugangsdaten über die Betriebssystem-App-Auswahl an Bring übergeben.

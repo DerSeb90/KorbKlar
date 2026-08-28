@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from .common import (
@@ -84,6 +85,21 @@ def _cashback_credit(offer: Offer) -> tuple[float, str]:
     return total, f"+ {format_euro(total)} {labels}" if total > 0 and labels else ""
 
 
+def _deposit_note(offer: Offer) -> str:
+    if offer.deposit is None:
+        return ""
+    total = format_euro(offer.deposit)
+    count_match = re.match(r"^(\d{1,3})x", offer.pack_signature, flags=re.IGNORECASE)
+    if not count_match:
+        return f"zzgl. {total} Pfand"
+    count = int(count_match.group(1))
+    if count <= 1:
+        return f"zzgl. {total} Pfand"
+    per_container = offer.deposit / count
+    container = "Dose" if re.search(r"\bdosen?\b|energy\s*drink", f"{offer.name} {offer.description}", re.I) else "Einheit"
+    return f"Pfand: {format_euro(per_container)} je {container} · {total} gesamt für {count}"
+
+
 def offer_for_response(
     offer: Offer,
     include_image_urls: bool,
@@ -142,6 +158,7 @@ def offer_for_response(
         "valid_until": offer.valid_until,
         "deposit": offer.deposit,
         "deposit_text": format_euro(offer.deposit) if offer.deposit is not None else "",
+        "deposit_note": _deposit_note(offer),
         "minimum_quantity": offer.minimum_quantity,
         "offer_condition": offer.offer_condition,
         "coverage_note": offer.coverage_note,

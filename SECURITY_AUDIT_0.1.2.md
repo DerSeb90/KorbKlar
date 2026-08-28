@@ -1,4 +1,4 @@
-# Sicherheitsaudit KorbKlar 0.1.1
+# Sicherheitsaudit KorbKlar 0.1.2
 
 Stand: 28. August 2026
 
@@ -14,5 +14,7 @@ Es bestehen keine bekannten Findings mit hoher oder kritischer Schwere.
 ## Sicherheitsrelevante Architektur
 
 Die neue Marktauflösung für Netto schwarz bevorzugt exakte PLZ-Treffer und begrenzt den Entfernungsfallback. Externe Antworten sind zeitlich und in ihrer Größe begrenzt. Netto+, Netto plus, Rossmann-App-Vorteile und Müller-Blüten werden getrennt modelliert und nicht ohne belegten Endpreis als regulärer Angebotspreis verrechnet. Die Bring-Übergabe verwendet ausschließlich die lokale Web-Share-Schnittstelle beziehungsweise die Zwischenablage; KorbKlar speichert dafür keine fremden Zugangsdaten.
+
+Die Pfandkorrektur verändert keine Preise und keine externen Datenflüsse. Sie stellt bei Mehrfachgebinden den bereits gespeicherten Gesamtpfandwert zusammen mit dem rechnerischen Pfand je Behälter dar.
 
 Ältere versionsgebundene Audit-Zwischenstände wurden vor diesem Release aus dem aktiven Repository entfernt. Ihre Historie bleibt über Git nachvollziehbar.

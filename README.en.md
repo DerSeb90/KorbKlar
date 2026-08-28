@@ -327,6 +327,10 @@ Copyright © 2026 lesecuritae for Tarnkappe.info.
 
 KorbKlar is independent and is not affiliated with any retailer or loyalty program mentioned. Brand, retailer, and product names belong to their respective owners.
 
+## What is new in 0.1.2
+
+Version 0.1.2 displays both the per-container deposit and the total deposit for multipacks. A four-pack of BLACK CAT Energy is now clearly labelled “€0.25 per can · €1.00 total for 4”.
+
 ## What is new in 0.1.1
 
 Version 0.1.1 adds “Netto schwarz” as a retailer separate from the red-and-yellow Netto Marken-Discount, official Rossmann advertising offers and clearly labelled Müller online offers. Public Netto+ member prices use a distinct loyalty programme and unknown regular prices are never invented. Explicit deposits, including the BLACK CAT Energy offer notation, remain separate from the goods price. Open items from the existing local shopping list can optionally be handed to Bring through the operating system's share sheet without storing Bring credentials.

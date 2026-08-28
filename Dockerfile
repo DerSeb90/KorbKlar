@@ -28,7 +28,7 @@ FROM scratch AS final
 ARG PYTHON_BASE
 COPY --from=runtime-rootfs / /
 LABEL org.opencontainers.image.source="https://github.com/lesecuritae/KorbKlar" \
-      org.opencontainers.image.version="0.1.1" \
+      org.opencontainers.image.version="0.1.2" \
       org.opencontainers.image.base.name="${PYTHON_BASE}"
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
