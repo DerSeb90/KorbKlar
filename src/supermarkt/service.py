@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -7,7 +8,7 @@ from dataclasses import asdict, replace
 from typing import Any
 
 from .cache import PersistentSnapshotStore
-from .categories import normalize_category
+from .categories import category_decision
 from .common import clean_text, deduplicate_offers, filter_offers, normalize_aldi_region, normalize_view
 from .compare import OfferComparator, OfferMapper
 from .config import (
@@ -28,6 +29,8 @@ from .loyalty import available_programs, normalize_program_ids
 from .models import AGGREGATOR_RETAILERS, RETAILER_SPECS, Offer, RetailerContext, ToolError, offer_from_dict, offer_to_dict
 from .presentation import offer_for_response, offer_sort_key, resolve_retailer_name
 from .region import AldiRegionResolver
+
+LOGGER = logging.getLogger(__name__)
 from .sources import MarktguruClient, OfficialAldiSource, OfficialEdekaSource, OfficialGlobusSource, OfficialKauflandSource, OfficialMarktkaufSource, OfficialReweSource, OfficialHolabSource, OfficialNettoScottieSource, OfficialMuellerSource, OfficialRossmannSource
 from .sources.aldi_chain import AldiOfferChain
 
@@ -299,12 +302,26 @@ class SourceLoader:
             for retailer_offers in final_by_retailer.values()
             for offer in retailer_offers
         ])
-        offers = [replace(
-            offer,
-            source_category=offer.source_category or offer.category,
-            category=normalize_category(offer.source_category or offer.category, offer.retailer, offer.name, offer.description),
-            retailer_url=offer.retailer_url or contexts.get(offer.retailer, RetailerContext("", (), (), "", "", "")).market_url,
-        ) for offer in offers]
+        normalized_offers = []
+        for offer in offers:
+            source_category = offer.source_category or offer.category
+            decision = category_decision(
+                source_category, offer.retailer, offer.name, offer.description, offer.brand
+            )
+            if decision.category_conflict:
+                LOGGER.info(
+                    "category_conflict retailer=%r product=%r source_category=%r detected_category=%r",
+                    offer.retailer, offer.name, source_category, decision.detected_category,
+                )
+            normalized_offers.append(replace(
+                offer,
+                source_category=source_category,
+                detected_category=decision.detected_category,
+                category_conflict=decision.category_conflict,
+                category=decision.category,
+                retailer_url=offer.retailer_url or contexts.get(offer.retailer, RetailerContext("", (), (), "", "", "")).market_url,
+            ))
+        offers = normalized_offers
         if not offers:
             raise ToolError("Keine Supermarktangebote konnten geladen werden")
 
@@ -323,7 +340,8 @@ class SourceLoader:
         }
 
 class SupermarketEngine:
-    SNAPSHOT_SCHEMA = 5
+    # Category precedence and conflict metadata changed in 0.1.3.
+    SNAPSHOT_SCHEMA = 6
     def __init__(self) -> None:
         self.store = PersistentSnapshotStore(CACHE_DB, CACHE_TTL_MINUTES, RESULT_RETENTION_HOURS, CACHE_MAX_SNAPSHOTS)
         self.loader = SourceLoader()

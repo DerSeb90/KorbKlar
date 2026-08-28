@@ -125,6 +125,8 @@ class Offer:
     source_url: str
     image_url: str = ""
     source_category: str = ""
+    detected_category: str = ""
+    category_conflict: bool = False
     product_url: str = ""
     retailer_url: str = ""
     deposit: Optional[float] = None

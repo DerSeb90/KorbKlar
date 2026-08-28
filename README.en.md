@@ -325,6 +325,10 @@ Copyright © 2026 lesecuritae for Tarnkappe.info.
 
 KorbKlar is independent and is not affiliated with any retailer or loyalty program mentioned. Brand, retailer, and product names belong to their respective owners.
 
+## What is new in 0.1.3
+
+Version 0.1.3 gives concrete product kinds precedence over conflicting source categories and records category conflicts structurally. The Bring Web Share handoff optionally includes brand and EAN while deliberately excluding KorbKlar's category. The duplicate ALDI-nearby selector has been removed; ALDI North and South remain directly selectable as retailers. Retailer tiles remain the same size even with long names. Existing native Windows setup and browser discovery remain intact.
+
 ## What is new in 0.1.2
 
 Version 0.1.2 displays both the per-container deposit and the total deposit for multipacks. A four-pack of BLACK CAT Energy is now clearly labelled “€0.25 per can · €1.00 total for 4”.

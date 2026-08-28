@@ -106,6 +106,16 @@ def test_bring_handoff_contains_only_open_items_without_credentials():
     assert text == "2× Milch (1 l) – REWE"
 
 
+def test_bring_handoff_uses_product_data_but_not_korbklar_category():
+    result = js("""(()=>{
+      const item=m.offerToItem({product:'Pom-Bär',brand:'FUNNY-FRISCH',pack:'75 g',ean:'4001234567890',category:'Snacks',retailer:'REWE',regular_price:1.49});
+      return {item,text:m.bringText([item])};
+    })()""")
+    assert result["item"]["brand"] == "FUNNY-FRISCH"
+    assert result["text"] == "1× FUNNY-FRISCH Pom-Bär (75 g) · EAN 4001234567890 – REWE"
+    assert "Snacks" not in result["text"]
+
+
 def test_offer_image_uses_only_the_local_proxy_and_survives_json_roundtrip():
     result = js("""(()=>{
       const item=m.offerToItem({offer_id:'energy-1',product:'Energy',retailer:'REWE',regular_price:0.79,deposit:0.25,image_url:'/image?src=https%3A%2F%2Fexample.invalid%2Fenergy.jpg&sig=signed'});

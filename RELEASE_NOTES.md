@@ -1,3 +1,25 @@
+# 0.1.3
+
+KorbKlar 0.1.3 priorisiert konkrete Produktmerkmale vor Händler- und
+Quellkategorien. Dadurch werden unter anderem CLEANMAXX Bodenkehrer,
+MÄLZER&FU Ice Cream und FUNNY-FRISCH Pom-Bär korrekt eingeordnet.
+Geschmacksangaben wie „Franzbrötchen“ überschreiben die eigentliche Produktart
+nicht mehr. Abweichungen werden intern mit Quellkategorie, erkannter Kategorie
+und `category_conflict` nachvollziehbar protokolliert.
+
+Ein Audit vorhandener Angebotssnapshots deckt weitere Konflikte bei Rucola,
+Katzenfutter, Süßwaren, Backwaren, Reinigern und Eisprodukten auf und sichert sie
+mit Regressionstests ab. Die Cache-Generation wurde angehoben, damit alte
+Kategorisierungen nicht erneut ausgeliefert werden.
+
+Die bestehende Bring-Übergabe bleibt eine optionale Web-Share-Funktion ohne
+Zugangsdaten. Sie übergibt offene Artikel mit Name, Marke, Menge,
+Packungsgröße und – sofern vorhanden – EAN. KorbKlar-Kategorien werden bewusst
+nicht an Bring übertragen. Die vorhandene native Windows-Einrichtung und die
+portable Erkennung von Chromium, Chrome und Edge bleiben unverändert erhalten.
+Die doppelte Startseiten-Auswahl „ALDI in deiner Nähe“ entfällt; ALDI Nord und
+ALDI Süd werden weiterhin direkt über die Händlerauswahl gesteuert.
+
 # 0.1.2
 
 KorbKlar 0.1.2 präzisiert die Pfandanzeige für Mehrfachgebinde. Beim BLACK-CAT-Energy-Viererpack wird jetzt ausdrücklich „0,25 € je Dose · 1,00 € gesamt für 4“ angezeigt. Der Gesamtpfandwert des Verkaufspacks bleibt für Warenkorb und Einkaufsliste erhalten; eine einzelne Dose wird weiterhin mit 0,25 € Pfand geführt. Die Projektdokumentation enthält außerdem eine freiwillige Monero-Unterstützungsmöglichkeit; KorbKlar bleibt ohne Spende vollständig kostenlos und uneingeschränkt nutzbar.

@@ -11,8 +11,8 @@ def test_home_and_static_assets():
     response = client.get("/")
     assert response.status_code == 200
     assert 'name="postal_code"' in response.text
-    assert 'name="aldi_region"' in response.text
-    assert 'value="both"' in response.text
+    assert "ALDI in deiner Nähe" not in response.text
+    assert 'name="aldi_region"' not in response.text
     assert 'href="/static/home.css"' in response.text
     assert 'src="/static/home-v2.js"' in response.text
     assert '<progress id="statusProgress"' in response.text
@@ -105,6 +105,14 @@ def test_home_persists_retailer_selection_locally():
     assert "localStorage.setItem(retailerStorageKey" in script
     assert "/rewe/markets?postal_code=" in script
     assert "korbklar.reweMarket." in script
+
+
+def test_retailer_tiles_have_equal_grid_rows_and_height():
+    css = ui.static_text("home.css")
+    assert ".retailerGrid{display:grid" in css
+    assert "grid-auto-rows:1fr" in css
+    assert ".retailerGrid label" in css
+    assert "height:100%;min-height:58px" in css
 
 
 def test_browser_rewe_market_lookup_returns_all_exact_matches(monkeypatch):

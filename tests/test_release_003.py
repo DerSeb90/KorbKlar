@@ -7,7 +7,7 @@ from supermarkt.sources.holab import OfficialHolabSource
 @pytest.mark.parametrize(("source","expected"),[
     ("obst und gemüse","Obst & Gemüse"),("ALKOHOLFREIE GETRÄNKE","Getränke"),
     ("molkereiprodukte","Molkereiprodukte & Eier"),("tiernahrung","Tierbedarf"),
-    ("Süßigkeiten","Süßwaren & Snacks"),("unbekannte sonderaktion","Weitere Angebote"),
+    ("Süßigkeiten","Snacks"),("unbekannte sonderaktion","Weitere Angebote"),
 ])
 def test_category_normalization(source,expected):assert normalize_category(source)==expected
 

@@ -329,6 +329,10 @@ Wer die laufende Entwicklung, neue Händleradapter und die Pflege der Datenquell
 
 Eine Spende ist vollständig freiwillig und hat keinen Einfluss auf Funktionsumfang, Priorisierung einzelner Nutzer oder Zugang zu KorbKlar.
 
+## Neuerungen in 0.1.3
+
+Version 0.1.3 priorisiert konkrete Produktarten vor widersprüchlichen Quellkategorien und protokolliert Kategorie-Konflikte strukturiert. Die Bring-Web-Share-Übergabe enthält optional Marke und EAN, aber bewusst keine KorbKlar-Kategorie. Die doppelte ALDI-Nähe-Auswahl wurde entfernt; ALDI Nord und Süd bleiben direkt in der Händlerauswahl verfügbar. Alle Händlerkacheln besitzen auch bei langen Namen dieselbe Größe. Die bestehende native Windows-Einrichtung und Browsererkennung bleiben erhalten.
+
 ## Neuerungen in 0.1.2
 
 Version 0.1.2 zeigt bei Mehrfachgebinden sowohl das Pfand je Behälter als auch das Gesamtpfand des Verkaufspacks. Beim BLACK-CAT-Energy-Viererpack erscheint damit klar „0,25 € je Dose · 1,00 € gesamt für 4“.
