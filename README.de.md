@@ -329,9 +329,13 @@ Wer die laufende Entwicklung, neue Händleradapter und die Pflege der Datenquell
 
 Eine Spende ist vollständig freiwillig und hat keinen Einfluss auf Funktionsumfang, Priorisierung einzelner Nutzer oder Zugang zu KorbKlar.
 
+## Neuerungen in 0.1.4
+
+Version 0.1.4 verhindert, dass vollständige Globus-Prospektseiten als Produktbilder erscheinen. Globus verwendet explizit artikelbezogene Bilder; ergänzend darf KaufDA und danach Marktguru ausschließlich bei eindeutig gleichem Namen, Preis, Packung und Zeitraum die Bild-URL eines einzelnen Angebots liefern. Ohne sicheren Treffer bleibt das Bild leer, während alle Angebotsdaten offiziell bleiben. ALDI Süd trennt Verkaufspreis, Grundpreis, Altpreis und Pfand, bevor echte Mehrproduktkarten aufgeteilt werden. Eine neue Snapshot-Generation entfernt alte fehlerhafte Zuordnungen, ohne den Bildcache oder andere Laufzeitdaten pauschal zu löschen. Die app-spezifische Übergabe wurde entfernt; allgemeines Web Share und Text-/Dateiexporte bleiben erhalten. Eine optionale KitchenOwl-Adaptergrenze bildet Artikel ohne Zugangsdaten oder Netzwerkzugriff auf das offizielle Name-/Beschreibungsformat ab.
+
 ## Neuerungen in 0.1.3
 
-Version 0.1.3 priorisiert konkrete Produktarten vor widersprüchlichen Quellkategorien und protokolliert Kategorie-Konflikte strukturiert. Die Bring-Web-Share-Übergabe enthält optional Marke und EAN, aber bewusst keine KorbKlar-Kategorie. Die doppelte ALDI-Nähe-Auswahl wurde entfernt; ALDI Nord und Süd bleiben direkt in der Händlerauswahl verfügbar. Alle Händlerkacheln besitzen auch bei langen Namen dieselbe Größe. Die bestehende native Windows-Einrichtung und Browsererkennung bleiben erhalten.
+Version 0.1.3 priorisiert konkrete Produktarten vor widersprüchlichen Quellkategorien und protokolliert Kategorie-Konflikte strukturiert. Die doppelte ALDI-Nähe-Auswahl wurde entfernt; ALDI Nord und Süd bleiben direkt in der Händlerauswahl verfügbar. Alle Händlerkacheln besitzen auch bei langen Namen dieselbe Größe. Die bestehende native Windows-Einrichtung und Browsererkennung bleiben erhalten.
 
 ## Neuerungen in 0.1.2
 
@@ -339,7 +343,7 @@ Version 0.1.2 zeigt bei Mehrfachgebinden sowohl das Pfand je Behälter als auch 
 
 ## Neuerungen in 0.1.1
 
-Version 0.1.1 ergänzt „Netto schwarz“ als vom rot-gelben Netto Marken-Discount getrennten Händler sowie offizielle Rossmann-Werbeangebote und klar als online gekennzeichnete Müller-Angebote. Öffentlich ausgewiesene Netto+-Mitgliederpreise sind ein eigenes Bonusprogramm; unbekannte Normalpreise werden nicht erfunden. Explizite Pfandangaben wie beim BLACK-CAT-Energy-Angebot bleiben getrennt vom Warenpreis erhalten. Die bestehende lokale Einkaufsliste kann offene Artikel optional und ohne gespeicherte Zugangsdaten über die Betriebssystem-App-Auswahl an Bring übergeben.
+Version 0.1.1 ergänzt „Netto schwarz“ als vom rot-gelben Netto Marken-Discount getrennten Händler sowie offizielle Rossmann-Werbeangebote und klar als online gekennzeichnete Müller-Angebote. Öffentlich ausgewiesene Netto+-Mitgliederpreise sind ein eigenes Bonusprogramm; unbekannte Normalpreise werden nicht erfunden. Explizite Pfandangaben wie beim BLACK-CAT-Energy-Angebot bleiben getrennt vom Warenpreis erhalten.
 
 ## Neuerungen in 0.1.0
 

@@ -1,3 +1,35 @@
+# 0.1.4
+
+KorbKlar 0.1.4 korrigiert die Bildauswahl des offiziellen Globus-Adapters.
+Vollständige Prospekt-, Vorschau- und PDF-Seiten werden nicht mehr als
+Produktbilder gespeichert. Der Adapter verwendet ausschließlich ein explizit
+am Artikel hinterlegtes Produkt- oder Einzelangebotsbild; liefern die
+offiziellen Daten – wie derzeit – nur Seitenbilder, bleibt das Produktbild
+bewusst leer.
+
+Die Snapshot-Generation wurde gezielt erhöht, damit bereits gespeicherte
+Globus-Angebote mit falschen Seitenbildern nicht erneut ausgeliefert werden.
+Der URL-abhängige binäre Bildcache und sämtliche anderen Laufzeitdaten bleiben
+erhalten. Die Bildpfade von REWE, Kaufland, ALDI, EDEKA/Marktkauf, Rossmann und
+Müller wurden ebenfalls auf ihre Artikelbindung geprüft.
+
+Da Globus derzeit keine separaten Artikelbilder liefert, dürfen KaufDA und
+danach Marktguru für Globus ausnahmsweise nur die Bild-URL eines einzelnen
+Angebots ergänzen. Das geschieht ausschließlich
+bei einer eindeutigen Übereinstimmung von Produktname, Preis, Packung und
+Zeitraum; Angebotsdaten, Händlerquelle und Links bleiben offiziell. Mehrdeutige
+oder abweichende Treffer bleiben ohne Bild. Im Live-Test am 28. August wurden
+für PLZ 93073 sechs eindeutige KaufDA-Bilder mit 477 offiziellen Angeboten
+verknüpft. Marktguru lieferte für die geprüften Globus-Märkte keine Datensätze.
+
+ALDI-Süd-Karten unterscheiden jetzt Verkaufspreis, Grundpreis, durchgestrichenen
+Altpreis und Pfand, bevor eine echte Mehrproduktkarte aufgeteilt wird. Dadurch
+werden weder Pfand noch Grundpreise als Artikelpreis oder Produktname erfasst.
+Die app-spezifische Bring-Übergabe wurde entfernt; allgemeines Web Share,
+Textkopie, TXT und JSON bleiben erhalten. Für KitchenOwl ist eine getestete,
+netzwerkfreie Adaptergrenze passend zum offiziellen `name`-/`description`-Schema
+vorbereitet. Zugangsdaten oder API-Tokens werden nicht in KorbKlar gespeichert.
+
 # 0.1.3
 
 KorbKlar 0.1.3 priorisiert konkrete Produktmerkmale vor Händler- und
@@ -12,10 +44,7 @@ Katzenfutter, Süßwaren, Backwaren, Reinigern und Eisprodukten auf und sichert 
 mit Regressionstests ab. Die Cache-Generation wurde angehoben, damit alte
 Kategorisierungen nicht erneut ausgeliefert werden.
 
-Die bestehende Bring-Übergabe bleibt eine optionale Web-Share-Funktion ohne
-Zugangsdaten. Sie übergibt offene Artikel mit Name, Marke, Menge,
-Packungsgröße und – sofern vorhanden – EAN. KorbKlar-Kategorien werden bewusst
-nicht an Bring übertragen. Die vorhandene native Windows-Einrichtung und die
+Die vorhandene native Windows-Einrichtung und die
 portable Erkennung von Chromium, Chrome und Edge bleiben unverändert erhalten.
 Die doppelte Startseiten-Auswahl „ALDI in deiner Nähe“ entfällt; ALDI Nord und
 ALDI Süd werden weiterhin direkt über die Händlerauswahl gesteuert.
@@ -36,7 +65,7 @@ Rossmann ist über die offizielle gerenderte Angebotsseite angebunden; ausschlie
 
 Kaufland verwendet bevorzugt die offizielle filialbezogene Verfügbarkeits-JSON zusammen mit den strukturierten Angebotsdaten der Wochenübersicht. Regulärer Preis und Kaufland-Card-XTRA-Preis bleiben getrennt; XTRA wird nur bei ausgewähltem Programm als bedingter Preis berücksichtigt. Der bisherige Browserabruf bleibt als Kompatibilitätsfallback erhalten.
 
-Die bestehende browserlokale Einkaufsliste kann offene Artikel optional über Web Share an die App-Auswahl des Betriebssystems übergeben. Nutzer können dort Bring auswählen; ohne Web Share wird eine kompatible Artikelliste kopiert. KorbKlar speichert keine Bring-Zugangsdaten, führt keine zweite Liste und bleibt ohne Bring vollständig funktionsfähig. Eine dezente freiwillige Unterstützungssektion ergänzt die Startseite ohne Popup, Werbung oder Tracking.
+Die bestehende browserlokale Einkaufsliste kann offene Artikel über allgemeines Web Share oder die Zwischenablage weitergeben. Eine dezente freiwillige Unterstützungssektion ergänzt die Startseite ohne Popup, Werbung oder Tracking.
 
 Das Laufzeitimage verwendet eine gepinnte Python-3.13-Alpine-Basis. Damit wird die bisherige Debian-Basis ersetzt, nachdem der Release-Scan dort nicht reparierte kritische Betriebssystem-Findings gemeldet hatte.
 

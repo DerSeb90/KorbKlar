@@ -532,11 +532,26 @@ class OfficialAldiSource:
         parts = [clean_text(part) for part in card.get("text_parts") or [] if clean_text(part)]
         segments: list[list[str]] = []
         current: list[str] = []
-        for part in parts:
+        selling_price_indexes = [
+            position for position, part in enumerate(parts)
+            if re.search(r"\d{1,4}[,.]\d{2}\s*€", part)
+            and not re.search(r"(?:1\s*(?:kg|l)|100\s*(?:g|ml))\s*=|€\s*/\s*(?:1\s*)?(?:kg|l)|pfand", part, re.I)
+        ]
+        for position, part in enumerate(parts):
             current.append(part)
-            price_matches = re.findall(r"\d{1,4}[,.]\d{2}\s*€", part)
-            is_base_price = bool(re.search(r"(?:1\s*(?:kg|l)|100\s*(?:g|ml))\s*=", part, re.I))
-            if price_matches and not is_base_price:
+            if position not in selling_price_indexes:
+                continue
+            later_prices = [candidate for candidate in selling_price_indexes if candidate > position]
+            if later_prices:
+                between = parts[position + 1:later_prices[0]]
+                starts_another_product = any(
+                    re.search(r"[A-Za-zÄÖÜäöüß]{3}", value)
+                    and not re.search(r"^(?:spare|aktion|nur|ab|je|vegan|bio)\b", value, re.I)
+                    for value in between
+                )
+                if not starts_another_product:
+                    continue
+            if not later_prices or starts_another_product:
                 segments.append(current)
                 current = []
         if current and segments:

@@ -106,6 +106,29 @@ def test_aldi_south_keeps_only_explicit_deposit(monkeypatch):
     assert offer is not None and offer.deposit is None
 
 
+def test_single_card_does_not_split_base_price_old_price_or_deposit_into_products(monkeypatch):
+    monkeypatch.setattr("supermarkt.sources.aldi.offer_reference_date", lambda: date(2026, 8, 26))
+    rio = {
+        "url": "https://www.aldi-sued.de/produkt/rio-d-oro-orangennektar-1-5-l-000000000297839001",
+        "label": "",
+        "text_parts": [
+            "Vegan", "RIO D' ORO", "Orangennektar 1,5 l", "1,5 l",
+            "(0,93 €/1 l)", "Spare 17 %", "1,39 €", "²", "1,69 €",
+            "+ 0,25 € Pfand EINWEG",
+        ],
+        "group_label": "Angebote ab Montag 24.8.",
+        "image_url": "https://example.invalid/orangennektar.jpg",
+    }
+
+    offers = source()._south_card_to_offers(rio, date(2026, 8, 24), date(2026, 8, 29), 1)
+
+    assert len(offers) == 1
+    assert offers[0].name == "RIO D ORO Orangennektar 1 5 L"
+    assert offers[0].price == 1.39
+    assert offers[0].deposit == 0.25
+    assert offers[0].base_price == 0.93
+
+
 def make_offer(label: str, start: str | None, end: str | None, *, price: float = 1.29, pack: str = "1kg") -> Offer:
     return Offer(
         offer_id="aldi-sued:123456", retailer="ALDI Süd", category="Weitere Angebote",

@@ -1,15 +1,17 @@
 from __future__ import annotations
 
 import logging
+import re
 import threading
 import time
+import unicodedata
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import asdict, replace
 from typing import Any
 
 from .cache import PersistentSnapshotStore
 from .categories import category_decision
-from .common import clean_text, deduplicate_offers, filter_offers, normalize_aldi_region, normalize_view
+from .common import clean_text, deduplicate_offers, filter_offers, normalize_aldi_region, normalize_pack, normalize_view
 from .compare import OfferComparator, OfferMapper
 from .config import (
     CACHE_DB,
@@ -31,7 +33,7 @@ from .presentation import offer_for_response, offer_sort_key, resolve_retailer_n
 from .region import AldiRegionResolver
 
 LOGGER = logging.getLogger(__name__)
-from .sources import MarktguruClient, OfficialAldiSource, OfficialEdekaSource, OfficialGlobusSource, OfficialKauflandSource, OfficialMarktkaufSource, OfficialReweSource, OfficialHolabSource, OfficialNettoScottieSource, OfficialMuellerSource, OfficialRossmannSource
+from .sources import KaufdaGlobusImageSource, MarktguruClient, OfficialAldiSource, OfficialEdekaSource, OfficialGlobusSource, OfficialKauflandSource, OfficialMarktkaufSource, OfficialReweSource, OfficialHolabSource, OfficialNettoScottieSource, OfficialMuellerSource, OfficialRossmannSource
 from .sources.aldi_chain import AldiOfferChain
 
 class SourceLoader:
@@ -52,6 +54,7 @@ class SourceLoader:
         self.official_edeka = OfficialEdekaSource(TIMEOUT_SECONDS)
         self.official_holab = OfficialHolabSource(http)
         self.official_globus = OfficialGlobusSource(http)
+        self.kaufda_globus_images = KaufdaGlobusImageSource(http)
         self.official_netto_scottie = OfficialNettoScottieSource(http)
         self.official_rossmann = OfficialRossmannSource(timeout_seconds=TIMEOUT_SECONDS)
         self.official_mueller = OfficialMuellerSource(http)
@@ -86,6 +89,50 @@ class SourceLoader:
             market_label=clean_text(label) or context.market_label,
             market_url=clean_text(url) or context.market_url,
         )
+
+    @staticmethod
+    def _globus_image_name(value: str) -> tuple[str, set[str]]:
+        folded = unicodedata.normalize("NFKD", clean_text(value).casefold())
+        folded = "".join(char for char in folded if not unicodedata.combining(char))
+        normalized = re.sub(r"[^a-z0-9]+", " ", folded).strip()
+        ignored = {"globus", "verschiedene", "sorten", "oder", "und", "je"}
+        return normalized, {token for token in normalized.split() if token not in ignored and len(token) > 1}
+
+    @classmethod
+    def _enrich_globus_images(cls, official: list[Offer], image_offers: list[Offer], provider: str = "Marktguru") -> tuple[list[Offer], int]:
+        """Attach only uniquely matching images; catalogue and prices stay official."""
+        candidates = [item for item in image_offers if item.retailer == "Globus" and item.image_url]
+        enriched: list[Offer] = []
+        count = 0
+        for offer in official:
+            if offer.image_url:
+                enriched.append(offer)
+                continue
+            normalized_name, name_tokens = cls._globus_image_name(offer.name)
+            matches: dict[str, Offer] = {}
+            for candidate in candidates:
+                if offer.price is None or candidate.price is None or abs(offer.price - candidate.price) > 0.005:
+                    continue
+                if offer.pack_signature and candidate.pack_signature and normalize_pack(offer.pack_signature) != normalize_pack(candidate.pack_signature):
+                    continue
+                if offer.valid_from and candidate.valid_from and offer.valid_from != candidate.valid_from:
+                    continue
+                if offer.valid_until and candidate.valid_until and offer.valid_until != candidate.valid_until:
+                    continue
+                candidate_name, candidate_tokens = cls._globus_image_name(candidate.name)
+                overlap = name_tokens & candidate_tokens
+                union = name_tokens | candidate_tokens
+                strong_name = normalized_name == candidate_name or (len(overlap) >= 2 and len(overlap) / max(1, len(union)) >= 0.8)
+                if strong_name:
+                    matches[candidate.image_url] = candidate
+            if len(matches) != 1:
+                enriched.append(offer)
+                continue
+            image_url = next(iter(matches))
+            note = f"Produktbild ergänzend von {provider}; Angebotsdaten offiziell von Globus"
+            enriched.append(replace(offer, image_url=image_url, coverage_note=" · ".join(filter(None, (offer.coverage_note, note)))))
+            count += 1
+        return enriched, count
 
     def load(self, postal_code: str, aldi_region: str, progress=None, retailers: tuple[str, ...] = (), rewe_market_id: str = "") -> dict[str, Any]:
         notify = progress or (lambda **_fields: None)
@@ -199,6 +246,21 @@ class SourceLoader:
                     completed_sources += 1
                     notify(status="processing", progress=55, source="Offizielle Webseite", retailer=aldi_name, category="Wochenangebote", step="Quelle verarbeitet", processed_sources=completed_sources, processed_products=processed_products)
 
+        if source_states.get("Globus") == "offiziell" and hasattr(self, "kaufda_globus_images"):
+            market = getattr(self.official_globus, "last_market", None)
+            locality = clean_text(getattr(market, "name", ""))
+            if locality and any(not offer.image_url for offer in final_by_retailer.get("Globus", ())):
+                try:
+                    kaufda_images = self.kaufda_globus_images.load(locality)
+                    enriched, image_count = self._enrich_globus_images(
+                        final_by_retailer["Globus"], kaufda_images, "KaufDA"
+                    )
+                    final_by_retailer["Globus"] = enriched
+                    if image_count:
+                        source_states["Globus"] = "offiziell + KaufDA-Bild"
+                except Exception as exc:
+                    LOGGER.warning("KaufDA-Globus-Bildabgleich fehlgeschlagen: %s: %s", type(exc).__name__, exc)
+
         # Retailers without an official adapter use Marktguru as their
         # catalogue source. The broad regional term search is supplemented by
         # retailer-name searches; those name queries are never treated as a
@@ -212,18 +274,25 @@ class SourceLoader:
             name for name in failed_primary
             if name in active_contexts
         }
-        marketguru_candidates = aggregator_names | fallback_names
+        globus_image_enrichment = {
+            "Globus"
+            if source_states.get("Globus", "").startswith("offiziell")
+            and any(not offer.image_url for offer in final_by_retailer.get("Globus", ()))
+            else ""
+        } - {""}
+        marketguru_candidates = aggregator_names | fallback_names | globus_image_enrichment
         marktguru_mapped: list[Offer] = []
         if marketguru_candidates:
             completed_sources += 1
             notify(status="loading", progress=62, source="Marktguru", retailer="Lidl, PENNY, Netto Marken-Discount, Combi, famila", category="Händlerkategorien", step="Regionale Angebote werden geladen", processed_sources=completed_sources, processed_products=processed_products)
             raw: list[dict[str, Any]] = []
-            try:
-                broad_raw, errors = self.marktguru.load_offers(postal_code)
-                raw.extend(broad_raw)
-                request_errors.extend(errors)
-            except Exception as exc:
-                request_errors.append(f"Marktguru: {type(exc).__name__}: {exc}")
+            if aggregator_names or fallback_names:
+                try:
+                    broad_raw, errors = self.marktguru.load_offers(postal_code)
+                    raw.extend(broad_raw)
+                    request_errors.extend(errors)
+                except Exception as exc:
+                    request_errors.append(f"Marktguru: {type(exc).__name__}: {exc}")
 
             try:
                 targeted_raw, errors = self.marktguru.load_retailer_queries(
@@ -267,6 +336,16 @@ class SourceLoader:
                 f"{name}: offizielle Quelle war nicht verfügbar; Marktguru wurde als Fallback verwendet."
             )
 
+        if "Globus" in globus_image_enrichment and "Globus" in final_by_retailer:
+            enriched, image_count = self._enrich_globus_images(final_by_retailer["Globus"], marktguru_mapped)
+            final_by_retailer["Globus"] = enriched
+            if image_count:
+                source_states["Globus"] = (
+                    "offiziell + KaufDA-/Marktguru-Bild"
+                    if "KaufDA" in source_states.get("Globus", "")
+                    else "offiziell + Marktguru-Bild"
+                )
+
         # Update labels only from first-party adapters that actually supplied
         # the catalogue displayed to the user.
         if source_states.get("REWE") == "offiziell" and self.official_rewe.last_market_url:
@@ -281,7 +360,7 @@ class SourceLoader:
             active_contexts["Marktkauf"] = self._context_with_market(
                 active_contexts["Marktkauf"], self.official_marktkauf.last_market_label, self.official_marktkauf.last_market_url
             )
-        if source_states.get("Globus") == "offiziell" and self.official_globus.last_market_url:
+        if source_states.get("Globus", "").startswith("offiziell") and self.official_globus.last_market_url:
             active_contexts["Globus"] = self._context_with_market(
                 active_contexts["Globus"], self.official_globus.last_market_label, self.official_globus.last_market_url
             )
@@ -340,8 +419,9 @@ class SourceLoader:
         }
 
 class SupermarketEngine:
-    # Category precedence and conflict metadata changed in 0.1.3.
-    SNAPSHOT_SCHEMA = 6
+    # v8 retains the 0.1.3 category semantics, invalidates Globus flyer pages,
+    # and records the strict optional KaufDA/Marktguru image enrichment.
+    SNAPSHOT_SCHEMA = 8
     def __init__(self) -> None:
         self.store = PersistentSnapshotStore(CACHE_DB, CACHE_TTL_MINUTES, RESULT_RETENTION_HOURS, CACHE_MAX_SNAPSHOTS)
         self.loader = SourceLoader()

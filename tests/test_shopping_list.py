@@ -101,19 +101,20 @@ def test_json_roundtrip_schema_and_separate_ids():
     assert result["ean"] is None
 
 
-def test_bring_handoff_contains_only_open_items_without_credentials():
-    text = js("m.bringText([{name:'Milch',quantity:2,pack:'1 l',retailer:'REWE',checked:false},{name:'Brot',quantity:1,checked:true}])")
-    assert text == "2× Milch (1 l) – REWE"
-
-
-def test_bring_handoff_uses_product_data_but_not_korbklar_category():
+def test_kitchenowl_adapter_matches_installed_add_item_schema():
     result = js("""(()=>{
-      const item=m.offerToItem({product:'Pom-Bär',brand:'FUNNY-FRISCH',pack:'75 g',ean:'4001234567890',category:'Snacks',retailer:'REWE',regular_price:1.49});
-      return {item,text:m.bringText([item])};
+      const item=m.offerToItem({product:'Pom-Bär',brand:'FUNNY-FRISCH',pack:'75 g',ean:'4001234567890',category:'Snacks',retailer:'ALDI Nord',regular_price:0.99,valid_from:'2026-08-24',valid_until:'2026-08-29'});
+      return m.kitchenOwlItem(item);
     })()""")
-    assert result["item"]["brand"] == "FUNNY-FRISCH"
-    assert result["text"] == "1× FUNNY-FRISCH Pom-Bär (75 g) · EAN 4001234567890 – REWE"
-    assert "Snacks" not in result["text"]
+    assert set(result) == {"name", "description"}
+    assert result["name"] == "FUNNY-FRISCH Pom-Bär"
+    assert "Menge: 1" in result["description"]
+    assert "Packung: 75 g" in result["description"]
+    assert "Kategorie: Snacks" in result["description"]
+    assert "Händler: ALDI Nord" in result["description"]
+    assert "Angebot: 0,99" in result["description"]
+    assert "Zeitraum: 2026-08-24 bis 2026-08-29" in result["description"]
+    assert "EAN: 4001234567890" in result["description"]
 
 
 def test_offer_image_uses_only_the_local_proxy_and_survives_json_roundtrip():

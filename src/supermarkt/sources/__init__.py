@@ -8,5 +8,6 @@ from .globus import GlobusMarket, GlobusMarketResolver, OfficialGlobusSource
 from .aldi_chain import AldiOfferChain, AldiOfferProvider
 from .netto_scottie import OfficialNettoScottieSource
 from .drogeries import OfficialMuellerSource, OfficialRossmannSource
+from .kaufda import KaufdaGlobusImageSource
 
-__all__ = ["OfficialAldiSource", "OfficialEdekaSource", "OfficialMarktkaufSource", "OfficialKauflandSource", "MarktguruClient", "OfficialReweSource", "OfficialHolabSource", "OfficialGlobusSource", "GlobusMarket", "GlobusMarketResolver", "AldiOfferChain", "AldiOfferProvider", "OfficialNettoScottieSource", "OfficialMuellerSource", "OfficialRossmannSource"]
+__all__ = ["OfficialAldiSource", "OfficialEdekaSource", "OfficialMarktkaufSource", "OfficialKauflandSource", "MarktguruClient", "OfficialReweSource", "OfficialHolabSource", "OfficialGlobusSource", "GlobusMarket", "GlobusMarketResolver", "AldiOfferChain", "AldiOfferProvider", "OfficialNettoScottieSource", "OfficialMuellerSource", "OfficialRossmannSource", "KaufdaGlobusImageSource"]

@@ -325,9 +325,13 @@ Copyright © 2026 lesecuritae for Tarnkappe.info.
 
 KorbKlar is independent and is not affiliated with any retailer or loyalty program mentioned. Brand, retailer, and product names belong to their respective owners.
 
+## What is new in 0.1.4
+
+Version 0.1.4 prevents complete Globus flyer pages from appearing as product images. Globus uses explicitly article-scoped images; as a narrow exception, KaufDA and then Marktguru may supply only the image URL of a single offer when name, price, pack, and validity match unambiguously. Without a safe match the image remains empty and all offer data stays official. ALDI South separates selling price, base price, previous price, and deposit before splitting genuine multi-product cards. A new snapshot generation invalidates old incorrect mappings without broadly deleting the image cache or other runtime data. The app-specific handoff was removed while general Web Share and text/file exports remain. An optional KitchenOwl adapter boundary maps items to its official name/description shape without credentials or network access.
+
 ## What is new in 0.1.3
 
-Version 0.1.3 gives concrete product kinds precedence over conflicting source categories and records category conflicts structurally. The Bring Web Share handoff optionally includes brand and EAN while deliberately excluding KorbKlar's category. The duplicate ALDI-nearby selector has been removed; ALDI North and South remain directly selectable as retailers. Retailer tiles remain the same size even with long names. Existing native Windows setup and browser discovery remain intact.
+Version 0.1.3 gives concrete product kinds precedence over conflicting source categories and records category conflicts structurally. The duplicate ALDI-nearby selector has been removed; ALDI North and South remain directly selectable as retailers. Retailer tiles remain the same size even with long names. Existing native Windows setup and browser discovery remain intact.
 
 ## What is new in 0.1.2
 
@@ -335,7 +339,7 @@ Version 0.1.2 displays both the per-container deposit and the total deposit for 
 
 ## What is new in 0.1.1
 
-Version 0.1.1 adds “Netto schwarz” as a retailer separate from the red-and-yellow Netto Marken-Discount, official Rossmann advertising offers and clearly labelled Müller online offers. Public Netto+ member prices use a distinct loyalty programme and unknown regular prices are never invented. Explicit deposits, including the BLACK CAT Energy offer notation, remain separate from the goods price. Open items from the existing local shopping list can optionally be handed to Bring through the operating system's share sheet without storing Bring credentials.
+Version 0.1.1 adds “Netto schwarz” as a retailer separate from the red-and-yellow Netto Marken-Discount, official Rossmann advertising offers and clearly labelled Müller online offers. Public Netto+ member prices use a distinct loyalty programme and unknown regular prices are never invented. Explicit deposits, including the BLACK CAT Energy offer notation, remain separate from the goods price.
 
 ## What is new in 0.1.0
 

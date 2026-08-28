@@ -82,6 +82,23 @@ def test_parser_entities_prices_base_price_dates_and_deduplication():
     assert offer.source_category == "Prospektseite 2"
 
 
+def test_parser_never_uses_flyer_page_as_product_image_and_prefers_article_image():
+    payload = {"pages": [{
+        "page": 2,
+        "image": "https://example.test/flyer/page-2.jpg",
+        "zoom-image": "https://example.test/flyer/page-2-zoom.jpg",
+        "articles": [
+            article(article_id="without-image"),
+            article(article_id="with-image", product_image="https://example.test/products/4711.webp"),
+        ],
+    }]}
+
+    offers = OfficialGlobusSource.parse(payload, MARKET)
+
+    assert [offer.image_url for offer in offers] == ["", "https://example.test/products/4711.webp"]
+    assert all("/flyer/" not in offer.image_url for offer in offers)
+
+
 @pytest.mark.parametrize(("raw", "expected"), [("1,29 €", 1.29), ("12.99 EUR", 12.99), ("ab 2 €", 2.0), ("", None)])
 def test_price_formats(raw, expected):
     assert _price(raw) == expected
