@@ -24,8 +24,9 @@ __ERROR_HTML__
 <select name="rewe_market_id" id="reweMarket" disabled><option value="">Automatische Auswahl</option></select>
 <div class="marketHint" id="reweMarketHint" aria-live="polite"></div>
 </div>
-<fieldset class="retailerPicker">
-<legend>Welche Märkte möchtest du vergleichen?</legend>
+<details class="retailerPicker" id="retailerPicker" open>
+<summary><span>Welche Märkte möchtest du vergleichen?</span><span class="retailerSummary" id="retailerSummary">Alle Händler ausgewählt</span><span class="changeLabel" id="retailerChangeLabel">ändern</span></summary>
+<div class="retailerPickerBody">
 <p>Wähle die Händler aus, deren Angebote geladen werden sollen.</p>
 <div class="retailerGrid">
 <label><input type="checkbox" name="retailers" value="ALDI Nord" checked> Aldi Nord</label>
@@ -43,7 +44,8 @@ __ERROR_HTML__
 <label><input type="checkbox" name="retailers" value="Rossmann" checked> Rossmann</label>
 <label><input type="checkbox" name="retailers" value="Müller" checked> Müller</label>
 </div>
-</fieldset>
+</div>
+</details>
 <label class="refreshRow" for="refreshToggle"><input type="checkbox" name="refresh" value="1" id="refreshToggle">Angebote neu laden statt aus dem Zwischenspeicher</label>
 <button type="submit" id="submitButton">Angebote suchen</button>
 </form>

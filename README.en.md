@@ -88,11 +88,11 @@ The browser interface and REST API use the same comparison engine. Retailer adap
 
 ## Supported retailers and data paths
 
-KorbKlar currently supports REWE, EDEKA, Marktkauf, ALDI Nord, ALDI Süd, Kaufland, Lidl, PENNY, Netto Marken-Discount, GLOBUS, Combi, and famila Nordwest.
+KorbKlar currently supports REWE, EDEKA, Marktkauf, ALDI Nord, ALDI Süd, Kaufland, Lidl, PENNY, Netto Marken-Discount, Netto schwarz, GLOBUS, HOL’AB!, Rossmann, Müller, Combi, and famila Nordwest.
 
-REWE, EDEKA, Marktkauf, and Kaufland are loaded preferentially from direct retailer sources. For ALDI, the postal code determines the region and only ALDI Nord or ALDI Süd is retrieved directly. If the region cannot be determined unambiguously, ALDI is omitted and a warning is shown.
+REWE, EDEKA, Marktkauf, Kaufland, GLOBUS, and the applicable ALDI region are loaded preferentially from direct retailer sources. ALDI Süd uses its structured official weekly publication as its complete primary source. ALDI Nord takes price, unit price, explicitly published deposit, and product image from its official offer data. If the ALDI region cannot be determined unambiguously and no explicit selection was made, ALDI is omitted and a warning is shown.
 
-Lidl, PENNY, Netto Marken-Discount, GLOBUS, Combi, and famila Nordwest are loaded from regional Marktguru data. KorbKlar combines a broad regional search with supplementary retailer-name searches; the name queries alone are never treated as a complete catalogue.
+Lidl, PENNY, Netto Marken-Discount, Combi, and famila Nordwest are loaded from regional Marktguru data. Netto schwarz, Rossmann, Müller, and HOL’AB! use separate source-specific data paths. KorbKlar combines a broad regional search with supplementary retailer-name searches where applicable; the name queries alone are never treated as a complete catalogue.
 
 Combi and famila Nordwest belong to the Bünting group and only trade in north-western Germany. Both are therefore optional in the same sense as Marktkauf and GLOBUS: where they return nothing, that is not reported as a source error.
 
@@ -299,11 +299,15 @@ Retailer websites and undocumented interfaces may change at any time. An individ
 
 KorbKlar does not invent missing prices or estimate unknown loyalty benefits. Completeness and freshness depend on reachable regional source data.
 
+## Shopping list and export
+
+The **Einkauf** area stores the personal list exclusively in IndexedDB in the current browser profile. There are no accounts, server-side personal lists, trackers, or automatic device synchronisation. Offers and manual items can be added, edited, checked, and grouped by retailer. Goods and deposits are calculated separately; when prices are missing, KorbKlar shows only the known total.
+
+General transfer options include text copy, Web Share, TXT, and a versioned JSON backup with a local import preview. KorbKlar has no app-specific Bring or KitchenOwl connection.
+
 ## Roadmap
 
-Potential future integrations include Grocy, KitchenOwl, and further REST or OpenAPI connections for local automations, agents, and Conduit or LLM workflows such as the originally planned automatic Monday report.
-
-These integrations are not part of version 0.1.0. The existing REST API can already support custom automations.
+Future versions may add REST or OpenAPI connections for local automations. The current release does not connect or synchronise with an external shopping-list application. The existing REST API can already support custom automations.
 
 ## Support the project
 
@@ -324,51 +328,3 @@ The source code is available under the [BSD 3-Clause License](LICENSE).
 Copyright © 2026 lesecuritae for Tarnkappe.info.
 
 KorbKlar is independent and is not affiliated with any retailer or loyalty program mentioned. Brand, retailer, and product names belong to their respective owners.
-
-## What is new in 0.1.4
-
-Version 0.1.4 prevents complete Globus flyer pages from appearing as product images. Globus uses explicitly article-scoped images; as a narrow exception, KaufDA and then Marktguru may supply only the image URL of a single offer when name, price, pack, and validity match unambiguously. Without a safe match the image remains empty and all offer data stays official. ALDI South separates selling price, base price, previous price, and deposit before splitting genuine multi-product cards. A new snapshot generation invalidates old incorrect mappings without broadly deleting the image cache or other runtime data. The app-specific handoff was removed while general Web Share and text/file exports remain. An optional KitchenOwl adapter boundary maps items to its official name/description shape without credentials or network access.
-
-## What is new in 0.1.3
-
-Version 0.1.3 gives concrete product kinds precedence over conflicting source categories and records category conflicts structurally. The duplicate ALDI-nearby selector has been removed; ALDI North and South remain directly selectable as retailers. Retailer tiles remain the same size even with long names. Existing native Windows setup and browser discovery remain intact.
-
-## What is new in 0.1.2
-
-Version 0.1.2 displays both the per-container deposit and the total deposit for multipacks. A four-pack of BLACK CAT Energy is now clearly labelled “€0.25 per can · €1.00 total for 4”.
-
-## What is new in 0.1.1
-
-Version 0.1.1 adds “Netto schwarz” as a retailer separate from the red-and-yellow Netto Marken-Discount, official Rossmann advertising offers and clearly labelled Müller online offers. Public Netto+ member prices use a distinct loyalty programme and unknown regular prices are never invented. Explicit deposits, including the BLACK CAT Energy offer notation, remain separate from the goods price.
-
-## What is new in 0.1.0
-
-Version 0.1.0 adds a native Globus adapter, optional retailer filters in the API and start page, and manual REWE store selection when several stores exactly match the entered postcode. Multi-product ALDI South cards are fully expanded. REWE Bonus credits are shown separately and no longer treated as a reduced sale price.
-
-## What is new in 0.0.7
-
-Version 0.0.7 adds native Windows setup and portable discovery of Chromium, Chrome, and Edge. An optional control deliberately refreshes offers by bypassing the server-side offer cache for that search only. Leverkusen postcodes are recorded as exact ALDI South evidence while prefix-based guesses remain excluded. HTTPS verification uses a reproducible CA bundle while certificate and hostname verification remain enabled. Explicit euro-denominated REWE Bonus amounts were first captured structurally; since 0.1.0 credits are clearly separated from the sale price.
-
-## What is new in 0.0.6
-
-The ALDI resolver now contains additional postcode-exact, versioned evidence from official store regions for Aachen, Düren, Heinsberg and selected Ruhr border areas. It explicitly does not classify the entire `52xxx` prefix; unknown postcodes still use bounded store-location evidence. Users who know their local stores may optionally select ALDI North, ALDI South, or both on the start page. That explicit choice overrides automatic detection and never substitutes the other region.
-
-## What is new in 0.0.5
-
-Offer images remain visible in the browser-local shopping list through the secured local image proxy, including after reload. Explicitly published deposits from ALDI, REWE and Marktguru are stored separately and calculated by quantity. KorbKlar never guesses a deposit from packaging alone.
-
-## What is new in 0.0.4
-
-Revision: Zenq & Enzo
-
-ALDI Süd offer validity is now resolved from the individual product card first, its offer group second, and the general weekly range only as a fallback. Weekly, Thursday, and Friday/Saturday promotions therefore remain distinct. Redundant parser paths and expired day groups no longer create duplicate offers, while genuinely different promotions are retained.
-
-## What is new in 0.0.3
-
-Categories map to 18 stable German top-level labels. HOL’AB! appears only for postcodes in its official store list; six structured offers are honestly marked as partial coverage. Deposits and quantity conditions remain separate. REWE uses card deeplinks where present, while Lidl without a reliable identifier uses an official product search. The lightbox, local background and automatic light/dark theme load no third-party assets.
-
-The **Einkauf** area stores the personal shopping list exclusively in IndexedDB in the current browser profile. There are no accounts, server-side personal lists, trackers, or automatic device synchronisation. Offers and manual items can be added, edited, checked and grouped by retailer. Goods and deposits use separate integer-cent arithmetic. Missing prices result in an explicitly incomplete known total; saved offer prices are never silently refreshed and expiry and quantity conditions remain visible.
-
-Portable options include readable text, clipboard, Web Share, TXT, and a versioned JSON backup with a local preview. Imports are limited to 256 KiB and never sent to the backend. The canonical model keeps quantity, unit, pack, local ID, offer ID, source ID, and optional barcode separate. A small adapter boundary allows future KitchenOwl/Grocy adapters, but 0.0.3 includes no connection or synchronisation.
-
-ALDI resolution uses exact official postcode evidence or strong store tags. Border regions load North and South separately. The offer chain uses official pages, a schema- and region-bound last-known-good cache, then replaceable external catalogue data; one ALDI region is never substituted for the other.

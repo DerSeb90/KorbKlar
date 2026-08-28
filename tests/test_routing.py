@@ -62,6 +62,41 @@ def test_zero_hit_retailers_are_not_exposed_as_filter_chips():
     assert page["retailer_counts"] == {"Lidl": 1}
 
 
+def test_results_expose_selected_market_labels_for_retailers_with_offers():
+    from dataclasses import asdict, replace
+    from supermarkt.compare import OfferComparator
+    from supermarkt.models import Offer
+    from supermarkt.service import SupermarketEngine
+
+    contexts = SourceLoader._contexts()
+    contexts["REWE"] = replace(
+        contexts["REWE"],
+        market_label="REWE Markt – Hauptstr. 1, 12345 Teststadt",
+        market_url="https://www.rewe.de/angebote/teststadt/100/rewe-markt-hauptstrasse/",
+    )
+    offer = Offer(
+        offer_id="rewe-test", retailer="REWE", category="Test", name="Testprodukt",
+        brand="", description="", price=1.0, base_price=None, base_unit="",
+        pack_signature="", validity_label="Aktuell", match_key="unique:rewe",
+        source_url="https://www.rewe.de/",
+    )
+    engine = object.__new__(SupermarketEngine)
+    engine.comparator = OfferComparator()
+    snapshot = {
+        "search_id": "market-label", "postal_code": "12345",
+        "offers": [asdict(offer)],
+        "retailers": {name: asdict(value) for name, value in contexts.items()},
+        "source_states": {}, "request_errors": [], "store_warnings": [], "created_at": 0,
+    }
+
+    page = engine.page(snapshot, view="all")
+    assert page["retailer_markets"] == [{
+        "retailer": "REWE",
+        "label": "REWE Markt – Hauptstr. 1, 12345 Teststadt",
+        "url": "https://www.rewe.de/angebote/teststadt/100/rewe-markt-hauptstrasse/",
+    }]
+
+
 def test_direct_source_failure_uses_target_week_marktguru_fallback(monkeypatch):
     from datetime import date
     from types import SimpleNamespace

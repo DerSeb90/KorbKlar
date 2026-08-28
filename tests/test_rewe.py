@@ -1,8 +1,40 @@
 from bs4 import BeautifulSoup
 import pytest
+from types import SimpleNamespace
 
 from supermarkt.sources.rewe import OfficialReweSource
 from supermarkt.models import ToolError
+
+
+def test_rewe_market_search_counts_unique_selectable_market_ids(monkeypatch):
+    html = """
+    <main>
+      <article><span>REWE Markt 12345 Teststadt</span>
+        <a href="/angebote/teststadt/100/rewe-markt-hauptstrasse/">Angebote</a>
+      </article>
+      <article><span>REWE Markt 12345 Teststadt</span>
+        <a href="/angebote/teststadt/100/rewe-markt-hauptstrasse-neu/">Angebote</a>
+      </article>
+      <article><span>REWE Center 12345 Teststadt</span>
+        <a href="/angebote/teststadt/200/rewe-center-marktplatz/">Angebote</a>
+      </article>
+    </main>
+    """
+
+    class Response:
+        status_code = 200
+        text = html
+
+    class Session:
+        def get(self, _url, timeout):
+            assert timeout > 0
+            return Response()
+
+    source = OfficialReweSource(SimpleNamespace(locality=lambda postal_code: "Teststadt"))
+    monkeypatch.setattr(source, "_session", lambda: Session())
+
+    markets = source.markets("12345")
+    assert [market["market_id"] for market in markets] == ["200", "100"]
 
 
 def test_rewe_card_keeps_explicit_deposit():

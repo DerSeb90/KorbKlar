@@ -419,9 +419,9 @@ class SourceLoader:
         }
 
 class SupermarketEngine:
-    # v8 retains the 0.1.3 category semantics, invalidates Globus flyer pages,
-    # and records the strict optional KaufDA/Marktguru image enrichment.
-    SNAPSHOT_SCHEMA = 8
+    # v9 also invalidates snapshots from the former partial ALDI-Süd catalogue
+    # and snapshots which omitted ALDI-Nord's structured deposit value.
+    SNAPSHOT_SCHEMA = 9
     def __init__(self) -> None:
         self.store = PersistentSnapshotStore(CACHE_DB, CACHE_TTL_MINUTES, RESULT_RETENTION_HOURS, CACHE_MAX_SNAPSHOTS)
         self.loader = SourceLoader()
@@ -521,6 +521,18 @@ class SupermarketEngine:
         for offer in category_scope:
             category_counts[offer.category] = category_counts.get(offer.category, 0) + 1
 
+        retailer_markets = [
+            {
+                "retailer": name,
+                "label": context.market_label,
+                "url": context.market_url,
+            }
+            for name, context in sorted(retailers.items())
+            if source_retailer_counts.get(name, 0)
+            and clean_text(context.market_label)
+            and clean_text(context.market_label).casefold() != name.casefold()
+        ]
+
         ordered = sorted(filtered, key=lambda offer: offer_sort_key(offer, sort))
         page_size = max(1, min(int(page_size), 100))
         page_count = max(1, (len(ordered) + page_size - 1) // page_size)
@@ -545,6 +557,7 @@ class SupermarketEngine:
             "retailer": selected_retailer,
             "view": normalized_view,
             "retailer_counts": counts,
+            "retailer_markets": retailer_markets,
             "category": selected_category,
             "category_counts": category_counts,
             "selected_loyalty_programs": list(selected_programs),

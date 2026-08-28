@@ -115,6 +115,44 @@ def test_retailer_tiles_have_equal_grid_rows_and_height():
     assert "height:100%;min-height:58px" in css
 
 
+def test_retailer_selection_is_collapsible_and_summarized():
+    page = ui.static_text("home.html")
+    script = ui.static_text("home-v2.js")
+    assert '<details class="retailerPicker" id="retailerPicker" open>' in page
+    assert 'id="retailerSummary"' in page
+    assert 'id="retailerChangeLabel"' in page
+    assert "updateRetailerSummary" in script
+    assert "retailerPicker.open=false" in script
+
+
+def test_results_filters_and_loyalty_are_collapsible_after_search():
+    page = ui.static_text("results.html")
+    script = ui.static_text("results-v2.js")
+    assert '<details class="filterBox" id="filterBox">' in page
+    assert '<details class="loyaltyBox" id="loyaltyBox" hidden>' in page
+    assert 'id="loyaltySummary"' in page
+    assert "updateLoyaltySummary" in script
+    assert 'id="marketBox"' in page
+    assert "renderMarkets" in script
+
+
+def test_results_page_has_no_sticky_scroll_traps():
+    css = ui.static_text("results.css")
+    assert ".top{position:sticky" not in css
+    assert ".mainTabs{position:sticky" not in css
+
+
+def test_bonus_price_labels_explain_the_selected_programs():
+    page = ui.static_text("results.html")
+    script = ui.static_text("results-v2.js")
+    css = ui.static_text("results.css")
+    assert "Mit Auswahl" not in page
+    assert "Mit gewählten Bonusprogrammen" in page
+    assert 'data-label="Ohne Bonus"' in script
+    assert 'data-label="Mit Bonuswahl"' in script
+    assert ".price::before{content:attr(data-label)" in css
+
+
 def test_browser_rewe_market_lookup_returns_all_exact_matches(monkeypatch):
     from supermarkt import runtime
 

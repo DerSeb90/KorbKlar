@@ -388,13 +388,17 @@ class OfficialReweSource:
         soup = BeautifulSoup(response.text, "html.parser")
 
         exact: list[tuple[str, str, str]] = []
-        seen: set[str] = set()
+        # The search page can expose more than one URL/slug for the same store.
+        # Only the numeric market id represents an independently selectable market.
+        seen_market_ids: set[str] = set()
         for link in soup.select('a[href*="/angebote/"]'):
             href = urljoin(self.BASE, clean_text(link.get("href")))
             match = re.search(r"/angebote/[^/]+/(\d+)/[^/?#]+/?", href)
-            if not match or href in seen:
+            if not match:
                 continue
-            seen.add(href)
+            market_id = match.group(1)
+            if market_id in seen_market_ids:
+                continue
 
             node = link
             local_text = clean_text(link.get_text(" ", strip=True))
@@ -410,7 +414,8 @@ class OfficialReweSource:
                     break
             if postal_code not in local_text:
                 continue
-            exact.append((match.group(1), href, local_text))
+            seen_market_ids.add(market_id)
+            exact.append((market_id, href, local_text))
 
         if not exact:
             raise ToolError(f"REWE fand in {locality} keinen Markt mit exakt PLZ {postal_code}")

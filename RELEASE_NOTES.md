@@ -1,3 +1,27 @@
+# 0.1.5
+
+KorbKlar 0.1.5 behebt die unvollständige ALDI-Süd-Erfassung und verbessert die
+Bedienung der Ergebnisansicht. Der strukturierte offizielle ALDI-Süd-Prospekt
+ist nun die vollständige Primärquelle; dadurch erscheinen auch Lebensmittel,
+Obst und Gemüse, die auf der bisherigen Angebotsseite fehlten. Verkaufspreis,
+Grundpreis, ausdrückliches Pfand und artikelbezogenes Bild bleiben getrennt.
+ALDI Nord verwendet weiterhin seinen offiziellen Angebotsdatensatz und
+übernimmt daraus nun auch das ausdrückliche strukturierte Pfandfeld. Bei
+ALDI-Süd-Mehrfachgebinden wird das je Behälter ausgewiesene Pfand auf das
+Gesamtpfand des Verkaufspacks hochgerechnet und zugleich transparent je
+Behälter und als Packsumme angezeigt.
+
+Die Marktanzeige zählt nur tatsächlich auswählbare, deduplizierte REWE-Märkte.
+Händler- und Bonusauswahl werden nach der Suche platzsparend eingeklappt,
+bleiben aber jederzeit änderbar. Nicht notwendige Sticky-Bereiche wurden
+entfernt, damit der mobile Seitenfluss keine Inhalte oder Touch-Ziele verdeckt.
+Die ausgewählten konkreten Filialen werden kompakt im Ergebnis angezeigt.
+
+Die README-Dateien enthalten keine duplizierte Release-Historie mehr; diese
+Datei ist die einzige chronologische Release-Quelle. Versionsgebundene interne
+Zwischenberichte wurden aus dem öffentlichen Repository entfernt und aktuelle
+Funktionen, Händlerpfade, Einkaufsliste und Exportgrenzen wurden dokumentiert.
+
 # 0.1.4
 
 KorbKlar 0.1.4 korrigiert die Bildauswahl des offiziellen Globus-Adapters.
