@@ -7,6 +7,17 @@ __pycache__/
 *.sqlite3-wal
 *.sqlite3-shm
 .DS_Store
+*.log
+*.tmp
+*.orig
+*.rej
+*.bak
+.coverage
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+.idea/
+.vscode/
 
 # Build-Ausgaben
 dist/

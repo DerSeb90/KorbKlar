@@ -11,7 +11,7 @@ REQUIRED_MINIMUMS = {
     "REWE": 10,
     "Lidl": 50,
     "PENNY": 50,
-    "Netto": 50,
+    "Netto Marken-Discount": 50,
     "Kaufland": 50,
     "EDEKA": 10,
 }

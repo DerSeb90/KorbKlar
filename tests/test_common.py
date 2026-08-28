@@ -18,6 +18,12 @@ def test_deposit_is_parsed_only_when_explicitly_published():
     assert parse_deposit_text("Energy Drink in der Dose") is None
 
 
+def test_black_cat_marktguru_deposit_notation_is_preserved():
+    from supermarkt.common import parse_deposit_text
+
+    assert parse_deposit_text("BLACK CAT Energy Drink 4 x 0,25 Liter zzgl. Pfand 1.–") == 1.0
+
+
 def test_number_and_base_price():
     assert parse_number("1,99 €") == 1.99
     assert parse_base_price_text("1 kg = 3,98") == (3.98, "kg")

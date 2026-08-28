@@ -366,6 +366,7 @@ class OfficialAldiSource:
                 completed = subprocess.run(
                     [
                         chromium_command(), headless, "--no-sandbox", "--disable-gpu",
+                        "--disable-software-rasterizer", "--disable-crashpad-for-testing", "--single-process",
                         "--disable-dev-shm-usage", "--lang=de-DE",
                         "--virtual-time-budget=10000", "--dump-dom", url,
                     ],
@@ -381,7 +382,7 @@ class OfficialAldiSource:
                 errors.append(f"Chromium: {type(exc).__name__}: {exc}")
                 continue
             page = completed.stdout or ""
-            if completed.returncode == 0 and "<html" in page.casefold():
+            if "<html" in page.casefold():
                 return page
             errors.append(f"Chromium rc={completed.returncode}")
         raise ToolError("ALDI Süd Seite nicht abrufbar: " + " | ".join(errors[-3:]))

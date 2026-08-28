@@ -6,5 +6,7 @@ from .rewe import OfficialReweSource
 from .holab import OfficialHolabSource
 from .globus import GlobusMarket, GlobusMarketResolver, OfficialGlobusSource
 from .aldi_chain import AldiOfferChain, AldiOfferProvider
+from .netto_scottie import OfficialNettoScottieSource
+from .drogeries import OfficialMuellerSource, OfficialRossmannSource
 
-__all__ = ["OfficialAldiSource", "OfficialEdekaSource", "OfficialMarktkaufSource", "OfficialKauflandSource", "MarktguruClient", "OfficialReweSource", "OfficialHolabSource", "OfficialGlobusSource", "GlobusMarket", "GlobusMarketResolver", "AldiOfferChain", "AldiOfferProvider"]
+__all__ = ["OfficialAldiSource", "OfficialEdekaSource", "OfficialMarktkaufSource", "OfficialKauflandSource", "MarktguruClient", "OfficialReweSource", "OfficialHolabSource", "OfficialGlobusSource", "GlobusMarket", "GlobusMarketResolver", "AldiOfferChain", "AldiOfferProvider", "OfficialNettoScottieSource", "OfficialMuellerSource", "OfficialRossmannSource"]

@@ -17,4 +17,7 @@ def test_health_reports_actual_source_priority(monkeypatch):
     assert sources["REWE"].startswith("official primary")
     assert sources["Lidl"] == "Marktguru regional catalogue"
     assert sources["PENNY"] == "Marktguru regional catalogue"
-    assert sources["Netto"] == "Marktguru regional catalogue"
+    assert sources["Netto Marken-Discount"] == "Marktguru regional catalogue"
+    assert sources["Netto mit Scottie"].startswith("official")
+    assert sources["Rossmann"].startswith("official")
+    assert sources["Müller"].startswith("official")

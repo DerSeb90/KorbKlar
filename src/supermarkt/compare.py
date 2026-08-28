@@ -30,7 +30,7 @@ from .models import AGGREGATOR_RETAILERS, ComparisonResult, Offer, RetailerConte
 MARKTGURU_RETAILER_SLUGS = {
     "Lidl": "lidl",
     "PENNY": "penny",
-    "Netto": "netto-marken-discount",
+    "Netto Marken-Discount": "netto-marken-discount",
     "Globus": "globus",
     "Combi": "combi",
     "famila Nordwest": "famila-nordwest",

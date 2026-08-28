@@ -317,6 +317,10 @@ KorbKlar erfindet keine fehlenden Preise und schätzt keine unbekannten Bonusvor
 
 Für spätere Versionen sind zusätzliche Integrationen denkbar beziehungsweise geplant, darunter Grocy, KitchenOwl und weitere REST-/OpenAPI-Anbindungen für lokale Automationen und Agenten. Diese Integrationen sind keine Voraussetzung für Version 0.1.0.
 
+## Neuerungen in 0.1.1
+
+Version 0.1.1 ergänzt „Netto mit Scottie“ als vom rot-gelben Netto Marken-Discount getrennten Händler sowie offizielle Rossmann-Werbeangebote und klar als online gekennzeichnete Müller-Angebote. Öffentlich ausgewiesene Netto+-Mitgliederpreise sind ein eigenes Bonusprogramm; unbekannte Normalpreise werden nicht erfunden. Explizite Pfandangaben wie beim BLACK-CAT-Energy-Angebot bleiben getrennt vom Warenpreis erhalten. Die bestehende lokale Einkaufsliste kann offene Artikel optional und ohne gespeicherte Zugangsdaten über die Betriebssystem-App-Auswahl an Bring übergeben.
+
 ## Neuerungen in 0.1.0
 
 Version 0.1.0 ergänzt einen nativen Globus-Adapter, optionale Händlerfilter in API und Startseite sowie eine manuelle REWE-Marktauswahl, wenn mehrere Märkte exakt zur eingegebenen PLZ gehören. ALDI-Süd-Mehrproduktkarten werden vollständig aufgeteilt. REWE-Bonusgutschriften werden separat angezeigt und nicht mehr als reduzierter Verkaufspreis bewertet.

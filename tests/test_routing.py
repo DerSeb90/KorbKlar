@@ -3,7 +3,7 @@ from supermarkt.service import SourceLoader
 
 
 def test_marktguru_scope_is_minimal():
-    assert AGGREGATOR_RETAILERS == {"Lidl", "PENNY", "Netto", "Globus", "Combi", "famila Nordwest"}
+    assert AGGREGATOR_RETAILERS == {"Lidl", "PENNY", "Netto Marken-Discount", "Globus", "Combi", "famila Nordwest"}
     assert not {"ALDI Nord", "ALDI Süd", "REWE", "EDEKA", "Marktkauf", "Kaufland"} & AGGREGATOR_RETAILERS
 
 
@@ -11,7 +11,8 @@ def test_all_expected_retailers_exist():
     names = {spec.name for spec in RETAILER_SPECS}
     assert {
         "REWE", "EDEKA", "Marktkauf", "ALDI Nord", "ALDI Süd", "Kaufland",
-        "Lidl", "PENNY", "Netto", "Globus", "Combi", "famila Nordwest",
+        "Lidl", "PENNY", "Netto Marken-Discount", "Globus", "Combi", "famila Nordwest",
+        "Netto mit Scottie", "Rossmann", "Müller",
     } <= names
 
 
@@ -139,7 +140,7 @@ def test_direct_source_failure_uses_target_week_marktguru_fallback(monkeypatch):
 
     result = loader.load("12345", "nord")
     retailers = {offer["retailer"] for offer in result["offers"]}
-    assert {"Lidl", "PENNY", "Netto", "REWE", "EDEKA", "Kaufland", "ALDI Nord"} <= retailers
+    assert {"Lidl", "PENNY", "Netto Marken-Discount", "REWE", "EDEKA", "Kaufland", "ALDI Nord"} <= retailers
     assert result["source_states"]["REWE"] == "Marktguru-Fallback"
     assert result["source_states"]["Kaufland"] == "Marktguru-Fallback"
 
@@ -225,10 +226,10 @@ def test_partial_broad_marktguru_result_is_completed_by_retailer_queries(monkeyp
 
     assert counts["Lidl"] == 2
     assert counts["PENNY"] == 1
-    assert counts["Netto"] == 1
+    assert counts["Netto Marken-Discount"] == 1
     assert marketguru.queries
     queried = set(marketguru.queries[0])
-    assert {"Lidl", "PENNY", "Netto", "REWE", "EDEKA", "Kaufland"} <= queried
+    assert {"Lidl", "PENNY", "Netto Marken-Discount", "REWE", "EDEKA", "Kaufland"} <= queried
     assert "Globus" not in queried
 
 

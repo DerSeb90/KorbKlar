@@ -28,7 +28,7 @@ from .loyalty import available_programs, normalize_program_ids
 from .models import AGGREGATOR_RETAILERS, RETAILER_SPECS, Offer, RetailerContext, ToolError, offer_from_dict, offer_to_dict
 from .presentation import offer_for_response, offer_sort_key, resolve_retailer_name
 from .region import AldiRegionResolver
-from .sources import MarktguruClient, OfficialAldiSource, OfficialEdekaSource, OfficialGlobusSource, OfficialKauflandSource, OfficialMarktkaufSource, OfficialReweSource, OfficialHolabSource
+from .sources import MarktguruClient, OfficialAldiSource, OfficialEdekaSource, OfficialGlobusSource, OfficialKauflandSource, OfficialMarktkaufSource, OfficialReweSource, OfficialHolabSource, OfficialNettoScottieSource, OfficialMuellerSource, OfficialRossmannSource
 from .sources.aldi_chain import AldiOfferChain
 
 class SourceLoader:
@@ -49,6 +49,9 @@ class SourceLoader:
         self.official_edeka = OfficialEdekaSource(TIMEOUT_SECONDS)
         self.official_holab = OfficialHolabSource(http)
         self.official_globus = OfficialGlobusSource(http)
+        self.official_netto_scottie = OfficialNettoScottieSource(http)
+        self.official_rossmann = OfficialRossmannSource(timeout_seconds=TIMEOUT_SECONDS)
+        self.official_mueller = OfficialMuellerSource(http)
         self.official_marktkauf = OfficialMarktkaufSource(TIMEOUT_SECONDS)
         self.official_kaufland = OfficialKauflandSource(
             http,
@@ -131,6 +134,12 @@ class SourceLoader:
         official_jobs = {name: loader for name, loader in official_loaders.items() if name in active_contexts}
         if hasattr(self, "official_globus") and "Globus" in active_contexts:
             official_jobs["Globus"] = lambda: self.official_globus.load(postal_code)
+        if hasattr(self, "official_netto_scottie") and "Netto mit Scottie" in active_contexts:
+            official_jobs["Netto mit Scottie"] = lambda: self.official_netto_scottie.load(postal_code)
+        if hasattr(self, "official_rossmann") and "Rossmann" in active_contexts:
+            official_jobs["Rossmann"] = lambda: self.official_rossmann.load(postal_code)
+        if hasattr(self, "official_mueller") and "Müller" in active_contexts:
+            official_jobs["Müller"] = lambda: self.official_mueller.load(postal_code)
         if hasattr(self, "official_holab") and "HOL’AB!" in active_contexts:
             official_jobs["HOL’AB!"] = lambda: self.official_holab.load(postal_code)
         completed_sources = 0
@@ -204,7 +213,7 @@ class SourceLoader:
         marktguru_mapped: list[Offer] = []
         if marketguru_candidates:
             completed_sources += 1
-            notify(status="loading", progress=62, source="Marktguru", retailer="Lidl, PENNY, Netto, Combi, famila", category="Händlerkategorien", step="Regionale Angebote werden geladen", processed_sources=completed_sources, processed_products=processed_products)
+            notify(status="loading", progress=62, source="Marktguru", retailer="Lidl, PENNY, Netto Marken-Discount, Combi, famila", category="Händlerkategorien", step="Regionale Angebote werden geladen", processed_sources=completed_sources, processed_products=processed_products)
             raw: list[dict[str, Any]] = []
             try:
                 broad_raw, errors = self.marktguru.load_offers(postal_code)
@@ -226,7 +235,7 @@ class SourceLoader:
             if raw:
                 marktguru_mapped = deduplicate_offers(self.mapper.map_all(raw, active_contexts))
                 processed_products += len(marktguru_mapped)
-            notify(status="processing", progress=88, source="Marktguru", retailer="Lidl, PENNY, Netto, Combi, famila", category="Händlerkategorien", step="Angebote zugeordnet", processed_sources=completed_sources, processed_products=processed_products)
+            notify(status="processing", progress=88, source="Marktguru", retailer="Lidl, PENNY, Netto Marken-Discount, Combi, famila", category="Händlerkategorien", step="Angebote zugeordnet", processed_sources=completed_sources, processed_products=processed_products)
 
         for name in sorted(aggregator_names, key=str.casefold):
             offers = deduplicate_offers([
@@ -273,6 +282,12 @@ class SourceLoader:
             active_contexts["Globus"] = self._context_with_market(
                 active_contexts["Globus"], self.official_globus.last_market_label, self.official_globus.last_market_url
             )
+        if source_states.get("Netto mit Scottie") == "offiziell" and self.official_netto_scottie.last_market_url:
+            active_contexts["Netto mit Scottie"] = self._context_with_market(
+                active_contexts["Netto mit Scottie"],
+                self.official_netto_scottie.last_market_label,
+                self.official_netto_scottie.last_market_url,
+            )
         if source_states.get("Kaufland") == "offiziell" and self.official_kaufland.last_store_url:
             label = "Kaufland " + clean_text(self.official_kaufland.last_locality)
             active_contexts["Kaufland"] = self._context_with_market(
@@ -308,7 +323,7 @@ class SourceLoader:
         }
 
 class SupermarketEngine:
-    SNAPSHOT_SCHEMA = 4
+    SNAPSHOT_SCHEMA = 5
     def __init__(self) -> None:
         self.store = PersistentSnapshotStore(CACHE_DB, CACHE_TTL_MINUTES, RESULT_RETENTION_HOURS, CACHE_MAX_SNAPSHOTS)
         self.loader = SourceLoader()

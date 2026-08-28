@@ -21,10 +21,18 @@ RETAILER_SPECS: tuple[RetailerSpec, ...] = (
     RetailerSpec("Lidl", ("lidl",), "#0050aa", "https://www.lidl.de/c/angebote/s10007591"),
     RetailerSpec("PENNY", ("penny",), "#cc001c", "https://www.penny.de/angebote"),
     RetailerSpec(
-        "Netto",
+        "Netto Marken-Discount",
         ("netto marken-discount", "netto markendiscount", "netto-online", "netto"),
         "#f4c300",
         "https://www.netto-online.de/angebote/",
+    ),
+    RetailerSpec(
+        "Netto mit Scottie",
+        ("netto scottie", "netto mit hund", "netto salling", "netto schwarz"),
+        "#ffd500",
+        "https://netto.de/marktsuche/",
+        True,
+        ("netto marken-discount", "netto markendiscount", "netto-online"),
     ),
     RetailerSpec("Kaufland", ("kaufland",), "#e10915", "https://filiale.kaufland.de/"),
     RetailerSpec("EDEKA", ("edeka",), "#f7c600", "https://www.edeka.de/marktsuche.jsp"),
@@ -50,10 +58,12 @@ RETAILER_SPECS: tuple[RetailerSpec, ...] = (
         ("famila-nordost", "famila nordost"),
     ),
     RetailerSpec("HOL’AB!", ("hol'ab", "hol’ab", "holab"), "#e30613", "https://holab.de/angebote", True),
+    RetailerSpec("Rossmann", ("rossmann",), "#cf003d", "https://www.rossmann.de/de/filialen/index.html", True),
+    RetailerSpec("Müller", ("mueller", "müller drogerie", "mueller drogerie"), "#e30613", "https://www.mueller.de/storefinder/", True),
 )
 
 SPEC_BY_NAME = {spec.name: spec for spec in RETAILER_SPECS}
-AGGREGATOR_RETAILERS = frozenset({"Lidl", "PENNY", "Netto", "Globus", "Combi", "famila Nordwest"})
+AGGREGATOR_RETAILERS = frozenset({"Lidl", "PENNY", "Netto Marken-Discount", "Globus", "Combi", "famila Nordwest"})
 
 
 def resolve_retailer_names(values: list[str] | tuple[str, ...]) -> tuple[tuple[str, ...], tuple[str, ...]]:

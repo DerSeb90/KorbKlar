@@ -327,6 +327,10 @@ Copyright © 2026 lesecuritae for Tarnkappe.info.
 
 KorbKlar is independent and is not affiliated with any retailer or loyalty program mentioned. Brand, retailer, and product names belong to their respective owners.
 
+## What is new in 0.1.1
+
+Version 0.1.1 adds “Netto mit Scottie” as a retailer separate from the red-and-yellow Netto Marken-Discount, official Rossmann advertising offers and clearly labelled Müller online offers. Public Netto+ member prices use a distinct loyalty programme and unknown regular prices are never invented. Explicit deposits, including the BLACK CAT Energy offer notation, remain separate from the goods price. Open items from the existing local shopping list can optionally be handed to Bring through the operating system's share sheet without storing Bring credentials.
+
 ## What is new in 0.1.0
 
 Version 0.1.0 adds a native Globus adapter, optional retailer filters in the API and start page, and manual REWE store selection when several stores exactly match the entered postcode. Multi-product ALDI South cards are fully expanded. REWE Bonus credits are shown separately and no longer treated as a reduced sale price.

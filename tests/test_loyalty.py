@@ -54,7 +54,7 @@ def test_marktguru_app_price_is_bound_to_retailer_program():
 
 def test_program_registry_covers_supported_retailers_and_aldi_has_no_price_program():
     counts = {
-        "REWE": 1, "Lidl": 1, "PENNY": 1, "Netto": 1, "Kaufland": 1,
+        "REWE": 1, "Lidl": 1, "PENNY": 1, "Netto Marken-Discount": 1, "Kaufland": 1,
         "EDEKA": 1, "Marktkauf": 1, "Globus": 1, "ALDI Nord": 1, "ALDI Süd": 1,
     }
     ids = {item["id"] for item in available_programs(counts)}
@@ -63,6 +63,45 @@ def test_program_registry_covers_supported_retailers_and_aldi_has_no_price_progr
         "edeka_app", "marktkauf_app", "mein_globus", "payback",
     } <= ids
     assert not any("ALDI" in retailer for program in PROGRAM_BY_ID.values() for retailer in program.retailers)
+
+
+def test_two_netto_companies_have_separate_loyalty_programs():
+    counts = {"Netto Marken-Discount": 1, "Netto mit Scottie": 1}
+    programs = {item["id"]: item for item in available_programs(counts)}
+
+    assert programs["netto_plus"]["retailers"] == ("Netto Marken-Discount",)
+    assert programs["netto_scottie_plus"]["retailers"] == ("Netto mit Scottie",)
+
+
+def test_scottie_app_price_does_not_activate_marken_discount_program():
+    from supermarkt.loyalty import parse_public_loyalty_prices
+
+    benefits = parse_public_loyalty_prices("APP-PREIS 1,29", 1.79, "Netto mit Scottie")
+    assert benefits == (
+        LoyaltyBenefit("netto_scottie_plus", "direct_price", 1.29, "APP-PREIS"),
+    )
+
+
+def test_public_member_price_without_regular_price_is_not_relabelled():
+    item = Offer(
+        offer_id="s", retailer="Netto mit Scottie", category="Test", name="Mandarinen",
+        brand="", description="", price=None, base_price=None, base_unit="",
+        pack_signature="750g", validity_label="Aktuell", match_key="mandarinen|750g",
+        source_url="https://netto.de/angebote/",
+        benefits=(LoyaltyBenefit("netto_scottie_plus", "direct_price", 1.79, "Netto+ App-Preis"),),
+    )
+
+    assert apply_selected_programs(item, ())[0] is None
+    assert apply_selected_programs(item, ("netto_scottie_plus",))[:3] == (1.79, 1.79, 0.0)
+
+
+def test_netto_marken_discount_credit_is_not_a_direct_price():
+    from supermarkt.loyalty import parse_public_loyalty_prices
+
+    benefits = parse_public_loyalty_prices("2,49 € und 0,50 € Netto plus Vorteil", 2.49, "Netto Marken-Discount")
+    assert benefits == (
+        LoyaltyBenefit("netto_plus", "cashback", 0.50, "0,50 € Netto plus Vorteil"),
+    )
 
 
 def test_comparator_uses_selected_programs_for_winner():

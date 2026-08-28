@@ -17,7 +17,7 @@ def test_home_and_static_assets():
     assert 'src="/static/home-v2.js"' in response.text
     assert '<progress id="statusProgress"' in response.text
     assert "Welche Märkte möchtest du vergleichen?" in response.text
-    assert response.text.count('name="retailers"') == 11
+    assert response.text.count('name="retailers"') == 14
     assert 'value="Globus" checked' in response.text
     assert 'name="rewe_market_id"' in response.text
     assert client.get("/static/home.css").status_code == 200
