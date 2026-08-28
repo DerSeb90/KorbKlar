@@ -329,7 +329,7 @@ KorbKlar is independent and is not affiliated with any retailer or loyalty progr
 
 ## What is new in 0.1.1
 
-Version 0.1.1 adds “Netto mit Scottie” as a retailer separate from the red-and-yellow Netto Marken-Discount, official Rossmann advertising offers and clearly labelled Müller online offers. Public Netto+ member prices use a distinct loyalty programme and unknown regular prices are never invented. Explicit deposits, including the BLACK CAT Energy offer notation, remain separate from the goods price. Open items from the existing local shopping list can optionally be handed to Bring through the operating system's share sheet without storing Bring credentials.
+Version 0.1.1 adds “Netto schwarz” as a retailer separate from the red-and-yellow Netto Marken-Discount, official Rossmann advertising offers and clearly labelled Müller online offers. Public Netto+ member prices use a distinct loyalty programme and unknown regular prices are never invented. Explicit deposits, including the BLACK CAT Energy offer notation, remain separate from the goods price. Open items from the existing local shopping list can optionally be handed to Bring through the operating system's share sheet without storing Bring credentials.
 
 ## What is new in 0.1.0
 

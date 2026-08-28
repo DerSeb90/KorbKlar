@@ -35,7 +35,7 @@ def test_scottie_parser_maps_regular_and_public_app_prices():
     offers = source.load("10115")
 
     assert len(offers) == 2
-    assert offers[0].retailer == "Netto mit Scottie"
+    assert offers[0].retailer == "Netto schwarz"
     assert offers[0].price == 2.49
     assert offers[0].base_price == 4.98
     assert offers[0].valid_from == date(2026, 8, 24).isoformat()

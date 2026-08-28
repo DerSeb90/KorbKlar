@@ -38,7 +38,7 @@ class NettoScottieMarketResolver:
             if match:
                 self._api_key = match[1]
                 return self._api_key
-        raise ToolError("Netto-mit-Scottie-Marktsuche lieferte keine öffentliche Zugriffskonfiguration")
+        raise ToolError("Netto-schwarz-Marktsuche lieferte keine öffentliche Zugriffskonfiguration")
 
     @staticmethod
     def _select_exact(stores: list[dict], postal_code: str) -> dict | None:
@@ -56,7 +56,7 @@ class NettoScottieMarketResolver:
             locations = json.loads(self.http.get_bytes(location_url, {"Accept": "application/json"}).decode("utf-8"))
             latitude, longitude = float(locations[0]["lat"]), float(locations[0]["lon"])
         except (ValueError, TypeError, KeyError, IndexError, json.JSONDecodeError) as exc:
-            raise ToolError(f"Netto mit Scottie konnte PLZ {postal_code} nicht geokodieren") from exc
+            raise ToolError(f"Netto schwarz konnte PLZ {postal_code} nicht geokodieren") from exc
         query = urlencode({
             "brand": "netto", "country": "DE", "geo": f"{latitude},{longitude}",
             "radius": 100, "per_page": 25,
@@ -66,9 +66,9 @@ class NettoScottieMarketResolver:
                 f"{self.STORE_API}?{query}", {"Accept": "application/json", "Authorization": f"Bearer {self._public_api_key()}"},
             ).decode("utf-8"))
         except json.JSONDecodeError as exc:
-            raise ToolError("Netto-mit-Scottie-Marktsuche lieferte ungültiges JSON") from exc
+            raise ToolError("Netto-schwarz-Marktsuche lieferte ungültiges JSON") from exc
         if not isinstance(stores, list):
-            raise ToolError("Netto-mit-Scottie-Marktsuche lieferte eine unerwartete Antwort")
+            raise ToolError("Netto-schwarz-Marktsuche lieferte eine unerwartete Antwort")
         return self._select_exact([item for item in stores if isinstance(item, dict)], postal_code)
 
 
@@ -83,7 +83,7 @@ class OfficialNettoScottieSource:
         self.http = http
         self.market_resolver = market_resolver or NettoScottieMarketResolver(http).resolve
         self.last_market_url = self.BASE_URL + "/marktsuche/"
-        self.last_market_label = "Netto mit Scottie"
+        self.last_market_label = "Netto schwarz"
 
     @staticmethod
     def _dates(text: str) -> tuple[date | None, date | None]:
@@ -128,16 +128,16 @@ class OfficialNettoScottieSource:
         if not market:
             return []
         address = market.get("address") or {}
-        self.last_market_label = clean_text(market.get("name")) or f"Netto mit Scottie {postal_code}"
+        self.last_market_label = clean_text(market.get("name")) or f"Netto schwarz {postal_code}"
         self.last_market_url = self.BASE_URL + "/marktsuche/"
         try:
             from bs4 import BeautifulSoup
         except Exception as exc:  # pragma: no cover - installation guard
-            raise ToolError(f"Netto mit Scottie benötigt BeautifulSoup: {exc}") from exc
+            raise ToolError(f"Netto schwarz benötigt BeautifulSoup: {exc}") from exc
 
         payload = self.http.get_bytes(self.OFFERS_URL, {"Accept": "text/html"})
         if len(payload) > self.MAX_RESPONSE:
-            raise ToolError("Netto-mit-Scottie-Antwort überschreitet das Größenlimit")
+            raise ToolError("Netto-schwarz-Antwort überschreitet das Größenlimit")
         page = BeautifulSoup(payload.decode("utf-8", errors="replace"), "html.parser")
         start, end = self._dates(page.get_text(" ", strip=True))
         offers: list[Offer] = []
@@ -164,7 +164,7 @@ class OfficialNettoScottieSource:
                     LoyaltyBenefit("netto_scottie_plus", "direct_price", shown_price, "Netto+ App-Preis"),
                 )
             elif not is_app:
-                benefits = parse_public_loyalty_prices(card_text, regular_price, "Netto mit Scottie")
+                benefits = parse_public_loyalty_prices(card_text, regular_price, "Netto schwarz")
             base_price, base_unit = parse_base_price_text(description)
             pack_text = re.sub(
                 r"(?:App:\s*)?(?:1\s*(?:kg|Liter|l)|100\s*(?:g|ml))\s*=\s*\d+[.,]\d+",
@@ -178,7 +178,7 @@ class OfficialNettoScottieSource:
             offer_id = f"netto-scottie:{index}:{re.sub(r'[^a-z0-9]+', '-', name.casefold()).strip('-')}"
             offers.append(Offer(
                 offer_id=offer_id,
-                retailer="Netto mit Scottie",
+                retailer="Netto schwarz",
                 category="Aktuelle Wochenangebote",
                 name=name,
                 brand=brand,
@@ -200,5 +200,5 @@ class OfficialNettoScottieSource:
                 benefits=benefits,
             ))
         if not offers:
-            raise ToolError("Netto mit Scottie lieferte keine lesbaren Wochenangebote")
+            raise ToolError("Netto schwarz lieferte keine lesbaren Wochenangebote")
         return offers

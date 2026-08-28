@@ -27,8 +27,8 @@ RETAILER_SPECS: tuple[RetailerSpec, ...] = (
         "https://www.netto-online.de/angebote/",
     ),
     RetailerSpec(
-        "Netto mit Scottie",
-        ("netto scottie", "netto mit hund", "netto salling", "netto schwarz"),
+        "Netto schwarz",
+        ("netto scottie", "netto mit scottie", "netto mit hund", "netto salling", "netto schwarz"),
         "#ffd500",
         "https://netto.de/marktsuche/",
         True,

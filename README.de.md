@@ -319,7 +319,7 @@ Für spätere Versionen sind zusätzliche Integrationen denkbar beziehungsweise 
 
 ## Neuerungen in 0.1.1
 
-Version 0.1.1 ergänzt „Netto mit Scottie“ als vom rot-gelben Netto Marken-Discount getrennten Händler sowie offizielle Rossmann-Werbeangebote und klar als online gekennzeichnete Müller-Angebote. Öffentlich ausgewiesene Netto+-Mitgliederpreise sind ein eigenes Bonusprogramm; unbekannte Normalpreise werden nicht erfunden. Explizite Pfandangaben wie beim BLACK-CAT-Energy-Angebot bleiben getrennt vom Warenpreis erhalten. Die bestehende lokale Einkaufsliste kann offene Artikel optional und ohne gespeicherte Zugangsdaten über die Betriebssystem-App-Auswahl an Bring übergeben.
+Version 0.1.1 ergänzt „Netto schwarz“ als vom rot-gelben Netto Marken-Discount getrennten Händler sowie offizielle Rossmann-Werbeangebote und klar als online gekennzeichnete Müller-Angebote. Öffentlich ausgewiesene Netto+-Mitgliederpreise sind ein eigenes Bonusprogramm; unbekannte Normalpreise werden nicht erfunden. Explizite Pfandangaben wie beim BLACK-CAT-Energy-Angebot bleiben getrennt vom Warenpreis erhalten. Die bestehende lokale Einkaufsliste kann offene Artikel optional und ohne gespeicherte Zugangsdaten über die Betriebssystem-App-Auswahl an Bring übergeben.
 
 ## Neuerungen in 0.1.0
 

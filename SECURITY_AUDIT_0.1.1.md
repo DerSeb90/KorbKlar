@@ -13,6 +13,6 @@ Es bestehen keine bekannten Findings mit hoher oder kritischer Schwere.
 
 ## Sicherheitsrelevante Architektur
 
-Die neue Scottie-Marktauflösung bevorzugt exakte PLZ-Treffer und begrenzt den Entfernungsfallback. Externe Antworten sind zeitlich und in ihrer Größe begrenzt. Netto+, Netto plus, Rossmann-App-Vorteile und Müller-Blüten werden getrennt modelliert und nicht ohne belegten Endpreis als regulärer Angebotspreis verrechnet. Die Bring-Übergabe verwendet ausschließlich die lokale Web-Share-Schnittstelle beziehungsweise die Zwischenablage; KorbKlar speichert dafür keine fremden Zugangsdaten.
+Die neue Marktauflösung für Netto schwarz bevorzugt exakte PLZ-Treffer und begrenzt den Entfernungsfallback. Externe Antworten sind zeitlich und in ihrer Größe begrenzt. Netto+, Netto plus, Rossmann-App-Vorteile und Müller-Blüten werden getrennt modelliert und nicht ohne belegten Endpreis als regulärer Angebotspreis verrechnet. Die Bring-Übergabe verwendet ausschließlich die lokale Web-Share-Schnittstelle beziehungsweise die Zwischenablage; KorbKlar speichert dafür keine fremden Zugangsdaten.
 
 Ältere versionsgebundene Audit-Zwischenstände wurden vor diesem Release aus dem aktiven Repository entfernt. Ihre Historie bleibt über Git nachvollziehbar.

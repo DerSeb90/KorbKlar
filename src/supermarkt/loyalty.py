@@ -41,8 +41,8 @@ PROGRAMS: tuple[LoyaltyProgram, ...] = (
     ),
     LoyaltyProgram(
         "netto_scottie_plus",
-        "Netto+ (Scottie)",
-        ("Netto mit Scottie",),
+        "Netto+ (Netto schwarz)",
+        ("Netto schwarz",),
         "Nur öffentlich ausgewiesene Netto+-Mitgliederpreise werden berücksichtigt; persönliche Coupons werden nicht geschätzt.",
     ),
     LoyaltyProgram(
@@ -96,7 +96,7 @@ _RETAILER_DEFAULT_PROGRAM = {
     "Lidl": "lidl_plus",
     "PENNY": "penny_app",
     "Netto Marken-Discount": "netto_plus",
-    "Netto mit Scottie": "netto_scottie_plus",
+    "Netto schwarz": "netto_scottie_plus",
     "Kaufland": "kaufland_xtra",
     "EDEKA": "edeka_app",
     "Marktkauf": "marktkauf_app",

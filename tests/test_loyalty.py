@@ -66,17 +66,17 @@ def test_program_registry_covers_supported_retailers_and_aldi_has_no_price_progr
 
 
 def test_two_netto_companies_have_separate_loyalty_programs():
-    counts = {"Netto Marken-Discount": 1, "Netto mit Scottie": 1}
+    counts = {"Netto Marken-Discount": 1, "Netto schwarz": 1}
     programs = {item["id"]: item for item in available_programs(counts)}
 
     assert programs["netto_plus"]["retailers"] == ("Netto Marken-Discount",)
-    assert programs["netto_scottie_plus"]["retailers"] == ("Netto mit Scottie",)
+    assert programs["netto_scottie_plus"]["retailers"] == ("Netto schwarz",)
 
 
 def test_scottie_app_price_does_not_activate_marken_discount_program():
     from supermarkt.loyalty import parse_public_loyalty_prices
 
-    benefits = parse_public_loyalty_prices("APP-PREIS 1,29", 1.79, "Netto mit Scottie")
+    benefits = parse_public_loyalty_prices("APP-PREIS 1,29", 1.79, "Netto schwarz")
     assert benefits == (
         LoyaltyBenefit("netto_scottie_plus", "direct_price", 1.29, "APP-PREIS"),
     )
@@ -84,7 +84,7 @@ def test_scottie_app_price_does_not_activate_marken_discount_program():
 
 def test_public_member_price_without_regular_price_is_not_relabelled():
     item = Offer(
-        offer_id="s", retailer="Netto mit Scottie", category="Test", name="Mandarinen",
+        offer_id="s", retailer="Netto schwarz", category="Test", name="Mandarinen",
         brand="", description="", price=None, base_price=None, base_unit="",
         pack_signature="750g", validity_label="Aktuell", match_key="mandarinen|750g",
         source_url="https://netto.de/angebote/",

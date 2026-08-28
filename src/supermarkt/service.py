@@ -134,8 +134,8 @@ class SourceLoader:
         official_jobs = {name: loader for name, loader in official_loaders.items() if name in active_contexts}
         if hasattr(self, "official_globus") and "Globus" in active_contexts:
             official_jobs["Globus"] = lambda: self.official_globus.load(postal_code)
-        if hasattr(self, "official_netto_scottie") and "Netto mit Scottie" in active_contexts:
-            official_jobs["Netto mit Scottie"] = lambda: self.official_netto_scottie.load(postal_code)
+        if hasattr(self, "official_netto_scottie") and "Netto schwarz" in active_contexts:
+            official_jobs["Netto schwarz"] = lambda: self.official_netto_scottie.load(postal_code)
         if hasattr(self, "official_rossmann") and "Rossmann" in active_contexts:
             official_jobs["Rossmann"] = lambda: self.official_rossmann.load(postal_code)
         if hasattr(self, "official_mueller") and "Müller" in active_contexts:
@@ -282,9 +282,9 @@ class SourceLoader:
             active_contexts["Globus"] = self._context_with_market(
                 active_contexts["Globus"], self.official_globus.last_market_label, self.official_globus.last_market_url
             )
-        if source_states.get("Netto mit Scottie") == "offiziell" and self.official_netto_scottie.last_market_url:
-            active_contexts["Netto mit Scottie"] = self._context_with_market(
-                active_contexts["Netto mit Scottie"],
+        if source_states.get("Netto schwarz") == "offiziell" and self.official_netto_scottie.last_market_url:
+            active_contexts["Netto schwarz"] = self._context_with_market(
+                active_contexts["Netto schwarz"],
                 self.official_netto_scottie.last_market_label,
                 self.official_netto_scottie.last_market_url,
             )

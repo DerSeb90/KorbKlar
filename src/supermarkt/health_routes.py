@@ -30,7 +30,7 @@ def health() -> dict[str, Any]:
             "Lidl": "Marktguru regional catalogue",
             "PENNY": "Marktguru regional catalogue",
             "Netto Marken-Discount": "Marktguru regional catalogue",
-            "Netto mit Scottie": "official weekly offers",
+            "Netto schwarz": "official weekly offers",
             "Rossmann": "official advertising offers",
             "Müller": "official online offers",
             "Globus": "official primary with Marktguru fallback",

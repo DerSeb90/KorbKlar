@@ -1,5 +1,5 @@
 export const SCHEMA_VERSION=1,MAX_ITEMS=5000,MAX_QUANTITY=999,MAX_IMPORT_BYTES=256*1024;
-export const KNOWN_RETAILERS=new Set(["ALDI Nord","ALDI Süd","EDEKA","Marktkauf","Kaufland","Lidl","REWE","PENNY","Netto Marken-Discount","Netto mit Scottie","Globus","HOL’AB!","Rossmann","Müller"]);
+export const KNOWN_RETAILERS=new Set(["ALDI Nord","ALDI Süd","EDEKA","Marktkauf","Kaufland","Lidl","REWE","PENNY","Netto Marken-Discount","Netto schwarz","Globus","HOL’AB!","Rossmann","Müller"]);
 const id=()=>globalThis.crypto?.randomUUID?.()||`local-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 const text=(v,n=500)=>typeof v==="string"?v.trim().slice(0,n):"";
 const nullableText=(v,n=500)=>{const s=text(v,n);return s||null};
