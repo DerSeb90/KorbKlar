@@ -21,6 +21,34 @@ def card(text: str, identifier: str = "000000000000123456", group: str = "") -> 
     }
 
 
+def test_multi_product_frame_keeps_every_independently_priced_product(monkeypatch):
+    monkeypatch.setattr("supermarkt.sources.aldi.offer_reference_date", lambda: date(2026, 8, 26))
+    frame = {
+        "url": "https://www.aldi-sued.de/produkt/cola-rahmen-000000000000999999",
+        "label": "Pepsi oder Schwip Schwap",
+        "text_parts": [
+            "Pepsi oder Schwip Schwap",
+            "Verschiedene Sorten, koffeinhaltig, je 1,25-l-Flasche",
+            "0,99 €",
+            "Coca-Cola Original, Zero oder Fanta Exotic",
+            "Teilweise koffeinhaltig, 6 x 0,33-l-Flasche",
+            "7,99 €",
+        ],
+        "group_label": "Angebote ab Montag 24.8.",
+        "image_url": "https://example.invalid/cola-frame.jpg",
+    }
+
+    offers = source()._south_card_to_offers(frame, date(2026, 8, 24), date(2026, 8, 29), 1)
+
+    assert [(offer.name, offer.price) for offer in offers] == [
+        ("Pepsi oder Schwip Schwap", 0.99),
+        ("Coca-Cola Original, Zero oder Fanta Exotic", 7.99),
+    ]
+    assert len({offer.offer_id for offer in offers}) == 2
+    assert all(offer.valid_from == "2026-08-24" for offer in offers)
+    assert all(offer.valid_until == "2026-08-29" for offer in offers)
+
+
 def test_normal_week_card_uses_global_period(monkeypatch):
     monkeypatch.setattr("supermarkt.sources.aldi.offer_reference_date", lambda: date(2026, 8, 26))
     offer = source()._south_card_to_offer(card("Test Artikel"), date(2026, 8, 24), date(2026, 8, 29), 1)

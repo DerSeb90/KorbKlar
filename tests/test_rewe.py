@@ -2,6 +2,7 @@ from bs4 import BeautifulSoup
 import pytest
 
 from supermarkt.sources.rewe import OfficialReweSource
+from supermarkt.models import ToolError
 
 
 def test_rewe_card_keeps_explicit_deposit():
@@ -49,8 +50,9 @@ def test_rewe_bonus_in_additional_text_is_applied_as_cashback():
     assert offer.benefits == (LoyaltyBenefit("rewe_bonus", "cashback", 0.10, "REWE Bonus"),)
     compared = OfferComparator().compare([offer], ("rewe_bonus",), "all").offers[0]
     assert compared.checkout_price == 0.99
-    assert compared.effective_price == 0.89
-    assert compared.loyalty_savings == pytest.approx(0.10)
+    assert compared.effective_price == 0.99
+    assert compared.loyalty_savings == 0.0
+    assert compared.applied_benefits == (LoyaltyBenefit("rewe_bonus", "cashback", 0.10, "REWE Bonus"),)
 
 
 def test_rewe_bonus_parser_does_not_invent_value_from_points_or_percentages():
@@ -244,6 +246,44 @@ def test_rewe_find_market_prefers_center_for_same_postcode(monkeypatch):
     assert market_id == "222"
     assert "marktplatz-2" in market_url
     assert "REWE Center" in label
+
+
+def test_rewe_lists_all_exact_postcode_markets_and_honours_manual_choice(monkeypatch):
+    class Locator:
+        def locality(self, postal_code):
+            assert postal_code == "12345"
+            return "Musterstadt"
+
+    class Response:
+        status_code = 200
+        text = """
+        <div><a href="/angebote/musterstadt/111/rewe-markt-hauptstr-1/">
+          Angebote zu REWE Markt - Hauptstr. 1, 12345 Musterstadt
+        </a></div>
+        <div><a href="/angebote/musterstadt/222/rewe-center-marktplatz-2/">
+          Angebote zu REWE Center - Marktplatz 2, 12345 Musterstadt
+        </a></div>
+        <div><a href="/angebote/anderswo/999/rewe-markt-falsch/">
+          Angebote zu REWE Markt - Falsch 1, 54321 Anderswo
+        </a></div>
+        """
+
+    class Session:
+        def get(self, url, timeout):
+            return Response()
+
+    source = OfficialReweSource(Locator())
+    monkeypatch.setattr(source, "_session", lambda: Session())
+
+    markets = source.markets("12345")
+    assert [market["market_id"] for market in markets] == ["222", "111"]
+    _session, market_id, market_url, label = source._find_market("12345", market_id="111")
+    assert market_id == "111"
+    assert "hauptstr-1" in market_url
+    assert "REWE Markt" in label
+
+    with pytest.raises(ToolError, match="gehört nicht zur PLZ"):
+        source._find_market("12345", market_id="999")
 
 
 def test_rewe_market_mapping_is_cached_for_24_hours(tmp_path, monkeypatch):

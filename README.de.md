@@ -482,9 +482,33 @@ SUPERMARKT_DATA_DIR=.devdata python -m supermarkt.diagnostics 26123
 Die oben beschriebene Anbindung an KitchenOwl ist umgesetzt. Weitere Integrationen sind für spätere Versionen vorgesehen, darunter Grocy und zusätzliche REST-/OpenAPI-Anbindungen für lokale Automationen und Agenten.
 
 
+## Projekt freiwillig unterstützen
+
+KorbKlar bleibt kostenlos, werbefrei und ohne Nutzertracking. Alle Funktionen stehen unabhängig davon zur Verfügung, ob jemand spendet. Es gibt keine Bezahlschranke und keine Einschränkungen für Nutzer ohne Spende.
+
+Wer die laufende Entwicklung, neue Händleradapter und die Pflege der Datenquellen freiwillig unterstützen möchte, kann Monero an folgende öffentliche Projektadresse senden:
+
+```text
+83WjjKs4ijKChStc9GPrpZYa9DXYpHmbSeVipJrQSzMnRdmYtFE4K5D7ff7BsrTDa8TTZvJmAWivgWLEcJpULQ79KpRX8ik
+```
+
+Eine Spende ist vollständig freiwillig und hat keinen Einfluss auf Funktionsumfang, Priorisierung einzelner Nutzer oder Zugang zu KorbKlar.
+
+## Neuerungen in 0.1.2
+
+Version 0.1.2 zeigt bei Mehrfachgebinden sowohl das Pfand je Behälter als auch das Gesamtpfand des Verkaufspacks. Beim BLACK-CAT-Energy-Viererpack erscheint damit klar „0,25 € je Dose · 1,00 € gesamt für 4“.
+
+## Neuerungen in 0.1.1
+
+Version 0.1.1 ergänzt „Netto schwarz“ als vom rot-gelben Netto Marken-Discount getrennten Händler sowie offizielle Rossmann-Werbeangebote und klar als online gekennzeichnete Müller-Angebote. Öffentlich ausgewiesene Netto+-Mitgliederpreise sind ein eigenes Bonusprogramm; unbekannte Normalpreise werden nicht erfunden. Explizite Pfandangaben wie beim BLACK-CAT-Energy-Angebot bleiben getrennt vom Warenpreis erhalten. Die bestehende lokale Einkaufsliste kann offene Artikel optional und ohne gespeicherte Zugangsdaten über die Betriebssystem-App-Auswahl an Bring übergeben.
+
+## Neuerungen in 0.1.0
+
+Version 0.1.0 ergänzt einen nativen Globus-Adapter, optionale Händlerfilter in API und Startseite sowie eine manuelle REWE-Marktauswahl, wenn mehrere Märkte exakt zur eingegebenen PLZ gehören. ALDI-Süd-Mehrproduktkarten werden vollständig aufgeteilt. REWE-Bonusgutschriften werden separat angezeigt und nicht mehr als reduzierter Verkaufspreis bewertet.
+
 ## Neuerungen in 0.0.7
 
-Version 0.0.7 ergänzt eine native Windows-Einrichtung und erkennt Chromium, Chrome sowie Edge portabel. Ein optionaler Schalter lädt Angebote bewusst neu und umgeht nur für diese Suche den serverseitigen Angebotscache. Leverkusener PLZ sind als exakte ALDI-Süd-Nachweise ergänzt; Präfixschätzungen bleiben ausgeschlossen. Die HTTPS-Prüfung nutzt einen reproduzierbaren CA-Satz bei weiterhin aktiver Zertifikats- und Hostnamenprüfung. Explizit in Euro ausgewiesene REWE-Bonusbeträge werden nun bei ausgewähltem REWE Bonus im effektiven Preis berücksichtigt.
+Version 0.0.7 ergänzt eine native Windows-Einrichtung und erkennt Chromium, Chrome sowie Edge portabel. Ein optionaler Schalter lädt Angebote bewusst neu und umgeht nur für diese Suche den serverseitigen Angebotscache. Leverkusener PLZ sind als exakte ALDI-Süd-Nachweise ergänzt; Präfixschätzungen bleiben ausgeschlossen. Die HTTPS-Prüfung nutzt einen reproduzierbaren CA-Satz bei weiterhin aktiver Zertifikats- und Hostnamenprüfung. Explizit in Euro ausgewiesene REWE-Bonusbeträge wurden erstmals strukturiert erfasst; seit 0.1.0 werden Gutschriften klar vom Verkaufspreis getrennt.
 
 ## Neuerungen in 0.0.6
 

@@ -26,6 +26,31 @@ __ERROR_HTML__
 <option value="sued">Bei mir gibt es ALDI Süd</option>
 <option value="both">Bei mir gibt es ALDI Nord und Süd</option>
 </select>
+<div class="reweMarketPicker" id="reweMarketPicker" hidden>
+<label for="reweMarket">REWE-Markt auswählen</label>
+<select name="rewe_market_id" id="reweMarket" disabled><option value="">Automatische Auswahl</option></select>
+<div class="marketHint" id="reweMarketHint" aria-live="polite"></div>
+</div>
+<fieldset class="retailerPicker">
+<legend>Welche Märkte möchtest du vergleichen?</legend>
+<p>Wähle die Händler aus, deren Angebote geladen werden sollen.</p>
+<div class="retailerGrid">
+<label><input type="checkbox" name="retailers" value="ALDI Nord" checked> Aldi Nord</label>
+<label><input type="checkbox" name="retailers" value="ALDI Süd" checked> Aldi Süd</label>
+<label><input type="checkbox" name="retailers" value="Lidl" checked> Lidl</label>
+<label><input type="checkbox" name="retailers" value="REWE" checked> REWE</label>
+<label><input type="checkbox" name="retailers" value="EDEKA" checked> EDEKA</label>
+<label><input type="checkbox" name="retailers" value="Marktkauf" checked> Marktkauf</label>
+<label><input type="checkbox" name="retailers" value="Kaufland" checked> Kaufland</label>
+<label><input type="checkbox" name="retailers" value="PENNY" checked> Penny</label>
+<label><input type="checkbox" name="retailers" value="Netto Marken-Discount" checked> Netto Marken-Discount</label>
+<label><input type="checkbox" name="retailers" value="Netto schwarz" checked> Netto schwarz</label>
+<label><input type="checkbox" name="retailers" value="Globus" checked> Globus</label>
+<label><input type="checkbox" name="retailers" value="HOL’AB!" checked> HOL'AB!</label>
+<label><input type="checkbox" name="retailers" value="Rossmann" checked> Rossmann</label>
+<label><input type="checkbox" name="retailers" value="Müller" checked> Müller</label>
+</div>
+</fieldset>
 <label class="refreshRow" for="refreshToggle"><input type="checkbox" name="refresh" value="1" id="refreshToggle">Angebote neu laden statt aus dem Zwischenspeicher</label>
 <button type="submit" id="submitButton">Angebote suchen</button>
 </form>
@@ -34,7 +59,13 @@ __ERROR_HTML__
 <div class="progressRow"><progress id="statusProgress" max="100" value="0">0%</progress><strong id="statusPercent">0%</strong></div>
 <dl><div><dt>Quelle</dt><dd id="statusSource">KorbKlar</dd></div><div><dt>Händler</dt><dd id="statusRetailer">Alle Händler</dd></div><div><dt>Kategorie</dt><dd id="statusCategory">Alle Kategorien</dd></div><div><dt>Schritt</dt><dd id="statusStep">Suche wird vorbereitet</dd></div><div><dt>Verarbeitet</dt><dd id="statusCount">0 von 6 Quellen · 0 Produkte</dd></div></dl>
 </section>
-<div class="hint">Keine LLM erforderlich. Bonusprogramme, Händlerfilter und Sortierung wählst du anschließend in der Ergebnisansicht.</div>
+<div class="hint">Keine LLM erforderlich. Bonusprogramme, Kategorien und Sortierung wählst du anschließend in der Ergebnisansicht.</div>
+<section class="supportNote" aria-labelledby="supportTitle">
+<h2 id="supportTitle">KorbKlar freiwillig unterstützen</h2>
+<p>KorbKlar bleibt kostenlos für alle. Wenn dir KorbKlar beim Einkauf geholfen und Geld gespart hat, kannst du das Projekt freiwillig unterstützen.</p>
+<p>Neue Händler, Datenquellen und Schnittstellen müssen recherchiert, entwickelt und regelmäßig angepasst werden. Deine Unterstützung hilft dabei, KorbKlar weiterhin kostenlos, werbefrei und ohne Nutzertracking anzubieten.</p>
+<a href="https://tarnkappe.info/spenden/" target="_blank" rel="noopener noreferrer">Projekt freiwillig unterstützen</a>
+</section>
 </main>
 <script src="/static/home-v2.js" defer></script>
 </body>

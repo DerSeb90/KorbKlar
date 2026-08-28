@@ -69,6 +69,34 @@ class HttpClient:
             raise ToolError(f"Unerwartete JSON-Antwort von {urlsplit(url).netloc}")
         return payload
 
+    def post_form_json(self, url: str, fields: dict[str, str]) -> dict[str, Any]:
+        parsed = urlsplit(url)
+        if parsed.scheme != "https" or not parsed.hostname:
+            raise ToolError("Nur HTTPS-Quellen sind erlaubt")
+        request = Request(
+            url,
+            data=urlencode(fields).encode("ascii"),
+            headers={
+                "User-Agent": USER_AGENT,
+                "Accept": "application/json",
+                "Content-Type": "application/x-www-form-urlencoded",
+            },
+            method="POST",
+        )
+        try:
+            with urlopen(request, timeout=self.timeout_seconds, context=trusted_ssl_context()) as response:
+                data = response.read(10 * 1024 * 1024 + 1)
+            if len(data) > 10 * 1024 * 1024:
+                raise ToolError("Quellantwort überschreitet das Größenlimit")
+            payload = json.loads(data.decode("utf-8", errors="replace"))
+        except json.JSONDecodeError as exc:
+            raise ToolError(f"Ungültige JSON-Antwort von {parsed.netloc}") from exc
+        except (HTTPError, URLError, TimeoutError, OSError) as exc:
+            raise ToolError(f"Abruf von {parsed.netloc} fehlgeschlagen: {exc}") from exc
+        if not isinstance(payload, dict):
+            raise ToolError(f"Unerwartete JSON-Antwort von {parsed.netloc}")
+        return payload
+
 class PostalCodeLocator:
     def __init__(self, http: HttpClient) -> None:
         self.http = http

@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field, field_validator
 
 from .common import validate_postal_code
 from .loyalty import PROGRAMS, VALID_PROGRAM_IDS, normalize_program_ids
+from .models import resolve_retailer_names
 
 
 class SupermarketRequest(BaseModel):
@@ -16,6 +17,17 @@ class SupermarketRequest(BaseModel):
     )
     filter_text: str = Field(default="", max_length=120, description="Optionaler Produkt- oder Markenfilter")
     retailer: str = Field(default="", max_length=60, description="Optionaler Händlerfilter, z. B. Lidl oder Kaufland")
+    retailers: list[str] = Field(
+        default_factory=list,
+        max_length=20,
+        description="Optional: Nur diese Händlerquellen laden. Ohne Angabe werden alle Händler geladen.",
+    )
+    rewe_market_id: str = Field(
+        default="",
+        max_length=30,
+        pattern=r"^\d*$",
+        description="Optional: zuvor über die REWE-Marktsuche gewählte Markt-ID.",
+    )
     page: int = Field(default=1, ge=1, le=10000)
     page_size: int = Field(default=100, ge=1, le=100, description="Maximal 100 Angebote pro API-Antwort")
     view: Literal["best_only", "all"] = Field(default="best_only", description="Nur günstigste sichere Treffer oder alle")
@@ -45,3 +57,11 @@ class SupermarketRequest(BaseModel):
         if unknown:
             raise ValueError("Unbekannte Bonusprogramme: " + ", ".join(unknown))
         return list(normalize_program_ids(raw))
+
+    @field_validator("retailers")
+    @classmethod
+    def valid_retailers(cls, values: list[str]) -> list[str]:
+        resolved, unknown = resolve_retailer_names(values)
+        if unknown:
+            raise ValueError("Unbekannte Händler: " + ", ".join(unknown))
+        return list(resolved)

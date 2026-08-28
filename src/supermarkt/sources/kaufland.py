@@ -143,6 +143,21 @@ class OfficialKauflandSource:
         profile_dir: str = "",
     ) -> str:
         errors: list[str] = []
+        required = tuple(item.casefold() for item in required_any if item)
+        # Ein einfacher Abruf reicht oft und spart den Chromium-Start. Nur
+        # ohne eigenes Profil, denn ein Profil bedeutet, dass die Seite eine
+        # zuvor aufgebaute Sitzung braucht.
+        if not profile_dir:
+            try:
+                payload = self.http.get_bytes(url, headers={"Accept": "text/html,application/xhtml+xml"})
+                if len(payload) <= 5_000_000:
+                    page = payload.decode("utf-8", errors="replace")
+                    folded = page.casefold()
+                    if "<html" in folded and (not required or any(marker in folded for marker in required)):
+                        return page
+                errors.append("HttpClient: unvollständige HTML-Antwort")
+            except Exception as exc:
+                errors.append(f"HttpClient: {type(exc).__name__}: {exc}")
         binary = chromium_command()
         # chromium_command falls back to the bare name when nothing is
         # installed. Saying so beats the OSError that would follow.
@@ -154,8 +169,11 @@ class OfficialKauflandSource:
             )
         base = [
             binary,
+            "--disable-crashpad-for-testing",
+            "--single-process",
             "--no-sandbox",
             "--disable-gpu",
+            "--disable-software-rasterizer",
             "--disable-dev-shm-usage",
             "--lang=de-DE",
             "--window-size=1365,900",
@@ -164,7 +182,6 @@ class OfficialKauflandSource:
             "--dump-dom",
             url,
         ]
-        required = tuple(item.casefold() for item in required_any if item)
         # Chromium locks its user data directory. Without an explicit one it
         # would fall back to the machine's default profile, which collides
         # with a browser the operator has open and with any concurrent call,
@@ -206,7 +223,7 @@ class OfficialKauflandSource:
                 continue
             page = completed.stdout or ""
             folded = page.casefold()
-            valid = completed.returncode == 0 and "<html" in folded
+            valid = "<html" in folded
             if valid and required:
                 valid = any(marker in folded for marker in required)
             if valid:
@@ -869,21 +886,111 @@ class OfficialKauflandSource:
             offers.append(offer)
         return offers
 
+    def _load_structured_offers(self, store_url: str) -> list[Offer]:
+        selector = self._store_selector(store_url)
+        if not selector:
+            raise ToolError(f"Kaufland-Filialkennung fehlt in {store_url}")
+        availability_url = f"https://filiale.kaufland.de/.kloffers.storeName={selector}.json"
+        try:
+            availability = json.loads(
+                self.http.get_bytes(availability_url, {"Accept": "application/json"}).decode("utf-8")
+            )
+        except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+            raise ToolError("Kaufland-Verfügbarkeitsdaten sind ungültig") from exc
+        if not isinstance(availability, list):
+            raise ToolError("Kaufland-Verfügbarkeitsdaten haben ein unerwartetes Format")
+
+        reference = today_berlin().isoformat()
+        available_ids = {
+            clean_text(item.get("klNr"))
+            for item in availability
+            if isinstance(item, dict)
+            and clean_text(item.get("klNr"))
+            and clean_text(item.get("dateFrom")) <= reference <= clean_text(item.get("dateTo"))
+        }
+        overview_url = self._overview_url()
+        page = self.http.get_bytes(overview_url, {"Accept": "text/html,application/xhtml+xml"}).decode(
+            "utf-8", errors="replace"
+        )
+        marker = '{"component":"OfferTemplate"'
+        start = page.find(marker)
+        if start < 0:
+            raise ToolError("Kaufland-Angebotsseite enthält keine strukturierten Angebotsdaten")
+        try:
+            payload, _end = json.JSONDecoder().raw_decode(page[start:])
+            cycles = payload["props"]["offerData"]["cycles"]
+        except (json.JSONDecodeError, KeyError, TypeError) as exc:
+            raise ToolError("Kaufland-Angebotsdaten haben ein unerwartetes Format") from exc
+
+        result: list[Offer] = []
+        seen: set[str] = set()
+        # The later cycle contains Card-XTRA variants of otherwise identical
+        # offer IDs. Process it first so the conditional member price survives
+        # deduplication while the regular shelf price remains ``price``.
+        for cycle in reversed(cycles) if isinstance(cycles, list) else []:
+            for category in cycle.get("categories", []) if isinstance(cycle, dict) else []:
+                if not isinstance(category, dict):
+                    continue
+                category_name = clean_text(category.get("displayName")) or "Kaufland Filialangebote"
+                for raw in category.get("offers", []):
+                    if not isinstance(raw, dict) or clean_text(raw.get("klNr")) not in available_ids:
+                        continue
+                    valid_from = clean_text(raw.get("dateFrom"))
+                    valid_until = clean_text(raw.get("dateTo"))
+                    if not valid_from or not valid_until or not (valid_from <= reference <= valid_until):
+                        continue
+                    offer_id = clean_text(raw.get("offerId"))
+                    if not offer_id or offer_id in seen:
+                        continue
+                    seen.add(offer_id)
+                    title = clean_text(raw.get("title"))
+                    subtitle = clean_text(raw.get("subtitle"))
+                    name = clean_text(f"{title} {subtitle}")
+                    price = parse_number(raw.get("formattedPrice") or raw.get("price"))
+                    if not name or price is None or price <= 0:
+                        continue
+                    unit = clean_text(raw.get("unit"))
+                    description = clean_text(raw.get("detailDescription"))
+                    base_text = clean_text(raw.get("formattedBasePrice") or raw.get("basePrice"))
+                    base_price, base_unit = parse_base_price_text(base_text)
+                    pack = normalize_pack(f"{name} {unit}")
+                    image_url = normalize_image_url(raw.get("listImage", ""), base_url=overview_url)
+                    if is_rejected_image_url(image_url):
+                        image_url = ""
+                    loyalty_text = re.sub(r"[^\d,.-]", "", clean_text(raw.get("loyaltyFormattedPrice")))
+                    loyalty_price = parse_number(loyalty_text)
+                    benefits = ()
+                    if loyalty_price is not None and 0 < loyalty_price < price:
+                        benefits = (LoyaltyBenefit("kaufland_xtra", "direct_price", loyalty_price, "Kaufland Card XTRA"),)
+                    result.append(Offer(
+                        offer_id=f"kaufland-official:{offer_id}", retailer="Kaufland", category=category_name,
+                        name=name, brand=title if subtitle else "", description=description, price=price,
+                        base_price=base_price, base_unit=base_unit, pack_signature=pack,
+                        validity_label=f"Kaufland, gültig {valid_from} bis {valid_until}",
+                        match_key=build_match_key(title if subtitle else "", name, pack, offer_id),
+                        source_url=overview_url, image_url=image_url, retailer_url=store_url,
+                        coverage_note=f"Offizielle Filialangebote für {selector}", benefits=benefits,
+                        valid_from=valid_from, valid_until=valid_until,
+                    ))
+        if len(result) < 100:
+            raise ToolError(f"Kaufland-Strukturdaten für {selector} lieferten nur {len(result)} Angebote")
+        return result
+
     def load(self, postal_code: str, retailer_context: Any = None) -> list[Offer]:
         store_url, _store_page, locality, store_postal = self._resolve_store_page(postal_code, retailer_context)
         used_cached_store = self.last_discovery == "24h-Filialcache"
         try:
-            overview_page, overview_url = self._load_full_overview(store_url, locality)
+            offers = self._load_structured_offers(store_url)
         except ToolError:
-            if not used_cached_store:
-                raise
-            # A store can disappear or Kaufland can invalidate the selection
-            # before the 24h TTL. In that case refresh the mapping once instead
-            # of serving a stale cache until expiry.
-            self._drop_cached_store(postal_code)
-            store_url, _store_page, locality, store_postal = self._resolve_store_page(postal_code, retailer_context)
-            overview_page, overview_url = self._load_full_overview(store_url, locality)
-        offers = self._parse_page(overview_page, overview_url)
+            try:
+                overview_page, overview_url = self._load_full_overview(store_url, locality)
+                offers = self._parse_page(overview_page, overview_url)
+            except ToolError:
+                if not used_cached_store:
+                    raise
+                self._drop_cached_store(postal_code)
+                store_url, _store_page, locality, store_postal = self._resolve_store_page(postal_code, retailer_context)
+                offers = self._load_structured_offers(store_url)
         if len(offers) < 100:
             raise ToolError(
                 f"Kaufland-Angebotsübersicht für {store_url} lieferte nur "

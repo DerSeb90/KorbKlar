@@ -76,6 +76,7 @@ def test_docker_system_dependencies_are_actually_used():
     assert " curl" in dockerfile and '"curl"' in runtime
     assert 'CMD ["uvicorn"' in dockerfile
     assert "USER 10001" in dockerfile
+    assert "chown -R korbklar:korbklar /home/korbklar /data /app" in dockerfile
     assert "dumb-init" in dockerfile
     assert 'ENTRYPOINT ["dumb-init", "--"]' in dockerfile
 

@@ -472,17 +472,15 @@ Those remaining integrations are planned for later versions. The existing REST A
 
 ## Support the project
 
-To support KorbKlar and the work of Tarnkappe.info, see the current donation options at:
+KorbKlar remains free, ad-free, and without user tracking. Every feature remains available regardless of whether a user donates. There is no paywall and no restriction for users who do not donate.
 
-https://tarnkappe.info/spenden/
-
-The Tarnkappe.info Monero address documented in the current repository is:
+Anyone who voluntarily wants to support ongoing development, new retailer adapters, and maintenance of data sources can send Monero to this public project address:
 
 ```text
-87oownPVNFFciRNe2DLaNQPrVsjprbZBX7bHnPENABDyGpM6isrzKeWGsjT5W86h9d6A5nhE2Z2ZAXCHksvC2EikGGaWB8u
+83WjjKs4ijKChStc9GPrpZYa9DXYpHmbSeVipJrQSzMnRdmYtFE4K5D7ff7BsrTDa8TTZvJmAWivgWLEcJpULQ79KpRX8ik
 ```
 
-Wallet addresses can change. Before donating, verify the currently published address at [tarnkappe.info/spenden](https://tarnkappe.info/spenden/).
+Donations are entirely optional and do not influence the feature set, access to KorbKlar, or prioritisation of individual users.
 
 ## License and trademarks
 
@@ -492,9 +490,21 @@ Copyright © 2026 lesecuritae for Tarnkappe.info.
 
 KorbKlar is independent and is not affiliated with any retailer or loyalty program mentioned. Brand, retailer, and product names belong to their respective owners.
 
+## What is new in 0.1.2
+
+Version 0.1.2 displays both the per-container deposit and the total deposit for multipacks. A four-pack of BLACK CAT Energy is now clearly labelled “€0.25 per can · €1.00 total for 4”.
+
+## What is new in 0.1.1
+
+Version 0.1.1 adds “Netto schwarz” as a retailer separate from the red-and-yellow Netto Marken-Discount, official Rossmann advertising offers and clearly labelled Müller online offers. Public Netto+ member prices use a distinct loyalty programme and unknown regular prices are never invented. Explicit deposits, including the BLACK CAT Energy offer notation, remain separate from the goods price. Open items from the existing local shopping list can optionally be handed to Bring through the operating system's share sheet without storing Bring credentials.
+
+## What is new in 0.1.0
+
+Version 0.1.0 adds a native Globus adapter, optional retailer filters in the API and start page, and manual REWE store selection when several stores exactly match the entered postcode. Multi-product ALDI South cards are fully expanded. REWE Bonus credits are shown separately and no longer treated as a reduced sale price.
+
 ## What is new in 0.0.7
 
-Version 0.0.7 adds native Windows setup and portable discovery of Chromium, Chrome, and Edge. An optional control deliberately refreshes offers by bypassing the server-side offer cache for that search only. Leverkusen postcodes are recorded as exact ALDI South evidence while prefix-based guesses remain excluded. HTTPS verification uses a reproducible CA bundle while certificate and hostname verification remain enabled. Explicit euro-denominated REWE Bonus amounts are now reflected in the effective price when REWE Bonus is selected.
+Version 0.0.7 adds native Windows setup and portable discovery of Chromium, Chrome, and Edge. An optional control deliberately refreshes offers by bypassing the server-side offer cache for that search only. Leverkusen postcodes are recorded as exact ALDI South evidence while prefix-based guesses remain excluded. HTTPS verification uses a reproducible CA bundle while certificate and hostname verification remain enabled. Explicit euro-denominated REWE Bonus amounts were first captured structurally; since 0.1.0 credits are clearly separated from the sale price.
 
 ## What is new in 0.0.6
 

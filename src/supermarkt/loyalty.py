@@ -36,8 +36,14 @@ PROGRAMS: tuple[LoyaltyProgram, ...] = (
     LoyaltyProgram(
         "netto_plus",
         "Netto plus App",
-        ("Netto",),
+        ("Netto Marken-Discount",),
         "Öffentlich ausgewiesene App-Preise werden berücksichtigt. PAYBACK wird getrennt ausgewählt.",
+    ),
+    LoyaltyProgram(
+        "netto_scottie_plus",
+        "Netto+ (Netto schwarz)",
+        ("Netto schwarz",),
+        "Nur öffentlich ausgewiesene Netto+-Mitgliederpreise werden berücksichtigt; persönliche Coupons werden nicht geschätzt.",
     ),
     LoyaltyProgram(
         "kaufland_xtra",
@@ -66,8 +72,20 @@ PROGRAMS: tuple[LoyaltyProgram, ...] = (
     LoyaltyProgram(
         "payback",
         "PAYBACK",
-        ("EDEKA", "Marktkauf", "Netto", "Globus"),
+        ("EDEKA", "Marktkauf", "Netto Marken-Discount", "Globus"),
         "Punkte und persönliche PAYBACK-Coupons werden nicht pauschal in Euro umgerechnet. Nur konkret ausgewiesene Preisvorteile zählen.",
+    ),
+    LoyaltyProgram(
+        "rossmann_app",
+        "ROSSMANN-App",
+        ("Rossmann",),
+        "Prozent- und persönliche Coupons werden angezeigt, aber ohne konkreten resultierenden Produktpreis nicht in den Preisvergleich eingerechnet.",
+    ),
+    LoyaltyProgram(
+        "mueller_blueten",
+        "Müller Blüten",
+        ("Müller",),
+        "Blüten und persönliche Coupons werden nicht pauschal auf einzelne Online-Angebote umgelegt.",
     ),
 )
 
@@ -77,11 +95,14 @@ VALID_PROGRAM_IDS = frozenset(PROGRAM_BY_ID)
 _RETAILER_DEFAULT_PROGRAM = {
     "Lidl": "lidl_plus",
     "PENNY": "penny_app",
-    "Netto": "netto_plus",
+    "Netto Marken-Discount": "netto_plus",
+    "Netto schwarz": "netto_scottie_plus",
     "Kaufland": "kaufland_xtra",
     "EDEKA": "edeka_app",
     "Marktkauf": "marktkauf_app",
     "Globus": "mein_globus",
+    "Rossmann": "rossmann_app",
+    "Müller": "mueller_blueten",
 }
 
 
@@ -106,7 +127,7 @@ def program_for_condition(retailer: str, condition: str) -> str:
     if "penny" in folded:
         return "penny_app"
     if "netto" in folded:
-        return "netto_plus"
+        return _RETAILER_DEFAULT_PROGRAM.get(retailer, "")
     if "globus" in folded:
         return "mein_globus"
     if "edeka" in folded or "genuss" in folded:
@@ -146,9 +167,6 @@ def apply_selected_programs(
 ) -> tuple[float | None, float | None, float, tuple[LoyaltyBenefit, ...]]:
     selected = set(normalize_program_ids(selected_programs))
     regular = offer.price
-    if regular is None:
-        return None, None, 0.0, ()
-
     applicable = tuple(
         benefit for benefit in offer.benefits
         if benefit.program_id in selected
@@ -158,14 +176,16 @@ def apply_selected_programs(
         for benefit in applicable
         if benefit.kind == "direct_price" and benefit.value > 0
     ]
+    if regular is None:
+        # A published membership price may exist without a safely identifiable
+        # regular price. Show it only when selected, without inventing savings.
+        checkout = min(direct_prices) if direct_prices else None
+        return checkout, checkout, 0.0, applicable
     checkout = min([regular, *direct_prices]) if direct_prices else regular
 
-    cashback = sum(
-        benefit.value
-        for benefit in applicable
-        if benefit.kind == "cashback" and benefit.value > 0
-    )
-    effective = max(0.0, checkout - cashback)
+    # Cashback is credited to an account after checkout. It is not a lower
+    # product price and must not participate in price or unit-price ranking.
+    effective = checkout
     savings = max(0.0, regular - effective)
     return checkout, effective, savings, applicable
 
@@ -206,6 +226,18 @@ def parse_public_loyalty_prices(
     )
 
     found: dict[tuple[str, str], LoyaltyBenefit] = {}
+    if retailer == "Netto Marken-Discount":
+        advantage = re.search(
+            r"(\d+[,.]\d{2})\s*€\s*netto\s*plus\s*(?:vorteil|guthaben|gutschrift)",
+            description,
+            flags=re.IGNORECASE,
+        )
+        if advantage:
+            value = parse_number(advantage.group(1))
+            if value and value > 0:
+                found[("netto_plus", "cashback")] = LoyaltyBenefit(
+                    "netto_plus", "cashback", float(value), clean_text(advantage.group(0))
+                )
     for index, pattern in enumerate(patterns):
         for match in re.finditer(pattern, description, flags=re.IGNORECASE):
             price_text, condition = (
@@ -220,6 +252,9 @@ def parse_public_loyalty_prices(
                 continue
             program_id = program_for_condition(retailer, condition)
             if not program_id:
+                continue
+            nearby = description[max(0, match.start() - 10):match.end() + 20]
+            if program_id == "netto_plus" and re.search(r"vorteil|guthaben|gutschrift", nearby, re.I):
                 continue
             key = (program_id, "direct_price")
             benefit = LoyaltyBenefit(

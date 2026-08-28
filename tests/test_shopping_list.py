@@ -104,6 +104,11 @@ def test_json_roundtrip_schema_and_separate_ids():
     assert result["ean"] is None
 
 
+def test_bring_handoff_contains_only_open_items_without_credentials():
+    text = js("m.bringText([{name:'Milch',quantity:2,pack:'1 l',retailer:'REWE',checked:false},{name:'Brot',quantity:1,checked:true}])")
+    assert text == "2× Milch (1 l) – REWE"
+
+
 def test_offer_image_uses_only_the_local_proxy_and_survives_json_roundtrip():
     result = js("""(()=>{
       const item=m.offerToItem({offer_id:'energy-1',product:'Energy',retailer:'REWE',regular_price:0.79,deposit:0.25,image_url:'/image?src=https%3A%2F%2Fexample.invalid%2Fenergy.jpg&sig=signed'});

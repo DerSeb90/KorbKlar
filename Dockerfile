@@ -1,4 +1,4 @@
-ARG PYTHON_BASE=python:3.13-slim-bookworm@sha256:c45a22ea000adfd9cda29364bbe7edd23001ce5cc2ad15857cfbf7766943b9ca
+ARG PYTHON_BASE=python:3.13-alpine@sha256:540c7d91f98ff6880174c40e99067bf5941eb54d818a7a5e094d188b196a934d
 
 FROM ${PYTHON_BASE} AS builder
 ENV PIP_DISABLE_PIP_VERSION_CHECK=1 PIP_NO_CACHE_DIR=1
@@ -13,20 +13,22 @@ RUN /opt/venv/bin/pip install --upgrade "pip>=26.2" "setuptools>=78.1.1" wheel \
 
 FROM ${PYTHON_BASE} AS runtime-rootfs
 ARG PYTHON_BASE
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends chromium ca-certificates curl dumb-init tzdata \
+RUN apk upgrade --no-cache \
+    && apk add --no-cache chromium ca-certificates curl dumb-init tzdata \
     && python -m pip uninstall -y pip setuptools wheel \
-    && rm -rf /root/.cache /var/lib/apt/lists/* /usr/local/lib/python3.13/ensurepip
+    && rm -rf /root/.cache /usr/local/lib/python3.13/ensurepip
 COPY --from=builder /opt/venv /opt/venv
-RUN useradd --system --uid 10001 --create-home --home-dir /home/korbklar korbklar \
+RUN addgroup -S -g 10001 korbklar \
+    && adduser -S -D -H -u 10001 -G korbklar korbklar \
+    && mkdir -p /home/korbklar \
     && mkdir -p /data /app \
-    && chown -R korbklar:korbklar /data /app
+    && chown -R korbklar:korbklar /home/korbklar /data /app
 
 FROM scratch AS final
 ARG PYTHON_BASE
 COPY --from=runtime-rootfs / /
 LABEL org.opencontainers.image.source="https://github.com/lesecuritae/KorbKlar" \
-      org.opencontainers.image.version="0.0.7" \
+      org.opencontainers.image.version="0.1.2" \
       org.opencontainers.image.base.name="${PYTHON_BASE}"
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \

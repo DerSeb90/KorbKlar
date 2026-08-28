@@ -16,6 +16,10 @@ def test_home_and_static_assets():
     assert 'href="/static/home.css"' in response.text
     assert 'src="/static/home-v2.js"' in response.text
     assert '<progress id="statusProgress"' in response.text
+    assert "Welche Märkte möchtest du vergleichen?" in response.text
+    assert response.text.count('name="retailers"') == 14
+    assert 'value="Globus" checked' in response.text
+    assert 'name="rewe_market_id"' in response.text
     assert client.get("/static/home.css").status_code == 200
     assert client.get("/static/results-v2.js").status_code == 200
 
@@ -76,8 +80,9 @@ def test_search_job_route_passes_refresh_to_the_job_store(monkeypatch):
     recorded = {}
 
     class RecordingJobs:
-        def start(self, postal_code, aldi_region="auto", refresh=False):
+        def start(self, postal_code, aldi_region="auto", refresh=False, retailers=(), rewe_market_id=""):
             recorded["value"] = refresh
+            recorded["retailers"] = retailers
             return "job-id"
 
     monkeypatch.setattr(runtime, "get_jobs", lambda: RecordingJobs())
@@ -88,3 +93,33 @@ def test_search_job_route_passes_refresh_to_the_job_store(monkeypatch):
 
     client.post("/search/jobs", data={"postal_code": "01067", "refresh": "1"})
     assert recorded["value"] is True
+
+    client.post("/search/jobs", data={"postal_code": "01067", "retailers": ["REWE", "Globus"]})
+    assert recorded["retailers"] == ("REWE", "Globus")
+
+
+def test_home_persists_retailer_selection_locally():
+    script = ui.static_text("home-v2.js")
+    assert "korbklar.selectedRetailers.v1" in script
+    assert "localStorage.getItem(retailerStorageKey)" in script
+    assert "localStorage.setItem(retailerStorageKey" in script
+    assert "/rewe/markets?postal_code=" in script
+    assert "korbklar.reweMarket." in script
+
+
+def test_browser_rewe_market_lookup_returns_all_exact_matches(monkeypatch):
+    from supermarkt import runtime
+
+    class Rewe:
+        def markets(self, postal_code):
+            assert postal_code == "12345"
+            return [
+                {"market_id": "1", "market_url": "https://www.rewe.de/angebote/a/1/x/", "label": "REWE A"},
+                {"market_id": "2", "market_url": "https://www.rewe.de/angebote/a/2/y/", "label": "REWE B"},
+            ]
+
+    engine = type("Engine", (), {"loader": type("Loader", (), {"official_rewe": Rewe()})()})()
+    monkeypatch.setattr(runtime, "get_engine", lambda: engine)
+    response = TestClient(app).get("/rewe/markets", params={"postal_code": "12345"})
+    assert response.status_code == 200
+    assert [market["market_id"] for market in response.json()["markets"]] == ["1", "2"]

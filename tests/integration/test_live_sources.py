@@ -83,14 +83,14 @@ def test_marktguru_images_live(tmp_path):
     http = HttpClient(TIMEOUT_SECONDS)
     client = MarktguruClient(http, 500, 3)
     raw, _errors = client.load_offers(postal)
-    targeted, _targeted_errors = client.load_retailer_queries(postal, ["Lidl", "PENNY", "Netto"])
+    targeted, _targeted_errors = client.load_retailer_queries(postal, ["Lidl", "PENNY", "Netto Marken-Discount"])
     raw.extend(targeted)
     contexts = SourceLoader._contexts()
     aggregator_contexts = {name: contexts[name] for name in AGGREGATOR_RETAILERS if name in contexts}
     offers = OfferMapper().map_all(raw, aggregator_contexts)
     service = ImageService(cache_dir=tmp_path, timeout_seconds=min(TIMEOUT_SECONDS, 30))
 
-    for retailer in ("Lidl", "PENNY", "Netto"):
+    for retailer in ("Lidl", "PENNY", "Netto Marken-Discount"):
         all_retailer_offers = [offer for offer in offers if offer.retailer == retailer]
         assert len(all_retailer_offers) >= 50, f"{retailer}: nur {len(all_retailer_offers)} aktuelle Angebote"
         retailer_offers = [offer for offer in all_retailer_offers if offer.image_url]
@@ -127,7 +127,7 @@ def test_reference_postal_code_full_source_mix_live():
 
     assert counts["Lidl"] >= 50
     assert counts["PENNY"] >= 50
-    assert counts["Netto"] >= 50
+    assert counts["Netto Marken-Discount"] >= 50
     assert counts["REWE"] >= 10
     assert counts["EDEKA"] >= 10
     assert counts["Kaufland"] >= 10

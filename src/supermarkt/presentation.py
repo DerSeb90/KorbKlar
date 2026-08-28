@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from .common import (
@@ -77,6 +78,28 @@ def _benefit_text(offer: Offer) -> str:
     return " · ".join(parts)
 
 
+def _cashback_credit(offer: Offer) -> tuple[float, str]:
+    benefits = [benefit for benefit in offer.applied_benefits if benefit.kind == "cashback" and benefit.value > 0]
+    total = sum(benefit.value for benefit in benefits)
+    labels = ", ".join(dict.fromkeys(benefit_label(benefit) for benefit in benefits))
+    return total, f"+ {format_euro(total)} {labels}" if total > 0 and labels else ""
+
+
+def _deposit_note(offer: Offer) -> str:
+    if offer.deposit is None:
+        return ""
+    total = format_euro(offer.deposit)
+    count_match = re.match(r"^(\d{1,3})x", offer.pack_signature, flags=re.IGNORECASE)
+    if not count_match:
+        return f"zzgl. {total} Pfand"
+    count = int(count_match.group(1))
+    if count <= 1:
+        return f"zzgl. {total} Pfand"
+    per_container = offer.deposit / count
+    container = "Dose" if re.search(r"\bdosen?\b|energy\s*drink", f"{offer.name} {offer.description}", re.I) else "Einheit"
+    return f"Pfand: {format_euro(per_container)} je {container} · {total} gesamt für {count}"
+
+
 def offer_for_response(
     offer: Offer,
     include_image_urls: bool,
@@ -94,6 +117,7 @@ def offer_for_response(
     )
 
     retailers = offer_retailers(offer)
+    cashback_credit, cashback_note = _cashback_credit(offer)
     result = {
         "offer_id": offer.offer_id,
         "retailer": offer.retailer,
@@ -122,6 +146,9 @@ def offer_for_response(
             else ""
         ),
         "loyalty_benefit": _benefit_text(offer),
+        "cashback_credit": cashback_credit,
+        "cashback_credit_text": format_euro(cashback_credit) if cashback_credit > 0 else "",
+        "cashback_credit_note": cashback_note,
         "pack": format_pack(offer.pack_signature) if offer.pack_signature else "",
         "unit_price": _unit_price_label(offer, regular),
         "selected_unit_price": (
@@ -136,6 +163,7 @@ def offer_for_response(
         "valid_until": offer.valid_until,
         "deposit": offer.deposit,
         "deposit_text": format_euro(offer.deposit) if offer.deposit is not None else "",
+        "deposit_note": _deposit_note(offer),
         "minimum_quantity": offer.minimum_quantity,
         "offer_condition": offer.offer_condition,
         "coverage_note": offer.coverage_note,

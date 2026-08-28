@@ -9,7 +9,7 @@ from .access import build_result_path, verify_result_token
 from .assets import FAVICON_SVG
 from .common import clean_text, normalize_aldi_region, validate_postal_code
 from .loyalty import normalize_program_ids
-from .models import ToolError
+from .models import ToolError, resolve_retailer_names
 from . import runtime
 from .ui import build_home_html, build_results_html, build_shopping_html
 
@@ -40,25 +40,39 @@ def shopping() -> HTMLResponse:
     return HTMLResponse(build_shopping_html(), headers={"Cache-Control": "no-store"})
 
 
+@router.get("/rewe/markets", include_in_schema=False)
+def browser_rewe_markets(postal_code: str = Query(default="", min_length=5, max_length=5, pattern=r"^\d{5}$")) -> dict:
+    try:
+        return {"postal_code": postal_code, "markets": runtime.get_engine().loader.official_rewe.markets(postal_code)}
+    except ToolError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+
 @router.post("/search", include_in_schema=False)
-def browser_search(postal_code_input: Annotated[str, Form(alias="postal_code")] = "", aldi_region_input: Annotated[str, Form(alias="aldi_region")] = "auto", refresh_input: Annotated[str, Form(alias="refresh")] = "") -> Response:
+def browser_search(postal_code_input: Annotated[str, Form(alias="postal_code")] = "", aldi_region_input: Annotated[str, Form(alias="aldi_region")] = "auto", refresh_input: Annotated[str, Form(alias="refresh")] = "", retailers_input: Annotated[list[str], Form(alias="retailers")] = [], rewe_market_id_input: Annotated[str, Form(alias="rewe_market_id")] = "") -> Response:
     raw_postal_code = clean_text(postal_code_input)
     postal_code = validate_postal_code(raw_postal_code)
     if postal_code is None:
         return HTMLResponse(build_home_html(error="Bitte eine gültige fünfstellige deutsche Postleitzahl eingeben.", postal_code=raw_postal_code), status_code=400, headers={"Cache-Control": "no-store"})
     try:
-        snapshot, _ = runtime.get_engine().snapshot(postal_code, normalize_aldi_region(aldi_region_input), _wants_refresh(refresh_input))
+        retailers, unknown = resolve_retailer_names(retailers_input)
+        if unknown:
+            raise ToolError("Unbekannte Händler: " + ", ".join(unknown))
+        snapshot, _ = runtime.get_engine().snapshot(postal_code, normalize_aldi_region(aldi_region_input), _wants_refresh(refresh_input), retailers=retailers, rewe_market_id=clean_text(rewe_market_id_input))
     except ToolError as exc:
         return HTMLResponse(build_home_html(error=str(exc), postal_code=postal_code), status_code=502, headers={"Cache-Control": "no-store"})
     return RedirectResponse(build_result_path(snapshot["search_id"]), status_code=303)
 
 
 @router.post("/search/jobs", include_in_schema=False)
-def start_search_job(postal_code_input: Annotated[str, Form(alias="postal_code")] = "", aldi_region_input: Annotated[str, Form(alias="aldi_region")] = "auto", refresh_input: Annotated[str, Form(alias="refresh")] = "") -> dict[str, str]:
+def start_search_job(postal_code_input: Annotated[str, Form(alias="postal_code")] = "", aldi_region_input: Annotated[str, Form(alias="aldi_region")] = "auto", refresh_input: Annotated[str, Form(alias="refresh")] = "", retailers_input: Annotated[list[str], Form(alias="retailers")] = [], rewe_market_id_input: Annotated[str, Form(alias="rewe_market_id")] = "") -> dict[str, str]:
     postal_code = validate_postal_code(clean_text(postal_code_input))
     if postal_code is None:
         raise HTTPException(status_code=400, detail="Bitte eine gültige fünfstellige deutsche Postleitzahl eingeben.")
-    return {"job_id": runtime.get_jobs().start(postal_code, normalize_aldi_region(aldi_region_input), _wants_refresh(refresh_input))}
+    retailers, unknown = resolve_retailer_names(retailers_input)
+    if unknown:
+        raise HTTPException(status_code=400, detail="Unbekannte Händler: " + ", ".join(unknown))
+    return {"job_id": runtime.get_jobs().start(postal_code, normalize_aldi_region(aldi_region_input), _wants_refresh(refresh_input), retailers, clean_text(rewe_market_id_input))}
 
 
 @router.get("/search/jobs/{job_id}", include_in_schema=False)

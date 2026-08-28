@@ -1,4 +1,4 @@
-import {SCHEMA_VERSION,MAX_IMPORT_BYTES,MAX_QUANTITY,canonicalItem,offerToItem,identityKey,mergeItems,totals,euro,exportDocument,validateDocument,exportText,parseText,resolvedImageUrl} from "./shopping-core.mjs";
+import {SCHEMA_VERSION,MAX_IMPORT_BYTES,MAX_QUANTITY,canonicalItem,offerToItem,identityKey,mergeItems,totals,euro,exportDocument,validateDocument,exportText,bringText,parseText,resolvedImageUrl} from "./shopping-core.mjs";
 const DB_NAME="korbklar-shopping",DB_VERSION=1,STORE="items";
 const $=id=>document.getElementById(id),el=(tag,cls,text)=>{const n=document.createElement(tag);if(cls)n.className=cls;if(text!=null)n.textContent=text;return n};
 function openDb(){return new Promise((resolve,reject)=>{const r=indexedDB.open(DB_NAME,DB_VERSION);r.onupgradeneeded=()=>{const db=r.result;if(!db.objectStoreNames.contains(STORE))db.createObjectStore(STORE,{keyPath:"local_item_id"});const meta=db.objectStoreNames.contains("meta")?r.transaction.objectStore("meta"):db.createObjectStore("meta");meta.put(SCHEMA_VERSION,"schema_version")};r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error)})}

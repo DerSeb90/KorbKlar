@@ -1,8 +1,18 @@
 # 0.1.4
 
-Enthält alles aus KorbKlar 0.0.5, 0.0.6 und 0.0.7.
+Enthält alles aus KorbKlar 0.0.5, 0.0.6, 0.0.7 sowie den Ständen 0.1.0 bis
+0.1.2 des Hauptprojekts. Deren Versionsnummern überschneiden sich mit unseren;
+die Notizen des Hauptprojekts stehen deshalb am Ende dieser Datei.
 
 ## Übernommen aus dem Hauptprojekt
+
+- Händlerauswahl wird gespeichert, und bei mehreren exakten PLZ-Treffern lässt sich der REWE-Markt von Hand wählen. Jede Auswahl bekommt einen eigenen Cache-Schlüssel.
+- Netto schwarz (Scottie) als eigener Händler neben Netto Marken-Discount, mit ausgewiesenen Netto+-Mitgliederpreisen.
+- Rossmann und Müller als Drogerie-Quellen; Müllers Angebote bleiben ausdrücklich als Online-Angebote gekennzeichnet.
+- Globus über den offiziellen Markt- und Prospektdatenstrom, Marktguru nur noch als Fallback.
+- Kaufland nutzt bevorzugt die filialbezogene Verfügbarkeits-JSON; der Browserabruf bleibt als Fallback. Ein einfacher HTTP-Abruf kommt jetzt vor dem Chromium-Start und spart ihn meistens ganz.
+- Pfand bei Mehrfachgebinden wird pro Dose ausgewiesen („0,25 € je Dose · 1,00 € gesamt für 4“), der Gesamtwert bleibt für Warenkorb und Einkaufsliste erhalten.
+- ALDI-Süd-Karten mit mehreren bepreisten Produkten werden in einzelne Angebote aufgeteilt.
 
 - ALDI-Region wird für das westliche NRW richtig gewählt, und Leverkusener Postleitzahlen sind als ALDI-Süd-Gebiet belegt.
 - REWE-Bonus wird bei ausdrücklich ausgewiesenen Rabatten korrekt gerechnet.
@@ -140,7 +150,7 @@ Combi und famila Nordwest ergänzen als optionale regionale Händler die bestehe
 - Lokaler Text-/Messenger-Import und -Export, TXT, Web Share sowie versioniertes JSON-Backup mit Vorschau und Größenlimit; keine persönlichen Listendaten erreichen den Server.
 - Kanonisches Listenmodell mit Adaptergrenze für mögliche spätere KitchenOwl-/Grocy-Anbindungen, ohne Sync oder neue externe Abhängigkeit.
 
-Details und Sicherheitsgates stehen in `SECURITY_AUDIT_0.0.3.md`.
+Die damaligen Auditdetails bleiben in der Git-Historie nachvollziehbar; im aktiven Quellstand wird nur der aktuelle Sicherheitsbericht mitgeführt.
 
 ---
 
@@ -230,3 +240,42 @@ Die Standardinstallation besteht aus einem Anwendungscontainer auf Port 8000. La
 - Installation, Architektur und Abhängigkeiten sind im README beschrieben.
 - Geplante spätere Integrationen mit Grocy und KitchenOwl sind als Roadmap gekennzeichnet.
 - Die Tarnkappe.info-Spendenseite und die aktuell veröffentlichte Monero-Adresse sind im README verlinkt.
+
+---
+
+# Notizen des Hauptprojekts
+
+Die folgenden Abschnitte stammen aus lesecuritae/KorbKlar. Ihre
+Versionsnummern gehören zur Zählung des Hauptprojekts und sind nicht
+dieselben Stände wie die gleichnamigen oben.
+
+## Hauptprojekt 0.1.2
+
+KorbKlar 0.1.2 präzisiert die Pfandanzeige für Mehrfachgebinde. Beim BLACK-CAT-Energy-Viererpack wird jetzt ausdrücklich „0,25 € je Dose · 1,00 € gesamt für 4“ angezeigt. Der Gesamtpfandwert des Verkaufspacks bleibt für Warenkorb und Einkaufsliste erhalten; eine einzelne Dose wird weiterhin mit 0,25 € Pfand geführt. Die Projektdokumentation enthält außerdem eine freiwillige Monero-Unterstützungsmöglichkeit; KorbKlar bleibt ohne Spende vollständig kostenlos und uneingeschränkt nutzbar.
+
+## Hauptprojekt 0.1.1
+
+KorbKlar 0.1.1 führt „Netto schwarz“ als eigenständigen Händler neben Netto Marken-Discount ein. Die offizielle Netto-Angebotsseite liefert reguläre Wochenangebote und öffentlich ausgewiesene Netto+-Mitgliederpreise. Die offizielle Marktsuche ordnet eine exakte PLZ bevorzugt zu und begrenzt den Nächstmarkt-Fallback auf 15 km. Beide Netto-Unternehmen und ihre Programme bleiben technisch getrennt; persönliche Coupons, Stempelkarten und nicht bezifferte Vorteile werden nicht geschätzt.
+
+Mitgliederpreise ohne veröffentlichten regulären Vergleichspreis werden nur bei aktivierter Mitgliedschaft gezeigt und niemals als regulärer Verkaufspreis umetikettiert. REWE Bonus bleibt eine Gutschrift, während veröffentlichte App-/Kartenpreise als bedingte Kassenpreise modelliert werden. PAYBACK-Punkte und persönliche Coupons werden weiterhin nicht pauschal in Euro umgerechnet.
+
+Der explizite Marktguru-Pfandtext des Netto-Markendiscount-Angebots „BLACK CAT Energy Drink“, einschließlich der Schreibweise `zzgl. Pfand 1.–`, wird als separater Pfandbetrag übernommen. Aus einer bloßen Dosen- oder Getränkeangabe wird weiterhin kein Pfand geraten. Die Cache-Generation wurde angehoben, damit ältere unvollständige Angebotsabbilder nicht wiederverwendet werden.
+
+Rossmann ist über die offizielle gerenderte Angebotsseite angebunden; ausschließlich ausdrücklich als „Aus der Werbung“ markierte Karten gelangen mit Preis, Grundpreis, Bild, Link und Werbezeitraum in den Vergleich. Müller liefert seine offiziellen Online-Angebote direkt aus der strukturierten Produktliste. Diese bleiben ausdrücklich als Online-Angebote gekennzeichnet und werden nicht als lokaler Filialpreis ausgegeben.
+
+Kaufland verwendet bevorzugt die offizielle filialbezogene Verfügbarkeits-JSON zusammen mit den strukturierten Angebotsdaten der Wochenübersicht. Regulärer Preis und Kaufland-Card-XTRA-Preis bleiben getrennt; XTRA wird nur bei ausgewähltem Programm als bedingter Preis berücksichtigt. Der bisherige Browserabruf bleibt als Kompatibilitätsfallback erhalten.
+
+Die bestehende browserlokale Einkaufsliste kann offene Artikel optional über Web Share an die App-Auswahl des Betriebssystems übergeben. Nutzer können dort Bring auswählen; ohne Web Share wird eine kompatible Artikelliste kopiert. KorbKlar speichert keine Bring-Zugangsdaten, führt keine zweite Liste und bleibt ohne Bring vollständig funktionsfähig. Eine dezente freiwillige Unterstützungssektion ergänzt die Startseite ohne Popup, Werbung oder Tracking.
+
+Das Laufzeitimage verwendet eine gepinnte Python-3.13-Alpine-Basis. Damit wird die bisherige Debian-Basis ersetzt, nachdem der Release-Scan dort nicht reparierte kritische Betriebssystem-Findings gemeldet hatte.
+
+## Hauptprojekt 0.1.0
+
+KorbKlar 0.1.0 erweitert den Vergleich um eine gespeicherte Händlerauswahl und eine manuelle REWE-Filialauswahl bei mehreren exakten PLZ-Treffern. Die Vergleichs-API akzeptiert optional `retailers`; jede Händler- und REWE-Marktauswahl erhält einen getrennten Cache-Schlüssel.
+
+Globus wird über den offiziellen Markt- und Prospektdatenstrom geladen. Für PLZ 93073 wird der Markt Neutraubling aufgelöst; die offizielle Quelle gewinnt vollständig, Marktguru dient nur bei Fehlern oder leeren offiziellen Daten als ungemischter Fallback.
+
+ALDI-Süd-Karten mit mehreren separat bepreisten Produkten werden in einzelne Angebote aufgeteilt, ohne Zeitraum oder Dublettenlogik zu verlieren. REWE-Bonusgutschriften bleiben vom Verkaufspreis getrennt und erscheinen beispielsweise als „+ 0,50 € REWE Bonus“, ohne Preis- oder Grundpreisranking zu verfälschen.
+
+Die reproduzierbare Suite umfasst 207 bestandene Tests. Live geprüft wurden Globus Neutraubling (477 Angebote), die REWE-Mehrmarkt-PLZ 26123 einschließlich manueller Auswahl sowie Kaufland 44791. Die Startseite wurde bei 390×844, 412×915 und 1440×1000 geprüft. Issue #8 bleibt für den nicht reproduzierbaren historischen Kaufland-Datensatz, eine frei wählbare Datumsspanne und zusätzliche Händler offen.
+
