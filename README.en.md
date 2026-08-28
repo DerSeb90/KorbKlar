@@ -307,17 +307,15 @@ These integrations are not part of version 0.1.0. The existing REST API can alre
 
 ## Support the project
 
-To support KorbKlar and the work of Tarnkappe.info, see the current donation options at:
+KorbKlar remains free, ad-free, and without user tracking. Every feature remains available regardless of whether a user donates. There is no paywall and no restriction for users who do not donate.
 
-https://tarnkappe.info/spenden/
-
-The Tarnkappe.info Monero address documented in the current repository is:
+Anyone who voluntarily wants to support ongoing development, new retailer adapters, and maintenance of data sources can send Monero to this public project address:
 
 ```text
-87oownPVNFFciRNe2DLaNQPrVsjprbZBX7bHnPENABDyGpM6isrzKeWGsjT5W86h9d6A5nhE2Z2ZAXCHksvC2EikGGaWB8u
+83WjjKs4ijKChStc9GPrpZYa9DXYpHmbSeVipJrQSzMnRdmYtFE4K5D7ff7BsrTDa8TTZvJmAWivgWLEcJpULQ79KpRX8ik
 ```
 
-Wallet addresses can change. Before donating, verify the currently published address at [tarnkappe.info/spenden](https://tarnkappe.info/spenden/).
+Donations are entirely optional and do not influence the feature set, access to KorbKlar, or prioritisation of individual users.
 
 ## License and trademarks
 
