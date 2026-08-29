@@ -380,42 +380,53 @@ class OfficialReweSource:
         if not slug:
             raise ToolError(f"REWE konnte aus {locality!r} keinen Marktsuche-Pfad bilden")
 
-        search_url = f"{self.BASE}/marktsuche/{slug}/"
         session = self._session()
-        response = session.get(search_url, timeout=self.timeout_seconds)
-        if response.status_code != 200:
-            raise ToolError(f"REWE Marktsuche HTTP {response.status_code}")
-        soup = BeautifulSoup(response.text, "html.parser")
+        slugs = [slug]
+        state_getter = getattr(self.locator, "state", None)
+        state = clean_text(state_getter(postal_code)) if callable(state_getter) else ""
+        state_slug = self._slug(state)
+        if state_slug and state_slug not in slugs:
+            slugs.append(state_slug)
 
         exact: list[tuple[str, str, str]] = []
         # The search page can expose more than one URL/slug for the same store.
         # Only the numeric market id represents an independently selectable market.
         seen_market_ids: set[str] = set()
-        for link in soup.select('a[href*="/angebote/"]'):
-            href = urljoin(self.BASE, clean_text(link.get("href")))
-            match = re.search(r"/angebote/[^/]+/(\d+)/[^/?#]+/?", href)
-            if not match:
+        successful_pages = 0
+        for page_slug in slugs:
+            response = session.get(f"{self.BASE}/marktsuche/{page_slug}/", timeout=self.timeout_seconds)
+            if response.status_code != 200:
                 continue
-            market_id = match.group(1)
-            if market_id in seen_market_ids:
-                continue
+            successful_pages += 1
+            soup = BeautifulSoup(response.text, "html.parser")
+            for link in soup.select('a[href*="/angebote/"]'):
+                href = urljoin(self.BASE, clean_text(link.get("href")))
+                match = re.search(r"/angebote/[^/]+/(\d+)/[^/?#]+/?", href)
+                if not match:
+                    continue
+                market_id = match.group(1)
+                if market_id in seen_market_ids:
+                    continue
 
-            node = link
-            local_text = clean_text(link.get_text(" ", strip=True))
-            for _ in range(8):
-                parent = getattr(node, "parent", None)
-                if parent is None:
-                    break
-                node = parent
-                offer_links = node.select('a[href*="/angebote/"]') if hasattr(node, "select") else []
-                candidate_text = clean_text(node.get_text(" ", strip=True)) if hasattr(node, "get_text") else ""
-                if len(offer_links) == 1:
-                    local_text = candidate_text
-                    break
-            if postal_code not in local_text:
-                continue
-            seen_market_ids.add(market_id)
-            exact.append((market_id, href, local_text))
+                node = link
+                local_text = clean_text(link.get_text(" ", strip=True))
+                for _ in range(8):
+                    parent = getattr(node, "parent", None)
+                    if parent is None:
+                        break
+                    node = parent
+                    offer_links = node.select('a[href*="/angebote/"]') if hasattr(node, "select") else []
+                    candidate_text = clean_text(node.get_text(" ", strip=True)) if hasattr(node, "get_text") else ""
+                    if len(offer_links) == 1:
+                        local_text = candidate_text
+                        break
+                if postal_code not in local_text:
+                    continue
+                seen_market_ids.add(market_id)
+                exact.append((market_id, href, local_text))
+
+        if not successful_pages:
+            raise ToolError("REWE Marktsuche war nicht erreichbar")
 
         if not exact:
             raise ToolError(f"REWE fand in {locality} keinen Markt mit exakt PLZ {postal_code}")

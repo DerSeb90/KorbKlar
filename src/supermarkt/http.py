@@ -101,6 +101,7 @@ class PostalCodeLocator:
     def __init__(self, http: HttpClient) -> None:
         self.http = http
         self._cache: dict[str, str] = {}
+        self._address_cache: dict[str, dict[str, str]] = {}
         self._lock = threading.Lock()
 
     def locality(self, postal_code: str) -> str:
@@ -119,6 +120,7 @@ class PostalCodeLocator:
             }
         )
         locality = ""
+        normalized_address: dict[str, str] = {}
         try:
             payload = json.loads(
                 self.http.get_bytes(
@@ -129,8 +131,9 @@ class PostalCodeLocator:
             if isinstance(payload, list) and payload and isinstance(payload[0], dict):
                 address = payload[0].get("address")
                 if isinstance(address, dict):
+                    normalized_address = {str(key): clean_text(value) for key, value in address.items()}
                     for field in ("city", "town", "municipality", "village", "county"):
-                        locality = clean_text(address.get(field))
+                        locality = normalized_address.get(field, "")
                         if locality:
                             break
         except Exception:
@@ -138,4 +141,30 @@ class PostalCodeLocator:
 
         with self._lock:
             self._cache[postal_code] = locality
+            self._address_cache[postal_code] = normalized_address
         return locality
+
+    def state(self, postal_code: str) -> str:
+        """Return the federal state for source pages that group stores by state."""
+        with self._lock:
+            cached = self._address_cache.get(postal_code)
+        if cached is not None:
+            return cached.get("state", "")
+
+        query = urlencode(
+            {"postalcode": postal_code, "country": "Germany", "format": "jsonv2", "addressdetails": 1, "limit": 1}
+        )
+        address: dict[str, str] = {}
+        try:
+            payload = json.loads(self.http.get_bytes(
+                f"https://nominatim.openstreetmap.org/search?{query}", {"Accept": "application/json"}
+            ).decode("utf-8", errors="replace"))
+            if isinstance(payload, list) and payload and isinstance(payload[0], dict):
+                raw = payload[0].get("address")
+                if isinstance(raw, dict):
+                    address = {str(key): clean_text(value) for key, value in raw.items()}
+        except Exception:
+            address = {}
+        with self._lock:
+            self._address_cache[postal_code] = address
+        return address.get("state", "")

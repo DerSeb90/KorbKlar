@@ -3,6 +3,15 @@ import time
 from supermarkt.jobs import SearchJobStore
 
 
+def test_job_progress_never_exceeds_total_sources():
+    store = SearchJobStore(object())
+    store._jobs["audit"] = {"updated_at": 0, "processed_sources": 0, "total_sources": 7}
+    store._progress("audit", processed_sources=12)
+    job = store.get("audit")
+    assert job is not None
+    assert job["processed_sources"] == 7
+
+
 class ProgressEngine:
     def snapshot(self, postal_code, aldi_region, refresh, progress=None, retailers=(), rewe_market_id=""):
         progress(status="loading", progress=35, source="Testquelle", retailer="Lidl",

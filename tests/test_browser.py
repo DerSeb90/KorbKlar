@@ -133,7 +133,14 @@ def test_results_filters_and_loyalty_are_collapsible_after_search():
     assert 'id="loyaltySummary"' in page
     assert "updateLoyaltySummary" in script
     assert 'id="marketBox"' in page
+    assert 'class="marketChange"' in page
     assert "renderMarkets" in script
+
+
+def test_loader_labels_technical_progress_and_clamps_the_display():
+    script = ui.static_text("home-v2.js")
+    assert "Datenquellen" in script
+    assert "Math.min(total" in script
 
 
 def test_results_page_has_no_sticky_scroll_traps():

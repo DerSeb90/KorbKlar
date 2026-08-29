@@ -536,7 +536,9 @@ class OfficialAldiSource:
         page = self._south_get_html(publication_url)
         publication = self._south_publication_data(page)
         if publication is None:
-            raise ToolError("ALDI Süd Prospektkonfiguration fehlt")
+            # ALDI links forthcoming issues before their reader data is
+            # published. That is an unavailable candidate, not a broken offer.
+            return []
         config = publication.get("config") if isinstance(publication.get("config"), dict) else {}
         canonical = clean_text(config.get("canonicalUrl"))
         website = clean_text(config.get("websiteUrl"))

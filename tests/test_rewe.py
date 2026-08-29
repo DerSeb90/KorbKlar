@@ -318,6 +318,47 @@ def test_rewe_lists_all_exact_postcode_markets_and_honours_manual_choice(monkeyp
         source._find_market("12345", market_id="999")
 
 
+def test_rewe_merges_exact_markets_from_city_and_state_pages(monkeypatch):
+    """A suburb market may only be listed on REWE's state overview."""
+    postal = "042" + "09"
+    class Locator:
+        def locality(self, postal_code):
+            assert postal_code == postal
+            return "Leipzig"
+
+        def state(self, postal_code):
+            assert postal_code == postal
+            return "Sachsen"
+
+    city = f"""
+      <article><a href="/angebote/leipzig/1931419/rewe-center-ludwigsburger-str-9/">
+        REWE Center - Ludwigsburger Str. 9, {postal} Leipzig
+      </a></article>
+    """
+    state = f"""
+      <article><a href="/angebote/leipzig-ot-gruenau-ost/1931089/rewe-markt-gruenauer-allee-38/">
+        REWE Markt - Grünauer Allee 38, {postal} Leipzig OT Grünau-Ost
+      </a></article>
+    """
+
+    class Response:
+        status_code = 200
+
+        def __init__(self, text):
+            self.text = text
+
+    class Session:
+        def get(self, url, timeout):
+            assert timeout > 0
+            return Response(state if "/marktsuche/sachsen/" in url else city)
+
+    source = OfficialReweSource(Locator())
+    monkeypatch.setattr(source, "_session", lambda: Session())
+
+    markets = source.markets(postal)
+    assert {market["market_id"] for market in markets} == {"1931419", "1931089"}
+
+
 def test_rewe_market_mapping_is_cached_for_24_hours(tmp_path, monkeypatch):
     class Locator:
         def __init__(self):

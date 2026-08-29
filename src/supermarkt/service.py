@@ -156,7 +156,6 @@ class SourceLoader:
         elif not selected_retailers:
             resolved_regions = ["nord", "sued"] if requested_region == "both" else ([resolved] if resolved in {"nord", "sued"} else [])
         aldi_names = ["ALDI Nord" if item == "nord" else "ALDI Süd" for item in resolved_regions]
-        notify(total_sources=5 + len(aldi_names))
         if not aldi_names and not selected_retailers:
             detail = clean_text(self.aldi_region.last_error)
             warning = "ALDI-Region konnte geografisch nicht eindeutig bestimmt werden; ALDI wurde für diesen Abruf ausgelassen."
@@ -192,6 +191,11 @@ class SourceLoader:
             official_jobs["Müller"] = lambda: self.official_mueller.load(postal_code)
         if hasattr(self, "official_holab") and "HOL’AB!" in active_contexts:
             official_jobs["HOL’AB!"] = lambda: self.official_holab.load(postal_code)
+        initial_aggregator = any(
+            name in active_contexts and name != "Globus" for name in AGGREGATOR_RETAILERS
+        )
+        total_sources = len(official_jobs) + len(aldi_names) + (1 if initial_aggregator else 0)
+        notify(total_sources=max(1, total_sources), processed_sources=0)
         completed_sources = 0
         processed_products = 0
         with ThreadPoolExecutor(max_workers=max(1, len(official_jobs))) as executor:
@@ -283,6 +287,12 @@ class SourceLoader:
         marketguru_candidates = aggregator_names | fallback_names | globus_image_enrichment
         marktguru_mapped: list[Offer] = []
         if marketguru_candidates:
+            # A failed first-party source can add the aggregator fallback only
+            # after the initial plan was calculated. Grow the technical-source
+            # total before incrementing progress, never after it.
+            if not initial_aggregator:
+                total_sources += 1
+                notify(total_sources=max(1, total_sources), processed_sources=completed_sources)
             completed_sources += 1
             notify(status="loading", progress=62, source="Marktguru", retailer="Lidl, PENNY, Netto Marken-Discount, Combi, famila", category="Händlerkategorien", step="Regionale Angebote werden geladen", processed_sources=completed_sources, processed_products=processed_products)
             raw: list[dict[str, Any]] = []
@@ -419,9 +429,9 @@ class SourceLoader:
         }
 
 class SupermarketEngine:
-    # v9 also invalidates snapshots from the former partial ALDI-Süd catalogue
-    # and snapshots which omitted ALDI-Nord's structured deposit value.
-    SNAPSHOT_SCHEMA = 9
+    # v10 invalidates snapshots created before exact REWE markets were merged
+    # across locality and state overview pages.
+    SNAPSHOT_SCHEMA = 10
     def __init__(self) -> None:
         self.store = PersistentSnapshotStore(CACHE_DB, CACHE_TTL_MINUTES, RESULT_RETENTION_HOURS, CACHE_MAX_SNAPSHOTS)
         self.loader = SourceLoader()

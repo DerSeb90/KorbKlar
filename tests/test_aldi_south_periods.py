@@ -325,6 +325,26 @@ def test_aldi_south_uses_complete_current_brochure_without_mixing_web_cards(monk
     assert aldi._load_south() == [brochure_offer]
 
 
+def test_aldi_south_does_not_report_unconfigured_future_brochure(monkeypatch):
+    aldi = source()
+    current = make_offer("24.08. – 29.08.2026", "2026-08-24", "2026-08-29")
+    index = """
+      <a href="https://prospekt.aldi-sued.de/kw35-26-op-mp">Aktuell</a>
+      <a href="https://prospekt.aldi-sued.de/kw36-26-op-mp">Nächste Woche</a>
+    """
+    monkeypatch.setattr(aldi, "_south_get_html", lambda _url: index)
+    monkeypatch.setattr(aldi, "_south_page_offers", lambda _page, _url: [])
+
+    def brochure(url):
+        if "kw35" in url:
+            return [current]
+        raise ToolError("ALDI Süd Prospektkonfiguration fehlt")
+
+    monkeypatch.setattr(aldi, "_south_brochure_offers", brochure)
+    assert aldi._load_south() == [current]
+    assert not any("Prospektkonfiguration fehlt" in error for error in aldi.last_south_errors)
+
+
 def test_aldi_south_keeps_web_cards_when_brochure_is_unavailable(monkeypatch):
     aldi = source()
     web_offer = make_offer("24.08. – 29.08.2026", "2026-08-24", "2026-08-29")

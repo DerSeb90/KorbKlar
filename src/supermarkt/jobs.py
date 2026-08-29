@@ -25,7 +25,7 @@ class SearchJobStore:
             self._jobs[job_id] = {"job_id": job_id, "status": "waiting", "postal_code": postal_code, "aldi_region": aldi_region,
                 "source": "KorbKlar", "retailer": "Alle Händler", "category": "Alle Kategorien",
                 "step": "Suche wird vorbereitet", "progress": 0, "processed_sources": 0,
-                "total_sources": 6, "processed_products": 0, "created_at": now, "updated_at": now}
+                "total_sources": 0, "processed_products": 0, "created_at": now, "updated_at": now}
         self._pool.submit(self._run, job_id, postal_code, aldi_region, refresh, retailers, rewe_market_id)
         return job_id
 
@@ -37,6 +37,9 @@ class SearchJobStore:
     def _progress(self, job_id: str, **fields: str) -> None:
         with self._lock:
             if job_id in self._jobs:
+                total = int(fields.get("total_sources", self._jobs[job_id].get("total_sources", 0)) or 0)
+                if "processed_sources" in fields and total:
+                    fields["processed_sources"] = min(max(0, int(fields["processed_sources"])), total)
                 self._jobs[job_id].update(fields, updated_at=time.time())
 
     def _run(self, job_id: str, postal_code: str, aldi_region: str, refresh: bool = False, retailers: tuple[str, ...] = (), rewe_market_id: str = "") -> None:

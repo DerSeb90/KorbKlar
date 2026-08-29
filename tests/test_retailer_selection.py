@@ -20,6 +20,7 @@ def _offer(retailer: str) -> Offer:
 
 def test_source_loader_executes_only_selected_retailers():
     calls = []
+    progress_events = []
     class Source:
         last_market_url = last_market_label = ""
         def __init__(self, retailer): self.retailer = retailer
@@ -31,8 +32,20 @@ def test_source_loader_executes_only_selected_retailers():
     loader.official_globus = Source("Globus")
     loader.aldi_region = type("Region", (), {"last_error": ""})()
 
-    result = loader.load("50677", "auto", retailers=("REWE", "Globus"))
+    result = loader.load(
+        "50677", "auto", retailers=("REWE", "Globus"),
+        progress=lambda **event: progress_events.append(event),
+    )
 
     assert set(calls) == {"REWE", "Globus"}
     assert {item["retailer"] for item in result["offers"]} == {"REWE", "Globus"}
     assert set(result["retailers"]) == {"REWE", "Globus"}
+    totals = [event for event in progress_events if "total_sources" in event]
+    assert totals[0]["total_sources"] == 2
+    # Globus can add one image-only aggregator pass after its official
+    # catalogue has been inspected.
+    assert totals[-1]["total_sources"] == 3
+    assert all(
+        event.get("processed_sources", 0) <= totals[-1]["total_sources"]
+        for event in progress_events
+    )

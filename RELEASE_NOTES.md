@@ -1,3 +1,31 @@
+# 0.1.6
+
+KorbKlar 0.1.6 repariert die Filialauflösung für Orte, deren exakte
+REWE-Märkte auf unterschiedlichen Orts- und Bundeslandseiten veröffentlicht
+werden. Exakte Treffer werden anhand der numerischen Markt-ID zusammengeführt,
+dedupliziert und vollständig zur manuellen Auswahl angeboten; die gewählte
+Filiale wird weiterhin lokal gespeichert. Für Leipzig liefert die offizielle
+Quelle damit wieder beide exakten Märkte statt nur des auf der Stadtseite
+gelisteten Centers.
+
+Die Ladeanzeige bezeichnet ihre Einheiten nun eindeutig als technische
+Datenquellen. Ihre Gesamtzahl wird aus dem tatsächlichen Ladeplan einschließlich
+später notwendiger Fallback- oder Bildläufe gebildet. Backend und Oberfläche
+stellen zusätzlich sicher, dass der verarbeitete Zähler nie größer als die
+Gesamtzahl dargestellt wird.
+
+Noch nicht konfigurierte zukünftige ALDI-Süd-Prospekte gelten nicht mehr als
+Fehler eines erfolgreichen aktuellen Abrufs. Der strukturierte aktuelle
+Wochenprospekt bleibt unverändert Primärquelle; Preis, Grundpreis, Pfand,
+artikelbezogenes Bild und Gültigkeitszeitraum bleiben getrennt. Die kompakte
+Marktanzeige der Ergebnisse erhält einen direkten Weg zurück zur Änderung.
+
+Der Markt-Audit unterscheidet bewusst filialadressierbare Quellen von regionalen
+Katalogen: Lidl veröffentlicht für den geprüften Leipziger Bereich mehrere nahe
+Filialen, aber keinen exakten Markt unter der eingegebenen PLZ; Marktguru liefert
+zudem keine Filial-ID für eine belastbare Angebotszuordnung. Daher wird keine
+wirkungslos erscheinende Lidl-Filialauswahl vorgetäuscht.
+
 # 0.1.5
 
 KorbKlar 0.1.5 behebt die unvollständige ALDI-Süd-Erfassung und verbessert die
