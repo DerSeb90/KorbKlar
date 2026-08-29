@@ -22,7 +22,7 @@ router = APIRouter()
 def supermarket_compare(request_data: SupermarketRequest, request: Request, _: None = Depends(require_api_auth)) -> dict[str, Any]:
     try:
         engine = runtime.get_engine()
-        snapshot, from_cache = engine.snapshot(request_data.postal_code, request_data.aldi_region, request_data.refresh, retailers=tuple(request_data.retailers), rewe_market_id=request_data.rewe_market_id)
+        snapshot, from_cache = engine.snapshot(request_data.postal_code, request_data.aldi_region, request_data.refresh, retailers=tuple(request_data.retailers), rewe_market_id=request_data.rewe_market_id, netto_market_id=request_data.netto_market_id)
         page = engine.page(snapshot, filter_text=request_data.filter_text, retailer=request_data.retailer, page=request_data.page, page_size=request_data.page_size, view=request_data.view, loyalty_programs=tuple(request_data.loyalty_programs), sort=request_data.sort, include_image_urls=False)
         page["status"] = "ok"
         page["from_cache"] = from_cache
@@ -37,6 +37,15 @@ def rewe_markets(postal_code: str = Query(min_length=5, max_length=5, pattern=r"
     try:
         markets = runtime.get_engine().loader.official_rewe.markets(postal_code)
         return {"postal_code": postal_code, "markets": markets}
+    except ToolError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+
+@router.get("/api/v1/netto/markets", summary="Netto-Marken-Discount-Filialen einer PLZ auflösen", include_in_schema=False)
+def netto_markets(postal_code: str = Query(min_length=5, max_length=5, pattern=r"^\d{5}$"), _: None = Depends(require_api_auth)) -> dict[str, Any]:
+    try:
+        markets = runtime.get_engine().loader.netto_marken_markets.markets(postal_code)
+        return {"postal_code": postal_code, "markets": markets, "count": len(markets)}
     except ToolError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 

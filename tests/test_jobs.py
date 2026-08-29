@@ -13,7 +13,7 @@ def test_job_progress_never_exceeds_total_sources():
 
 
 class ProgressEngine:
-    def snapshot(self, postal_code, aldi_region, refresh, progress=None, retailers=(), rewe_market_id=""):
+    def snapshot(self, postal_code, aldi_region, refresh, progress=None, retailers=(), rewe_market_id="", netto_market_id=""):
         progress(status="loading", progress=35, source="Testquelle", retailer="Lidl",
                  category="Backwaren", step="Laden", processed_sources=2,
                  total_sources=6, processed_products=42)
@@ -37,7 +37,7 @@ def test_search_job_forwards_manual_aldi_choice():
     class RecordingEngine(ProgressEngine):
         seen = None
 
-        def snapshot(self, postal_code, aldi_region, refresh, progress=None, retailers=(), rewe_market_id=""):
+        def snapshot(self, postal_code, aldi_region, refresh, progress=None, retailers=(), rewe_market_id="", netto_market_id=""):
             self.seen = (postal_code, aldi_region)
             return super().snapshot(postal_code, aldi_region, refresh, progress, retailers)
 
@@ -72,7 +72,7 @@ def test_search_job_forwards_refresh_request():
     class RecordingEngine(ProgressEngine):
         seen = None
 
-        def snapshot(self, postal_code, aldi_region, refresh, progress=None, retailers=(), rewe_market_id=""):
+        def snapshot(self, postal_code, aldi_region, refresh, progress=None, retailers=(), rewe_market_id="", netto_market_id=""):
             self.seen = refresh
             return super().snapshot(postal_code, aldi_region, refresh, progress, retailers)
 
@@ -91,7 +91,7 @@ def test_search_job_forwards_retailer_selection():
     class RecordingEngine(ProgressEngine):
         seen = None
 
-        def snapshot(self, postal_code, aldi_region, refresh, progress=None, retailers=(), rewe_market_id=""):
+        def snapshot(self, postal_code, aldi_region, refresh, progress=None, retailers=(), rewe_market_id="", netto_market_id=""):
             self.seen = retailers
             return super().snapshot(postal_code, aldi_region, refresh, progress, retailers)
 

@@ -37,6 +37,7 @@ def test_request_accepts_one_or_multiple_known_retailers():
     assert several.retailers == ["REWE", "Kaufland", "Globus"]
     assert all_retailers.retailers == []
     assert SupermarketRequest(postal_code="01067", rewe_market_id="123456").rewe_market_id == "123456"
+    assert SupermarketRequest(postal_code="01067", netto_market_id="5303").netto_market_id == "5303"
 
 
 def test_request_rejects_unknown_retailer():

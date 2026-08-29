@@ -24,6 +24,11 @@ __ERROR_HTML__
 <select name="rewe_market_id" id="reweMarket" disabled><option value="">Automatische Auswahl</option></select>
 <div class="marketHint" id="reweMarketHint" aria-live="polite"></div>
 </div>
+<div class="reweMarketPicker" id="nettoMarketPicker" hidden>
+<label for="nettoMarket">Netto-Marken-Discount-Filiale auswählen</label>
+<select name="netto_market_id" id="nettoMarket" disabled><option value="">Automatische Auswahl</option></select>
+<div class="marketHint" id="nettoMarketHint" aria-live="polite"></div>
+</div>
 <details class="retailerPicker" id="retailerPicker" open>
 <summary><span>Welche Märkte möchtest du vergleichen?</span><span class="retailerSummary" id="retailerSummary">Alle Händler ausgewählt</span><span class="changeLabel" id="retailerChangeLabel">ändern</span></summary>
 <div class="retailerPickerBody">
@@ -52,7 +57,7 @@ __ERROR_HTML__
 <section class="monitor" id="monitor" aria-live="polite" hidden>
 <div class="monitorHead"><span class="spinner" aria-hidden="true"></span><strong id="statusLabel">Aktiv</strong></div>
 <div class="progressRow"><progress id="statusProgress" max="100" value="0">0%</progress><strong id="statusPercent">0%</strong></div>
-<dl><div><dt>Quelle</dt><dd id="statusSource">KorbKlar</dd></div><div><dt>Händler</dt><dd id="statusRetailer">Alle Händler</dd></div><div><dt>Kategorie</dt><dd id="statusCategory">Alle Kategorien</dd></div><div><dt>Schritt</dt><dd id="statusStep">Suche wird vorbereitet</dd></div><div><dt>Verarbeitet</dt><dd id="statusCount">0 von 6 Quellen · 0 Produkte</dd></div></dl>
+<dl><div><dt>Quelle</dt><dd id="statusSource">KorbKlar</dd></div><div><dt>Händler</dt><dd id="statusRetailer">Alle Händler</dd></div><div><dt>Kategorie</dt><dd id="statusCategory">Alle Kategorien</dd></div><div><dt>Schritt</dt><dd id="statusStep">Suche wird vorbereitet</dd></div><div><dt>Verarbeitet</dt><dd id="statusCount">Datenquellen werden geplant · 0 Produkte</dd></div></dl>
 </section>
 <div class="hint">Keine LLM erforderlich. Bonusprogramme, Kategorien und Sortierung wählst du anschließend in der Ergebnisansicht.</div>
 <section class="supportNote" aria-labelledby="supportTitle">

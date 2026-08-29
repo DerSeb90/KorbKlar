@@ -94,6 +94,8 @@ REWE, EDEKA, Marktkauf, Kaufland, GLOBUS, and the applicable ALDI region are loa
 
 Lidl, PENNY, Netto Marken-Discount, Combi, and famila Nordwest are loaded from regional Marktguru data. Netto schwarz, Rossmann, Müller, and HOL’AB! use separate source-specific data paths. KorbKlar combines a broad regional search with supplementary retailer-name searches where applicable; the name queries alone are never treated as a complete catalogue.
 
+When a postal code has multiple exact store matches, users can select a specific REWE or Netto Marken-Discount store. REWE offers are loaded for that store. Netto Marken-Discount currently remains a regional catalogue, so KorbKlar displays the selected official store transparently without claiming store-specific prices.
+
 Combi and famila Nordwest belong to the Bünting group and only trade in north-western Germany. Both are therefore optional in the same sense as Marktkauf and GLOBUS: where they return nothing, that is not reported as a source error.
 
 Their regional coverage in the Marktguru catalogue is uneven and is not the same for both brands. A postal code inside the sales area may return one brand, both, or neither, so the presence of a Bünting store near a postal code does not guarantee offers. KorbKlar shows what the regional catalogue actually contains and does not substitute data from another area.

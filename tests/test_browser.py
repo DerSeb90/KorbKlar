@@ -80,7 +80,7 @@ def test_search_job_route_passes_refresh_to_the_job_store(monkeypatch):
     recorded = {}
 
     class RecordingJobs:
-        def start(self, postal_code, aldi_region="auto", refresh=False, retailers=(), rewe_market_id=""):
+        def start(self, postal_code, aldi_region="auto", refresh=False, retailers=(), rewe_market_id="", netto_market_id=""):
             recorded["value"] = refresh
             recorded["retailers"] = retailers
             return "job-id"
@@ -105,6 +105,8 @@ def test_home_persists_retailer_selection_locally():
     assert "localStorage.setItem(retailerStorageKey" in script
     assert "/rewe/markets?postal_code=" in script
     assert "korbklar.reweMarket." in script
+    assert "/netto/markets?postal_code=" in script
+    assert "korbklar.nettoMarket." in script
 
 
 def test_retailer_tiles_have_equal_grid_rows_and_height():
@@ -176,3 +178,21 @@ def test_browser_rewe_market_lookup_returns_all_exact_matches(monkeypatch):
     response = TestClient(app).get("/rewe/markets", params={"postal_code": "12345"})
     assert response.status_code == 200
     assert [market["market_id"] for market in response.json()["markets"]] == ["1", "2"]
+
+
+def test_browser_netto_market_lookup_returns_all_exact_matches(monkeypatch):
+    from supermarkt import runtime
+
+    class Netto:
+        def markets(self, postal_code):
+            assert postal_code == "12345"
+            return [
+                {"market_id": "10", "market_url": "https://www.netto-online.de/filialen/a/10", "label": "Netto A", "match_type": "exact"},
+                {"market_id": "20", "market_url": "https://www.netto-online.de/filialen/b/20", "label": "Netto B", "match_type": "exact"},
+            ]
+
+    engine = type("Engine", (), {"loader": type("Loader", (), {"netto_marken_markets": Netto()})()})()
+    monkeypatch.setattr(runtime, "get_engine", lambda: engine)
+    response = TestClient(app).get("/netto/markets", params={"postal_code": "12345"})
+    assert response.status_code == 200
+    assert [market["market_id"] for market in response.json()["markets"]] == ["10", "20"]

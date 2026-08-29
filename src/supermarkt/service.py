@@ -33,7 +33,7 @@ from .presentation import offer_for_response, offer_sort_key, resolve_retailer_n
 from .region import AldiRegionResolver
 
 LOGGER = logging.getLogger(__name__)
-from .sources import KaufdaGlobusImageSource, MarktguruClient, OfficialAldiSource, OfficialEdekaSource, OfficialGlobusSource, OfficialKauflandSource, OfficialMarktkaufSource, OfficialReweSource, OfficialHolabSource, OfficialNettoScottieSource, OfficialMuellerSource, OfficialRossmannSource
+from .sources import KaufdaGlobusImageSource, MarktguruClient, NettoMarkenMarketResolver, OfficialAldiSource, OfficialEdekaSource, OfficialGlobusSource, OfficialKauflandSource, OfficialMarktkaufSource, OfficialReweSource, OfficialHolabSource, OfficialNettoScottieSource, OfficialMuellerSource, OfficialRossmannSource
 from .sources.aldi_chain import AldiOfferChain
 
 class SourceLoader:
@@ -56,6 +56,7 @@ class SourceLoader:
         self.official_globus = OfficialGlobusSource(http)
         self.kaufda_globus_images = KaufdaGlobusImageSource(http)
         self.official_netto_scottie = OfficialNettoScottieSource(http)
+        self.netto_marken_markets = NettoMarkenMarketResolver(http)
         self.official_rossmann = OfficialRossmannSource(timeout_seconds=TIMEOUT_SECONDS)
         self.official_mueller = OfficialMuellerSource(http)
         self.official_marktkauf = OfficialMarktkaufSource(TIMEOUT_SECONDS)
@@ -134,7 +135,7 @@ class SourceLoader:
             count += 1
         return enriched, count
 
-    def load(self, postal_code: str, aldi_region: str, progress=None, retailers: tuple[str, ...] = (), rewe_market_id: str = "") -> dict[str, Any]:
+    def load(self, postal_code: str, aldi_region: str, progress=None, retailers: tuple[str, ...] = (), rewe_market_id: str = "", netto_market_id: str = "") -> dict[str, Any]:
         notify = progress or (lambda **_fields: None)
         notify(status="loading", progress=5, source="Standortdienst", retailer="Alle Händler", category="Region", step="Region und Filialen werden ermittelt")
         contexts = self._contexts()
@@ -165,6 +166,18 @@ class SourceLoader:
         for name in ("ALDI Nord", "ALDI Süd"):
             if name not in aldi_names:
                 active_contexts.pop(name, None)
+
+        if "Netto Marken-Discount" in active_contexts and hasattr(self, "netto_marken_markets"):
+            try:
+                selected_netto = self.netto_marken_markets.resolve(postal_code, netto_market_id)
+                if selected_netto:
+                    option = self.netto_marken_markets._option(selected_netto, "exact" if clean_text(selected_netto.get("post_code")) == postal_code else "nearby")
+                    active_contexts["Netto Marken-Discount"] = self._context_with_market(active_contexts["Netto Marken-Discount"], option["label"], option["market_url"])
+                    store_warnings.append("Netto Marken-Discount: Filiale ausgewählt; der aktuelle Angebotskatalog ist regional und nicht filialgenau.")
+            except Exception as exc:
+                if netto_market_id:
+                    raise
+                store_warnings.append(f"Netto Marken-Discount: Filialauflösung nicht verfügbar ({type(exc).__name__}: {exc}).")
 
         source_states = {name: "keine Treffer" for name in active_contexts}
         final_by_retailer: dict[str, list[Offer]] = {}
@@ -439,13 +452,14 @@ class SupermarketEngine:
         self._refresh_lock = threading.Lock()
 
     @staticmethod
-    def cache_key(postal_code: str, aldi_region: str, retailers: tuple[str, ...] = (), rewe_market_id: str = "") -> str:
+    def cache_key(postal_code: str, aldi_region: str, retailers: tuple[str, ...] = (), rewe_market_id: str = "", netto_market_id: str = "") -> str:
         selected = ",".join(sorted(retailers, key=str.casefold)) or "all"
         rewe = clean_text(rewe_market_id) or "auto"
-        return f"v{SupermarketEngine.SNAPSHOT_SCHEMA}:{postal_code}:{normalize_aldi_region(aldi_region)}:{selected}:rewe-{rewe}"
+        netto = clean_text(netto_market_id) or "auto"
+        return f"v{SupermarketEngine.SNAPSHOT_SCHEMA}:{postal_code}:{normalize_aldi_region(aldi_region)}:{selected}:rewe-{rewe}:netto-{netto}"
 
-    def snapshot(self, postal_code: str, aldi_region: str, refresh: bool = False, progress=None, retailers: tuple[str, ...] = (), rewe_market_id: str = "") -> tuple[dict[str, Any], bool]:
-        key = self.cache_key(postal_code, aldi_region, retailers, rewe_market_id)
+    def snapshot(self, postal_code: str, aldi_region: str, refresh: bool = False, progress=None, retailers: tuple[str, ...] = (), rewe_market_id: str = "", netto_market_id: str = "") -> tuple[dict[str, Any], bool]:
+        key = self.cache_key(postal_code, aldi_region, retailers, rewe_market_id, netto_market_id)
         if not refresh:
             cached = self.store.get_by_key(key)
             if cached is not None:
@@ -459,7 +473,7 @@ class SupermarketEngine:
                     if progress:
                         progress(status="processing", progress=90, source="Cache", retailer="Alle Händler", category="Alle Kategorien", step="Gespeicherter Vergleich wird geöffnet", processed_sources=1, total_sources=1, processed_products=len(cached.get("offers", [])))
                     return cached, True
-            fresh = self.loader.load(postal_code, aldi_region, progress=progress, retailers=retailers, rewe_market_id=rewe_market_id)
+            fresh = self.loader.load(postal_code, aldi_region, progress=progress, retailers=retailers, rewe_market_id=rewe_market_id, netto_market_id=netto_market_id)
             return self.store.put(key, fresh), False
 
     def by_id(self, search_id: str) -> dict[str, Any]:
