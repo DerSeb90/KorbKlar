@@ -46,6 +46,13 @@ http://SERVER-IP:8000
 
 Postleitzahl eingeben, Angebote suchen, fertig. Für den normalen Browserbetrieb müssen weder eine `.env` noch ein API-Schlüssel oder eine LLM eingerichtet werden.
 
+Vor der Suche kann zwischen der aktuellen Angebotswoche und der Folgewoche
+gewählt werden. Vorschauen werden nur verwendet, wenn die jeweilige
+Händlerquelle sie bereits veröffentlicht hat; andernfalls bleibt der aktuelle
+Bestand mit einem Hinweis sichtbar. In der Ergebnisansicht lassen sich außerdem
+dauerhafte Produktnamens-Schlagworte mit ODER-Logik verwalten und als
+versionierte JSON-Datei sichern oder wieder importieren.
+
 Status prüfen:
 
 ```bash
@@ -208,6 +215,8 @@ Beispiel mit mehreren Bonusprogrammen:
 ```json
 {
   "postal_code": "01067",
+  "offer_week": "next",
+  "keywords": ["Milka", "Kaffee"],
   "loyalty_programs": [
     "rewe_bonus",
     "lidl_plus",
@@ -217,6 +226,11 @@ Beispiel mit mehreren Bonusprogrammen:
   "view": "best_only"
 }
 ```
+
+`offer_week` akzeptiert `current` (Standard) oder `next`. Ist die Folgewoche
+für einen Händler noch nicht verfügbar, werden dessen aktuellen Angebote nicht
+verworfen. `keywords` werden normalisiert, dedupliziert und mit ODER-Logik nur
+gegen den Produktnamen geprüft.
 
 Der Browserbetrieb funktioniert ohne Schlüssel. Soll nur der REST-Vergleichsendpunkt zusätzlich mit Bearer-Authentifizierung geschützt werden, kann `SUPERMARKT_API_KEY` gesetzt werden. Die weiteren optionalen Einstellungen stehen in [`.env.example`](.env.example).
 

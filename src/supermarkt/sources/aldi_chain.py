@@ -23,9 +23,9 @@ class AldiOfferChain:
     after this chain returns no catalogue, so catalogues are never mixed.
     """
 
-    # v2 invalidates catalogues created before structured ALDI-Süd brochures
-    # and ALDI-Nord's explicit deposit field were mapped.
-    SCHEMA_VERSION = 2
+    # v3 invalidates ALDI-Süd catalogues that discarded official brands and
+    # used the old multipack-only deposit calculation.
+    SCHEMA_VERSION = 3
     TABLE = "aldi_region_catalogues"
 
     def __init__(self, db_path: Path, providers: Sequence[AldiOfferProvider], ttl_seconds: int = 7 * 86400) -> None:

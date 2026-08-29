@@ -46,6 +46,12 @@ http://SERVER-IP:8000
 
 Normal browser use requires no account, no LLM, no API key, and no mandatory `.env` file.
 
+Before starting a search, users can choose the current offer week or the next
+week. A preview is used only where the retailer has already published it;
+otherwise current offers remain visible with a transparent notice. Persistent
+product-name keyword filters use OR semantics and can be backed up or restored
+as versioned JSON.
+
 ## Running with Docker
 
 The Compose project, service, and container are all named `korbklar`; persistent data is stored in the `korbklar-data` volume.
@@ -184,16 +190,22 @@ Minimal request:
 }
 ```
 
-Optional fields include loyalty programs, product or brand filters, retailer, pagination, view, sorting, ALDI region, and forced refresh:
+Optional fields include offer week, persistent product-name keywords, loyalty programs, retailer, pagination, view, sorting, ALDI region, and forced refresh:
 
 ```json
 {
   "postal_code": "01067",
+  "offer_week": "next",
+  "keywords": ["Milka", "coffee"],
   "loyalty_programs": ["rewe_bonus", "lidl_plus", "kaufland_xtra", "payback"],
   "view": "best_only",
   "sort": "unit_price"
 }
 ```
+
+`offer_week` accepts `current` (the default) or `next`. Retailers without an
+available preview fall back to their current catalogue. `keywords` are cleaned,
+deduplicated, and matched against product names using OR semantics.
 
 Browser access remains unauthenticated. If `SUPERMARKT_API_KEY` is set, a bearer token protects only `POST /api/v1/compare`. See [`.env.example`](.env.example) for current settings.
 

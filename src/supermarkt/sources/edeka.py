@@ -12,6 +12,8 @@ from ..common import (
     deduplicate_offers,
     format_validity,
     normalize_pack,
+    normalize_offer_week,
+    offer_week_reference,
     parse_base_price_text,
     parse_iso_date,
     parse_number,
@@ -181,6 +183,7 @@ class OfficialEdekaSource:
         retailer: str,
         market_id: str,
         market_url: str,
+        reference_date: Optional[date] = None,
     ) -> tuple[list[Offer], int, int]:
         response = session.get(
             self.OFFERS_API,
@@ -205,7 +208,7 @@ class OfficialEdekaSource:
 
         for index, doc in enumerate(docs):
             start, end = self._validity_dates(doc, payload)
-            if (start or end) and not date_is_current(start, end):
+            if (start or end) and not (date_is_current(start, end, reference_date) if reference_date else date_is_current(start, end)):
                 continue
 
             title = clean_text(doc.get("titel"))
@@ -259,6 +262,7 @@ class OfficialEdekaSource:
         postal_code: str,
         retailer: str,
         market_filter: MarketFilter | None = None,
+        offer_week: str = "current",
     ) -> list[Offer]:
         session = self._session()
         market_id, market_label, market_url = self._select_market(
@@ -272,6 +276,7 @@ class OfficialEdekaSource:
             retailer=retailer,
             market_id=market_id,
             market_url=market_url,
+            reference_date=offer_week_reference(offer_week) if normalize_offer_week(offer_week) == "next" else None,
         )
 
         self.last_market_id = market_id
@@ -286,8 +291,8 @@ class OfficialEdekaSource:
             )
         return offers
 
-    def load(self, postal_code: str) -> list[Offer]:
-        return self._load_retailer(postal_code, "EDEKA")
+    def load(self, postal_code: str, offer_week: str = "current") -> list[Offer]:
+        return self._load_retailer(postal_code, "EDEKA", offer_week=offer_week)
 
 
 class OfficialMarktkaufSource(OfficialEdekaSource):
@@ -303,9 +308,10 @@ class OfficialMarktkaufSource(OfficialEdekaSource):
             haystack = clean_text(market).casefold()
         return "marktkauf" in haystack
 
-    def load(self, postal_code: str) -> list[Offer]:
+    def load(self, postal_code: str, offer_week: str = "current") -> list[Offer]:
         return self._load_retailer(
             postal_code,
             "Marktkauf",
             self._is_marktkauf,
+            offer_week,
         )

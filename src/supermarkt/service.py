@@ -11,7 +11,7 @@ from typing import Any
 
 from .cache import PersistentSnapshotStore
 from .categories import category_decision
-from .common import clean_text, deduplicate_offers, filter_offers, normalize_aldi_region, normalize_pack, normalize_view
+from .common import clean_text, deduplicate_offers, filter_offers, filter_offers_by_keywords, normalize_aldi_region, normalize_keywords, normalize_offer_week, normalize_pack, normalize_view, offer_week_reference, parse_iso_date
 from .compare import OfferComparator, OfferMapper
 from .config import (
     CACHE_DB,
@@ -135,7 +135,7 @@ class SourceLoader:
             count += 1
         return enriched, count
 
-    def load(self, postal_code: str, aldi_region: str, progress=None, retailers: tuple[str, ...] = (), rewe_market_id: str = "", netto_market_id: str = "") -> dict[str, Any]:
+    def load(self, postal_code: str, aldi_region: str, progress=None, retailers: tuple[str, ...] = (), rewe_market_id: str = "", netto_market_id: str = "", offer_week: str = "current") -> dict[str, Any]:
         notify = progress or (lambda **_fields: None)
         notify(status="loading", progress=5, source="Standortdienst", retailer="Alle Händler", category="Region", step="Region und Filialen werden ermittelt")
         contexts = self._contexts()
@@ -144,6 +144,8 @@ class SourceLoader:
             contexts = {name: context for name, context in contexts.items() if name in selected_retailers}
         request_errors: list[str] = []
         store_warnings: list[str] = []
+        requested_week = normalize_offer_week(offer_week)
+        target_date = offer_week_reference(requested_week)
 
         requested_region = normalize_aldi_region(aldi_region)
         selected_aldi = [name for name in ("ALDI Nord", "ALDI Süd") if name in selected_retailers]
@@ -186,12 +188,33 @@ class SourceLoader:
         # Retailers with maintained first-party adapters always prefer their
         # official source. A partial aggregator result must never suppress a
         # complete official catalogue or be mixed into it.
+        def load_rewe() -> list[Offer]:
+            if requested_week == "next":
+                try:
+                    return self.official_rewe.load(postal_code, rewe_market_id, "next")
+                except Exception:
+                    store_warnings.append("REWE: Noch keine Angebote der Folgewoche verfügbar; aktuelle Angebote werden angezeigt.")
+            return self.official_rewe.load(postal_code, rewe_market_id) if rewe_market_id else self.official_rewe.load(postal_code)
+
+        def load_with_week(source: Any, name: str) -> list[Offer]:
+            if requested_week == "next":
+                try:
+                    return source.load(postal_code, "next")
+                except Exception:
+                    store_warnings.append(f"{name}: Noch keine Angebote der Folgewoche verfügbar; aktuelle Angebote werden angezeigt.")
+            return source.load(postal_code)
+
+        def load_kaufland() -> list[Offer]:
+            if requested_week == "next":
+                try:
+                    return self.official_kaufland.load(postal_code, offer_week="next")
+                except Exception:
+                    store_warnings.append("Kaufland: Noch keine Angebote der Folgewoche verfügbar; aktuelle Angebote werden angezeigt.")
+            return self.official_kaufland.load(postal_code)
+
         official_loaders: dict[str, Any] = {
-            "REWE": lambda: (
-                self.official_rewe.load(postal_code, rewe_market_id)
-                if rewe_market_id else self.official_rewe.load(postal_code)
-            ), "EDEKA": lambda: self.official_edeka.load(postal_code),
-            "Kaufland": lambda: self.official_kaufland.load(postal_code), "Marktkauf": lambda: self.official_marktkauf.load(postal_code),
+            "REWE": load_rewe, "EDEKA": lambda: load_with_week(self.official_edeka, "EDEKA"),
+            "Kaufland": load_kaufland, "Marktkauf": lambda: load_with_week(self.official_marktkauf, "Marktkauf"),
         }
         official_jobs = {name: loader for name, loader in official_loaders.items() if name in active_contexts}
         if hasattr(self, "official_globus") and "Globus" in active_contexts:
@@ -244,7 +267,14 @@ class SourceLoader:
             notify(status="loading", progress=50, source="Offizielle Webseite", retailer=" & ".join(aldi_names), category="Wochenangebote", step="Regionale Angebote werden getrennt geladen", processed_sources=completed_sources, processed_products=processed_products)
             with ThreadPoolExecutor(max_workers=len(aldi_names)) as executor:
                 aldi_loader = getattr(self, "aldi_offers", self.official_aldi)
-                aldi_futures = {executor.submit(aldi_loader.load, name): name for name in aldi_names}
+                def load_aldi(name: str):
+                    if requested_week == "next":
+                        try:
+                            return self.official_aldi.load(name, "next")
+                        except Exception:
+                            store_warnings.append(f"{name}: Noch keine Angebote der Folgewoche verfügbar; aktuelle Angebote werden angezeigt.")
+                    return aldi_loader.load(name)
+                aldi_futures = {executor.submit(load_aldi, name): name for name in aldi_names}
                 for future in as_completed(aldi_futures):
                     aldi_name = aldi_futures[future]
                     try:
@@ -299,6 +329,7 @@ class SourceLoader:
         } - {""}
         marketguru_candidates = aggregator_names | fallback_names | globus_image_enrichment
         marktguru_mapped: list[Offer] = []
+        marktguru_current_mapped: list[Offer] = []
         if marketguru_candidates:
             # A failed first-party source can add the aggregator fallback only
             # after the initial plan was calculated. Grow the technical-source
@@ -328,7 +359,11 @@ class SourceLoader:
                 request_errors.append(f"Marktguru Händlerergänzung: {type(exc).__name__}: {exc}")
 
             if raw:
-                marktguru_mapped = deduplicate_offers(self.mapper.map_all(raw, active_contexts))
+                marktguru_mapped = deduplicate_offers(self.mapper.map_all(raw, active_contexts, target_date))
+                if requested_week == "next":
+                    marktguru_current_mapped = deduplicate_offers(
+                        self.mapper.map_all(raw, active_contexts, offer_week_reference("current"))
+                    )
                 processed_products += len(marktguru_mapped)
             notify(status="processing", progress=88, source="Marktguru", retailer="Lidl, PENNY, Netto Marken-Discount, Combi, famila", category="Händlerkategorien", step="Angebote zugeordnet", processed_sources=completed_sources, processed_products=processed_products)
 
@@ -337,6 +372,15 @@ class SourceLoader:
                 offer for offer in marktguru_mapped
                 if offer.retailer == name
             ])
+            if not offers and requested_week == "next":
+                offers = deduplicate_offers([
+                    offer for offer in marktguru_current_mapped
+                    if offer.retailer == name
+                ])
+                if offers:
+                    store_warnings.append(
+                        f"{name}: Noch keine Angebote der Folgewoche verfügbar; aktuelle Angebote werden angezeigt."
+                    )
             if offers:
                 final_by_retailer[name] = offers
                 source_states[name] = "Marktguru"
@@ -351,6 +395,11 @@ class SourceLoader:
                 offer for offer in marktguru_mapped
                 if offer.retailer == name
             ])
+            if not offers and requested_week == "next":
+                offers = deduplicate_offers([
+                    offer for offer in marktguru_current_mapped
+                    if offer.retailer == name
+                ])
             if not offers:
                 continue
             final_by_retailer[name] = offers
@@ -399,6 +448,19 @@ class SourceLoader:
                 active_contexts["Kaufland"], label, self.official_kaufland.last_store_url
             )
 
+        if requested_week == "next":
+            for name, retailer_offers in list(final_by_retailer.items()):
+                preview = []
+                for offer in retailer_offers:
+                    start = parse_iso_date(offer.valid_from)
+                    end = parse_iso_date(offer.valid_until)
+                    if (start or end) and (start is None or start <= target_date) and (end is None or target_date <= end):
+                        preview.append(offer)
+                if preview:
+                    final_by_retailer[name] = preview
+                else:
+                    store_warnings.append(f"{name}: Noch keine Angebote der Folgewoche verfügbar; aktuelle Angebote werden angezeigt.")
+
         offers = deduplicate_offers([
             offer
             for retailer_offers in final_by_retailer.values()
@@ -433,6 +495,7 @@ class SourceLoader:
             "postal_code": postal_code,
             "resolved_aldi_region": resolved,
             "resolved_aldi_regions": resolved_regions,
+            "offer_week": requested_week,
             "aldi_resolution": {"source": getattr(self.aldi_region, "last_provider", ""), "distance_km": getattr(self.aldi_region, "last_distance_km", None), "confidence": getattr(self.aldi_region, "last_confidence", "")},
             "offers": [offer_to_dict(offer) for offer in offers],
             "retailers": {name: asdict(context) for name, context in active_contexts.items()},
@@ -442,9 +505,9 @@ class SourceLoader:
         }
 
 class SupermarketEngine:
-    # v10 invalidates snapshots created before exact REWE markets were merged
-    # across locality and state overview pages.
-    SNAPSHOT_SCHEMA = 10
+    # v11 separates offer weeks and invalidates snapshots with old ALDI brand
+    # and multipack-deposit semantics.
+    SNAPSHOT_SCHEMA = 11
     def __init__(self) -> None:
         self.store = PersistentSnapshotStore(CACHE_DB, CACHE_TTL_MINUTES, RESULT_RETENTION_HOURS, CACHE_MAX_SNAPSHOTS)
         self.loader = SourceLoader()
@@ -452,14 +515,14 @@ class SupermarketEngine:
         self._refresh_lock = threading.Lock()
 
     @staticmethod
-    def cache_key(postal_code: str, aldi_region: str, retailers: tuple[str, ...] = (), rewe_market_id: str = "", netto_market_id: str = "") -> str:
+    def cache_key(postal_code: str, aldi_region: str, retailers: tuple[str, ...] = (), rewe_market_id: str = "", netto_market_id: str = "", offer_week: str = "current") -> str:
         selected = ",".join(sorted(retailers, key=str.casefold)) or "all"
         rewe = clean_text(rewe_market_id) or "auto"
         netto = clean_text(netto_market_id) or "auto"
-        return f"v{SupermarketEngine.SNAPSHOT_SCHEMA}:{postal_code}:{normalize_aldi_region(aldi_region)}:{selected}:rewe-{rewe}:netto-{netto}"
+        return f"v{SupermarketEngine.SNAPSHOT_SCHEMA}:{postal_code}:{normalize_aldi_region(aldi_region)}:{selected}:rewe-{rewe}:netto-{netto}:week-{normalize_offer_week(offer_week)}"
 
-    def snapshot(self, postal_code: str, aldi_region: str, refresh: bool = False, progress=None, retailers: tuple[str, ...] = (), rewe_market_id: str = "", netto_market_id: str = "") -> tuple[dict[str, Any], bool]:
-        key = self.cache_key(postal_code, aldi_region, retailers, rewe_market_id, netto_market_id)
+    def snapshot(self, postal_code: str, aldi_region: str, refresh: bool = False, progress=None, retailers: tuple[str, ...] = (), rewe_market_id: str = "", netto_market_id: str = "", offer_week: str = "current") -> tuple[dict[str, Any], bool]:
+        key = self.cache_key(postal_code, aldi_region, retailers, rewe_market_id, netto_market_id, offer_week)
         if not refresh:
             cached = self.store.get_by_key(key)
             if cached is not None:
@@ -473,7 +536,7 @@ class SupermarketEngine:
                     if progress:
                         progress(status="processing", progress=90, source="Cache", retailer="Alle Händler", category="Alle Kategorien", step="Gespeicherter Vergleich wird geöffnet", processed_sources=1, total_sources=1, processed_products=len(cached.get("offers", [])))
                     return cached, True
-            fresh = self.loader.load(postal_code, aldi_region, progress=progress, retailers=retailers, rewe_market_id=rewe_market_id, netto_market_id=netto_market_id)
+            fresh = self.loader.load(postal_code, aldi_region, progress=progress, retailers=retailers, rewe_market_id=rewe_market_id, netto_market_id=netto_market_id, offer_week=offer_week)
             return self.store.put(key, fresh), False
 
     def by_id(self, search_id: str) -> dict[str, Any]:
@@ -487,6 +550,7 @@ class SupermarketEngine:
         snapshot: dict[str, Any],
         *,
         filter_text: str = "",
+        keywords: tuple[str, ...] = (),
         retailer: str = "",
         category: str = "",
         page: int = 1,
@@ -517,6 +581,7 @@ class SupermarketEngine:
 
         def scope(items: list[Offer]) -> list[Offer]:
             scoped = filter_offers(items, filter_text)
+            scoped = filter_offers_by_keywords(scoped, keywords)
             if selected_retailer:
                 scoped = [
                     offer
@@ -536,7 +601,7 @@ class SupermarketEngine:
         # but not the selected retailer chip itself, so switching retailers
         # remains possible without resetting the other filters.
         comparison_for_counts = all_comparison if normalized_view == "all" else best_comparison
-        count_scope = filter_offers(comparison_for_counts.offers, filter_text)
+        count_scope = filter_offers_by_keywords(filter_offers(comparison_for_counts.offers, filter_text), keywords)
         counts: dict[str, int] = {}
         for offer in count_scope:
             counts[offer.retailer] = counts.get(offer.retailer, 0) + 1
@@ -568,6 +633,7 @@ class SupermarketEngine:
             "search_id": snapshot["search_id"],
             "postal_code": snapshot.get("postal_code", ""),
             "resolved_aldi_region": snapshot.get("resolved_aldi_region", "auto"),
+            "offer_week": snapshot.get("offer_week", "current"),
             "cache_age_seconds": max(0, int(time.time() - float(snapshot.get("created_at", time.time())))),
             "source_offer_count": len(snapshot.get("offers", [])),
             "compared_offer_count": len(comparison_for_counts.offers),
@@ -584,6 +650,7 @@ class SupermarketEngine:
             "retailer_markets": retailer_markets,
             "category": selected_category,
             "category_counts": category_counts,
+            "keywords": list(normalize_keywords(keywords)),
             "selected_loyalty_programs": list(selected_programs),
             "available_loyalty_programs": available_programs(source_retailer_counts, offers),
             "loyalty_note": (

@@ -274,6 +274,44 @@ def test_aldi_south_brochure_keeps_deposit_from_official_price_label():
     assert offer.image_url == "https://aldi-assets.publitas.com/feed-images/pils.png"
 
 
+def test_aldi_south_brochure_keeps_official_brand_and_product_image():
+    offer = source()._south_brochure_product_offer(
+        {
+            "id": 69973898,
+            "title": "PiCK UP!",
+            "brand": "LEIBNIZ",
+            "description": "Versch. Sorten; je 308-g-Packung",
+            "price": "3.49",
+            "photoUrls": [{
+                "thumb": "/images?gId=7&height=200&src=pick-up.png&width=200&s=signed",
+                "full": "/images?gId=7&src=pick-up.png&s=full",
+            }],
+            "photoSharingUrl": "https://aldi-assets.publitas.com/feed-images/leibniz-pick-up.png",
+        },
+        "https://prospekt.aldi-sued.de/current",
+        (date(2026, 8, 24), date(2026, 8, 29)),
+    )
+
+    assert offer is not None
+    assert offer.brand == "LEIBNIZ"
+    assert offer.name == "LEIBNIZ PiCK UP!"
+    assert offer.image_url == (
+        "https://prospekt.aldi-sued.de/images?gId=7&height=200&src=pick-up.png&width=200&s=signed"
+    )
+
+
+def test_aldi_south_brochure_allows_missing_optional_brand_and_image():
+    offer = source()._south_brochure_product_offer(
+        {"id": 7, "title": "Nektarinen", "description": "1-kg-Schale", "price": "1.49"},
+        "https://prospekt.aldi-sued.de/current",
+        (date(2026, 8, 24), date(2026, 8, 29)),
+    )
+
+    assert offer is not None
+    assert offer.brand == ""
+    assert offer.image_url == ""
+
+
 def test_aldi_south_brochure_multiplies_per_container_deposit_for_multipack():
     offer = source()._south_brochure_product_offer(
         {
@@ -303,6 +341,52 @@ def test_aldi_south_rejects_future_brochure(monkeypatch):
     aldi = source()
     monkeypatch.setattr(aldi, "_south_get_html", lambda _url: f"<script>var data = {json.dumps(publication)}; Reader.start()</script>")
     assert aldi._south_brochure_offers("https://prospekt.aldi-sued.de/kw36-26-op") == []
+
+
+def test_aldi_south_explicit_next_week_accepts_future_brochure(monkeypatch):
+    publication = {
+        "cacheToken": "next-fixture",
+        "config": {
+            "canonicalUrl": "https://prospekt.aldi-sued.de/kw36-26-op/",
+            "websiteUrl": "https://www.aldi-sued.de/",
+            "description": "Aktuelle Angebote für: Montag 31.08.2026 I Samstag 05.09.2026",
+        },
+    }
+    page = f"<script>var data = {json.dumps(publication)}; Reader.start()</script>"
+    fixture = {
+        "https://prospekt.aldi-sued.de/kw36-26-op": page,
+        "https://prospekt.aldi-sued.de/kw36-26-op/spreads.json?version=next-fixture": [
+            {"pages": [{"number": 2}]},
+        ],
+        "https://prospekt.aldi-sued.de/kw36-26-op/page/2/hotspots_data.json?version=next-fixture": [
+            {
+                "type": "product",
+                "products": [
+                    {
+                        "id": 36,
+                        "title": "Folgewochenprodukt",
+                        "description": "500-g-Packung",
+                        "price": "1.99",
+                    },
+                ],
+            },
+        ],
+    }
+    aldi = source()
+    monkeypatch.setattr(aldi, "_south_get_html", lambda url: fixture[url])
+    monkeypatch.setattr(aldi, "_south_get_json_value", lambda url: fixture[url])
+
+    offers = aldi._south_brochure_offers(
+        "https://prospekt.aldi-sued.de/kw36-26-op",
+        reference_date=date(2026, 9, 1),
+    )
+
+    assert len(offers) == 1
+    assert offers[0].name == "Folgewochenprodukt"
+    assert (offers[0].valid_from, offers[0].valid_until) == (
+        "2026-08-31",
+        "2026-09-05",
+    )
 
 
 def test_aldi_south_uses_complete_current_brochure_without_mixing_web_cards(monkeypatch):

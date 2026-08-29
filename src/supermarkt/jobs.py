@@ -17,7 +17,7 @@ class SearchJobStore:
         self._lock = threading.Lock()
         self._pool = ThreadPoolExecutor(max_workers=2, thread_name_prefix="korbklar-search")
 
-    def start(self, postal_code: str, aldi_region: str = "auto", refresh: bool = False, retailers: tuple[str, ...] = (), rewe_market_id: str = "", netto_market_id: str = "") -> str:
+    def start(self, postal_code: str, aldi_region: str = "auto", refresh: bool = False, retailers: tuple[str, ...] = (), rewe_market_id: str = "", netto_market_id: str = "", offer_week: str = "current") -> str:
         job_id = uuid.uuid4().hex
         now = time.time()
         with self._lock:
@@ -26,7 +26,7 @@ class SearchJobStore:
                 "source": "KorbKlar", "retailer": "Alle Händler", "category": "Alle Kategorien",
                 "step": "Suche wird vorbereitet", "progress": 0, "processed_sources": 0,
                 "total_sources": 0, "processed_products": 0, "created_at": now, "updated_at": now}
-        self._pool.submit(self._run, job_id, postal_code, aldi_region, refresh, retailers, rewe_market_id, netto_market_id)
+        self._pool.submit(self._run, job_id, postal_code, aldi_region, refresh, retailers, rewe_market_id, netto_market_id, offer_week)
         return job_id
 
     def get(self, job_id: str) -> dict[str, Any] | None:
@@ -42,10 +42,12 @@ class SearchJobStore:
                     fields["processed_sources"] = min(max(0, int(fields["processed_sources"])), total)
                 self._jobs[job_id].update(fields, updated_at=time.time())
 
-    def _run(self, job_id: str, postal_code: str, aldi_region: str, refresh: bool = False, retailers: tuple[str, ...] = (), rewe_market_id: str = "", netto_market_id: str = "") -> None:
+    def _run(self, job_id: str, postal_code: str, aldi_region: str, refresh: bool = False, retailers: tuple[str, ...] = (), rewe_market_id: str = "", netto_market_id: str = "", offer_week: str = "current") -> None:
         try:
-            snapshot, from_cache = self.engine.snapshot(postal_code, aldi_region, refresh,
-                progress=lambda **fields: self._progress(job_id, **fields), retailers=retailers, rewe_market_id=rewe_market_id, netto_market_id=netto_market_id)
+            snapshot_kwargs = {"progress": lambda **fields: self._progress(job_id, **fields), "retailers": retailers, "rewe_market_id": rewe_market_id, "netto_market_id": netto_market_id}
+            if offer_week == "next":
+                snapshot_kwargs["offer_week"] = "next"
+            snapshot, from_cache = self.engine.snapshot(postal_code, aldi_region, refresh, **snapshot_kwargs)
             self._progress(job_id, status="completed", step="Vergleich ist bereit", progress=100,
                 source="Cache" if from_cache else "Live-Quellen", retailer="Alle Händler",
                 category="Alle Kategorien", processed_products=len(snapshot.get("offers", [])), search_id=snapshot["search_id"])

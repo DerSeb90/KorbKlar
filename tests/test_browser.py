@@ -20,6 +20,8 @@ def test_home_and_static_assets():
     assert response.text.count('name="retailers"') == 14
     assert 'value="Globus" checked' in response.text
     assert 'name="rewe_market_id"' in response.text
+    assert 'name="offer_week"' in response.text
+    assert 'value="next"' in response.text
     assert client.get("/static/home.css").status_code == 200
     assert client.get("/static/results-v2.js").status_code == 200
 
@@ -96,6 +98,22 @@ def test_search_job_route_passes_refresh_to_the_job_store(monkeypatch):
 
     client.post("/search/jobs", data={"postal_code": "01067", "retailers": ["REWE", "Globus"]})
     assert recorded["retailers"] == ("REWE", "Globus")
+
+
+def test_search_job_passes_explicit_next_week(monkeypatch):
+    from supermarkt import runtime
+
+    recorded = {}
+
+    class RecordingJobs:
+        def start(self, postal_code, aldi_region="auto", refresh=False, retailers=(), rewe_market_id="", netto_market_id="", offer_week="current"):
+            recorded["offer_week"] = offer_week
+            return "job-id"
+
+    monkeypatch.setattr(runtime, "get_jobs", lambda: RecordingJobs())
+    response = TestClient(app).post("/search/jobs", data={"postal_code": "01067", "offer_week": "next"})
+    assert response.status_code == 200
+    assert recorded["offer_week"] == "next"
 
 
 def test_home_persists_retailer_selection_locally():

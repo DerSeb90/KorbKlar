@@ -22,8 +22,11 @@ router = APIRouter()
 def supermarket_compare(request_data: SupermarketRequest, request: Request, _: None = Depends(require_api_auth)) -> dict[str, Any]:
     try:
         engine = runtime.get_engine()
-        snapshot, from_cache = engine.snapshot(request_data.postal_code, request_data.aldi_region, request_data.refresh, retailers=tuple(request_data.retailers), rewe_market_id=request_data.rewe_market_id, netto_market_id=request_data.netto_market_id)
-        page = engine.page(snapshot, filter_text=request_data.filter_text, retailer=request_data.retailer, page=request_data.page, page_size=request_data.page_size, view=request_data.view, loyalty_programs=tuple(request_data.loyalty_programs), sort=request_data.sort, include_image_urls=False)
+        snapshot_kwargs = {"retailers": tuple(request_data.retailers), "rewe_market_id": request_data.rewe_market_id, "netto_market_id": request_data.netto_market_id}
+        if request_data.offer_week == "next":
+            snapshot_kwargs["offer_week"] = "next"
+        snapshot, from_cache = engine.snapshot(request_data.postal_code, request_data.aldi_region, request_data.refresh, **snapshot_kwargs)
+        page = engine.page(snapshot, filter_text=request_data.filter_text, keywords=tuple(request_data.keywords), retailer=request_data.retailer, page=request_data.page, page_size=request_data.page_size, view=request_data.view, loyalty_programs=tuple(request_data.loyalty_programs), sort=request_data.sort, include_image_urls=False)
         page["status"] = "ok"
         page["from_cache"] = from_cache
         page["result_url"] = build_result_url(request, snapshot["search_id"], tuple(request_data.loyalty_programs))
@@ -55,6 +58,7 @@ def result_data(
     search_id: str,
     token: str = Query(default=""),
     q: str = Query(default="", max_length=120),
+    keywords: list[str] = Query(default=[], max_length=50),
     retailer: str = Query(default="", max_length=60),
     category: str = Query(default="", max_length=120),
     page: int = Query(default=1, ge=1, le=10000),
@@ -67,6 +71,6 @@ def result_data(
     try:
         engine = runtime.get_engine()
         snapshot = engine.by_id(search_id)
-        return proxy_page_images(engine.page(snapshot, filter_text=q, retailer=retailer, category=category, page=page, page_size=page_size, view=view, loyalty_programs=normalize_program_ids(loyalty.split(",")), sort=sort, include_image_urls=True))
+        return proxy_page_images(engine.page(snapshot, filter_text=q, keywords=tuple(keywords), retailer=retailer, category=category, page=page, page_size=page_size, view=view, loyalty_programs=normalize_program_ids(loyalty.split(",")), sort=sort, include_image_urls=True))
     except ToolError as exc:
         raise HTTPException(status_code=410, detail=str(exc)) from exc

@@ -4,7 +4,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator
 
-from .common import validate_postal_code
+from .common import normalize_keywords, validate_postal_code
 from .loyalty import PROGRAMS, VALID_PROGRAM_IDS, normalize_program_ids
 from .models import resolve_retailer_names
 
@@ -15,7 +15,9 @@ class SupermarketRequest(BaseModel):
         default="auto",
         description="ALDI-Region. Explizite Nutzerangaben übernehmen, sonst auto.",
     )
+    offer_week: Literal["current", "next"] = Field(default="current", description="Aktuelle Angebote oder – soweit verfügbar – Vorschau der Folgewoche")
     filter_text: str = Field(default="", max_length=120, description="Optionaler Produkt- oder Markenfilter")
+    keywords: list[str] = Field(default_factory=list, max_length=50, description="Optionale Produktnamens-Schlagworte mit ODER-Verknüpfung")
     retailer: str = Field(default="", max_length=60, description="Optionaler Händlerfilter, z. B. Lidl oder Kaufland")
     retailers: list[str] = Field(
         default_factory=list,
@@ -66,3 +68,8 @@ class SupermarketRequest(BaseModel):
         if unknown:
             raise ValueError("Unbekannte Händler: " + ", ".join(unknown))
         return list(resolved)
+
+    @field_validator("keywords")
+    @classmethod
+    def valid_keywords(cls, values: list[str]) -> list[str]:
+        return list(normalize_keywords(values))

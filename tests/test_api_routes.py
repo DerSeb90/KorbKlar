@@ -45,6 +45,16 @@ def test_request_rejects_unknown_retailer():
         SupermarketRequest(postal_code="01067", retailers=["REWE", "Nicht Echt"])
 
 
+def test_request_normalizes_persistent_product_keywords():
+    request = SupermarketRequest(postal_code="01067", keywords=[" Milka ", "milka", "", "Butter"])
+    assert request.keywords == ["Milka", "Butter"]
+
+
+def test_request_defaults_to_current_week_and_accepts_preview():
+    assert SupermarketRequest(postal_code="01067").offer_week == "current"
+    assert SupermarketRequest(postal_code="01067", offer_week="next").offer_week == "next"
+
+
 def test_openapi_exposes_only_compare_operation():
     operations=[]
     for path, methods in app.openapi()["paths"].items():

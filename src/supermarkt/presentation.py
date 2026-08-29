@@ -90,14 +90,16 @@ def _deposit_note(offer: Offer) -> str:
         return ""
     total = format_euro(offer.deposit)
     count_match = re.match(r"^(\d{1,3})x", offer.pack_signature, flags=re.IGNORECASE)
-    if not count_match:
+    if not count_match or offer.container_deposit is None:
         return f"zzgl. {total} Pfand"
     count = int(count_match.group(1))
     if count <= 1:
         return f"zzgl. {total} Pfand"
-    per_container = offer.deposit / count
-    container = "Dose" if re.search(r"\bdosen?\b|energy\s*drink", f"{offer.name} {offer.description}", re.I) else "Einheit"
-    return f"Pfand: {format_euro(per_container)} je {container} · {total} gesamt für {count}"
+    container = "Dose" if re.search(r"\bdosen?\b|energy\s*drink", f"{offer.name} {offer.description}", re.I) else "Flasche" if re.search(r"\bflaschen?\b|\bkasten\b|\bkiste\b", f"{offer.name} {offer.description}", re.I) else "Einheit"
+    breakdown = f"{format_euro(offer.container_deposit)} je {container} × {count}"
+    if offer.packaging_deposit is not None:
+        breakdown += f" + {format_euro(offer.packaging_deposit)} Kasten"
+    return f"Pfand: {breakdown} = {total} gesamt"
 
 
 def offer_for_response(
@@ -160,6 +162,8 @@ def offer_for_response(
         "valid_from": offer.valid_from,
         "valid_until": offer.valid_until,
         "deposit": offer.deposit,
+        "container_deposit": offer.container_deposit,
+        "packaging_deposit": offer.packaging_deposit,
         "deposit_text": format_euro(offer.deposit) if offer.deposit is not None else "",
         "deposit_note": _deposit_note(offer),
         "minimum_quantity": offer.minimum_quantity,

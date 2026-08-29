@@ -16,9 +16,43 @@ def validate_postal_code(value: Any) -> Optional[str]:
     return postal_code if re.fullmatch(r"\d{5}", postal_code) else None
 
 
-def parse_deposit_text(value: Any) -> Optional[float]:
-    """Parse only an explicitly published deposit, never infer it from packaging."""
+def parse_deposit_text(value: Any, *, container_count: Optional[int] = None) -> Optional[float]:
+    """Return the explicitly published total deposit for one sales unit.
+
+    ``container_count`` is supplied only when the source explicitly identifies
+    a multipack. Package shape alone is never used to invent a deposit.
+    """
     text = clean_text(value)
+    total_patterns = (
+        r"\b(?:gesamtpfand|pfand\s*gesamt)\s*:?\s*(\d{1,4}(?:[.,]\d{1,2})?)\s*€?",
+        r"(?:zzgl\.?|zuz(?:ü|ue)glich|\+)\s*(\d{1,4}(?:[.,]\d{1,2})?)\s*€?\s*pfand\s*/\s*(?:kiste|kasten)\b",
+        r"\bpfand\s*/\s*(?:kiste|kasten)\s*:?\s*(\d{1,4}(?:[.,]\d{1,2})?)\s*€?",
+    )
+    for pattern in total_patterns:
+        match = re.search(pattern, text, flags=re.IGNORECASE)
+        if match:
+            return parse_number(match.group(1))
+
+    crate_patterns = (
+        r"\b(?:kasten|kisten|crate)[- ]?pfand\s*:?\s*(\d{1,4}(?:[.,]\d{1,2})?)\s*€?",
+        r"(\d{1,4}(?:[.,]\d{1,2})?)\s*€?\s*(?:kasten|kisten|crate)[- ]?pfand\b",
+    )
+    bottle_patterns = (
+        r"\b(?:flaschen|dosen)[- ]?pfand\s*(?:je\s*)?(\d{1,4}(?:[.,]\d{1,2})?)\s*€?",
+        r"\bpfand\s*(?:je\s*)?(?:flasche|dose)\s*:?\s*(\d{1,4}(?:[.,]\d{1,2})?)\s*€?",
+    )
+    crate = next(
+        (parse_number(match.group(1)) for pattern in crate_patterns if (match := re.search(pattern, text, flags=re.IGNORECASE))),
+        None,
+    )
+    bottle = next(
+        (parse_number(match.group(1)) for pattern in bottle_patterns if (match := re.search(pattern, text, flags=re.IGNORECASE))),
+        None,
+    )
+    if crate is not None:
+        bottles_total = (bottle or 0.0) * max(1, int(container_count or 1))
+        return round(crate + bottles_total, 2)
+
     patterns = (
         r"(?:zzgl\.?|zuz(?:ü|ue)glich|\+)\s*(\d{1,4}(?:[.,]\d{1,2})?)\s*€?\s*pfand\b",
         r"\bpfand(?:\s*/\s*\w+)?\s*(?:je\s*)?(\d{1,4}(?:[.,]\d{1,2})?)\s*€?",
@@ -26,8 +60,40 @@ def parse_deposit_text(value: Any) -> Optional[float]:
     for pattern in patterns:
         match = re.search(pattern, text, flags=re.IGNORECASE)
         if match:
-            return parse_number(match.group(1))
+            amount = parse_number(match.group(1))
+            if amount is not None and container_count:
+                return round(amount * max(1, int(container_count)), 2)
+            return amount
+    if bottle is not None:
+        return round(bottle * max(1, int(container_count or 1)), 2)
     return None
+
+
+def parse_deposit_components(value: Any, *, container_count: Optional[int] = None) -> tuple[Optional[float], Optional[float], Optional[float]]:
+    """Return total, per-container and packaging deposit when explicitly known."""
+    text = clean_text(value)
+    total = parse_deposit_text(text, container_count=container_count)
+    crate_match = re.search(
+        r"\b(?:kasten|kisten|crate)[- ]?pfand\s*:?\s*(\d{1,4}(?:[.,]\d{1,2})?)\s*€?",
+        text,
+        flags=re.IGNORECASE,
+    )
+    bottle_match = re.search(
+        r"\b(?:flaschen|dosen)[- ]?pfand\s*(?:je\s*)?(\d{1,4}(?:[.,]\d{1,2})?)\s*€?",
+        text,
+        flags=re.IGNORECASE,
+    )
+    packaging = parse_number(crate_match.group(1)) if crate_match else None
+    per_container = parse_number(bottle_match.group(1)) if bottle_match else None
+    if total is not None and container_count and packaging is None and per_container is None and not re.search(r"pfand\s*/\s*(?:kiste|kasten)", text, flags=re.IGNORECASE):
+        generic = re.search(
+            r"(?:zzgl\.?|zuz(?:ü|ue)glich|\+)\s*(?:pfand\s*)?(\d{1,4}(?:[.,]\d{1,2})?)\s*€?(?:\s*pfand\b)?",
+            text,
+            flags=re.IGNORECASE,
+        )
+        if generic:
+            per_container = parse_number(generic.group(1))
+    return total, per_container, packaging
 
 def normalize_aldi_region(value: Any) -> str:
     normalized = clean_text(value).casefold().replace("ü", "ue")
@@ -53,6 +119,26 @@ def filter_offers(offers: Iterable[Offer], filter_text: str) -> list[Offer]:
         in f"{offer.name} {offer.brand} {offer.description} {offer.category} {offer.retailer}".casefold()
     ]
 
+
+def normalize_keywords(values: Iterable[Any], limit: int = 50) -> tuple[str, ...]:
+    """Clean user keywords case-insensitively while preserving their spelling."""
+    unique: dict[str, str] = {}
+    for value in values:
+        keyword = clean_text(value)[:80]
+        if keyword:
+            unique.setdefault(keyword.casefold(), keyword)
+        if len(unique) >= limit:
+            break
+    return tuple(unique.values())
+
+
+def filter_offers_by_keywords(offers: Iterable[Offer], keywords: Iterable[Any]) -> list[Offer]:
+    """Match product names using OR semantics; no keywords means no filtering."""
+    normalized = tuple(keyword.casefold() for keyword in normalize_keywords(keywords))
+    if not normalized:
+        return list(offers)
+    return [offer for offer in offers if any(keyword in offer.name.casefold() for keyword in normalized)]
+
 def today_berlin() -> date:
     return datetime.now(BERLIN).date()
 
@@ -66,6 +152,15 @@ def offer_reference_date(day: Optional[date] = None) -> date:
     """
     current = day or today_berlin()
     return current + timedelta(days=1) if current.weekday() == 6 else current
+
+
+def offer_week_reference(value: Any, day: Optional[date] = None) -> date:
+    reference = offer_reference_date(day)
+    return reference + timedelta(days=7) if clean_text(value).casefold() == "next" else reference
+
+
+def normalize_offer_week(value: Any) -> str:
+    return "next" if clean_text(value).casefold() in {"next", "folge", "folgewoche"} else "current"
 
 def clean_text(value: Any) -> str:
     return re.sub(r"\s+", " ", str(value or "")).strip()

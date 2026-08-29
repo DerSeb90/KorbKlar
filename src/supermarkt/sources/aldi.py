@@ -23,9 +23,12 @@ from ..common import (
     first_text,
     format_validity,
     normalize_pack,
+    normalize_offer_week,
     offer_reference_date,
+    offer_week_reference,
     parse_base_price_text,
     parse_deposit_text,
+    parse_deposit_components,
     parse_iso_date,
     parse_number,
     strip_html,
@@ -212,14 +215,15 @@ class OfficialAldiSource:
         self.last_south_pages: list[dict[str, Any]] = []
         self.last_south_errors: list[str] = []
 
-    def load(self, retailer: str) -> LoadResult:
+    def load(self, retailer: str, offer_week: str = "current") -> LoadResult:
+        reference_date = offer_week_reference(offer_week) if normalize_offer_week(offer_week) == "next" else None
         if retailer == "ALDI Nord":
-            return LoadResult(self._load_north(), [])
+            return LoadResult(self._load_north(reference_date), [])
         if retailer == "ALDI Süd":
-            return LoadResult(self._load_south(), list(self.last_south_errors))
+            return LoadResult(self._load_south(reference_date), list(self.last_south_errors))
         return LoadResult([], ["ALDI-Region ist nicht eindeutig bestimmt"])
 
-    def _load_north(self) -> list[Offer]:
+    def _load_north(self, reference_date: Optional[date] = None) -> list[Offer]:
         page = self.http.get_bytes(self.NORTH_URL).decode("utf-8", errors="replace")
         match = re.search(
             r'<script[^>]+id=["\']__NEXT_DATA__["\'][^>]*>(.*?)</script>',
@@ -280,7 +284,7 @@ class OfficialAldiSource:
             place = placement.get(str(product_id), {})
             start = parse_iso_date(place.get("start") or price_data.get("validFromLocalDate"))
             end = parse_iso_date(place.get("end") or price_data.get("validUntilLocalDate"))
-            if not date_is_current(start, end):
+            if not (date_is_current(start, end, reference_date) if reference_date else date_is_current(start, end)):
                 continue
 
             name = clean_text(product.get("name"))
@@ -486,6 +490,7 @@ class OfficialAldiSource:
         period: tuple[Optional[date], Optional[date]],
     ) -> Optional[Offer]:
         name = clean_text(product.get("title"))
+        brand = clean_brand(product.get("brand"))
         identifier = clean_text(product.get("id") or product.get("webshopIdentifier"))
         price = parse_number(product.get("discountedPrice")) or parse_number(product.get("price"))
         if not name or not identifier or price is None or price <= 0:
@@ -505,34 +510,42 @@ class OfficialAldiSource:
             if base_match:
                 base_price = parse_number(base_match.group(2))
                 base_unit = clean_text(base_match.group(1)).casefold().rstrip(".")
-        image_url = normalize_image_url(product.get("photoSharingUrl"), base_url=publication_url)
+        # Publitas' sharing original can be well above the deliberately small
+        # image-proxy limit. Its signed product thumbnail is the same
+        # article-bound asset at a browser-appropriate size.
+        photos = product.get("photoUrls") or []
+        first_photo = next((item for item in photos if isinstance(item, dict)), {})
+        image_url = normalize_image_url(first_photo.get("thumb"), base_url=publication_url)
         if not image_url:
-            photos = product.get("photoUrls") or []
-            first_photo = next((item for item in photos if isinstance(item, dict)), {})
-            image_url = normalize_image_url(first_photo.get("full") or first_photo.get("thumb"), base_url=publication_url)
+            image_url = normalize_image_url(product.get("photoSharingUrl"), base_url=publication_url)
+        if not image_url:
+            image_url = normalize_image_url(first_photo.get("full"), base_url=publication_url)
         if is_rejected_image_url(image_url):
             image_url = ""
         webshop_url = normalize_image_url(product.get("webshopUrl"), base_url="https://www.aldi-sued.de/")
         if webshop_url and (urlsplit(webshop_url).hostname or "").casefold() != "www.aldi-sued.de":
             webshop_url = ""
         pack = normalize_pack(f"{name} {description}")
-        deposit = parse_deposit_text(f"{description} {base_text}")
         pack_count = re.match(r"^(\d{1,3})x", pack, flags=re.IGNORECASE)
-        if deposit is not None and pack_count and re.search(r"\b\d{1,3}\s*[x×]\s*\d", description, re.IGNORECASE):
-            deposit = round(deposit * int(pack_count.group(1)), 2)
+        deposit, container_deposit, packaging_deposit = parse_deposit_components(
+            f"{description} {base_text}",
+            container_count=int(pack_count.group(1)) if pack_count else None,
+        )
+        display_name = name if not brand or brand.casefold() in name.casefold() else f"{brand} {name}"
         return Offer(
             offer_id=f"aldi-sued:prospekt:{identifier}", retailer="ALDI Süd", category=category,
-            name=name, brand="", description=description, price=price,
+            name=display_name, brand=brand, description=description, price=price,
             base_price=base_price, base_unit=base_unit, pack_signature=pack,
             validity_label=format_validity(start, end) if start or end else "Aktueller Prospekt",
-            match_key=build_match_key("", name, pack, f"aldi-sued:prospekt:{identifier}"),
+            match_key=build_match_key(brand, name, pack, f"aldi-sued:prospekt:{identifier}"),
             source_url=publication_url, product_url=webshop_url, image_url=image_url,
             deposit=deposit, coverage_note="Offizieller ALDI-Süd-Prospekt",
+            container_deposit=container_deposit, packaging_deposit=packaging_deposit,
             valid_from=start.isoformat() if start else None,
             valid_until=end.isoformat() if end else None,
         )
 
-    def _south_brochure_offers(self, publication_url: str) -> list[Offer]:
+    def _south_brochure_offers(self, publication_url: str, reference_date: Optional[date] = None) -> list[Offer]:
         page = self._south_get_html(publication_url)
         publication = self._south_publication_data(page)
         if publication is None:
@@ -547,7 +560,7 @@ class OfficialAldiSource:
         if (urlsplit(website).hostname or "").casefold() != "www.aldi-sued.de":
             raise ToolError("ALDI Süd Prospekt besitzt keine offizielle Händlerzuordnung")
         period = self._south_publication_period(config.get("description"))
-        if not any(period) or not date_is_current(*period):
+        if not any(period) or not date_is_current(*period, reference_date):
             return []
         base_url = canonical.rstrip("/")
         token = clean_text(publication.get("cacheToken"))
@@ -784,7 +797,7 @@ class OfficialAldiSource:
         offers.extend(self._south_dom_offers(page, source_url))
         return deduplicate_offers(offers)
 
-    def _load_south(self) -> list[Offer]:
+    def _load_south(self, reference_date: Optional[date] = None) -> list[Offer]:
         queue = [self.SOUTH_INDEX_URL]
         seen: set[str] = set()
         collected: list[Offer] = []
@@ -812,7 +825,7 @@ class OfficialAldiSource:
                     queue.append(candidate)
         for publication_url in brochure_urls[:6]:
             try:
-                brochure_offers = self._south_brochure_offers(publication_url)
+                brochure_offers = self._south_brochure_offers(publication_url, reference_date) if reference_date else self._south_brochure_offers(publication_url)
             except Exception as exc:
                 errors.append(f"{urlsplit(publication_url).path}: {type(exc).__name__}: {exc}")
                 continue
@@ -826,6 +839,8 @@ class OfficialAldiSource:
         # duplicates with different title/brand spellings. Web cards remain the
         # fallback when no current brochure can be parsed.
         offers = deduplicate_offers(brochure_collected or collected)
+        if reference_date:
+            offers = [offer for offer in offers if (parse_iso_date(offer.valid_from) is None or parse_iso_date(offer.valid_from) <= reference_date) and (parse_iso_date(offer.valid_until) is None or reference_date <= parse_iso_date(offer.valid_until)) and (offer.valid_from or offer.valid_until)]
         if not offers:
             raise ToolError("ALDI Süd lieferte keine lesbaren aktuell gültigen Angebote" + (": " + " | ".join(errors[-5:]) if errors else ""))
         return offers

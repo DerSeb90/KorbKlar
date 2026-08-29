@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections import defaultdict
 from dataclasses import replace
 from typing import Any, Iterable
+from datetime import date
 from urllib.parse import quote_plus
 import re
 
@@ -42,10 +43,11 @@ class OfferMapper:
         self,
         raw_offers: Iterable[dict[str, Any]],
         retailers: dict[str, RetailerContext],
+        reference_date: date | None = None,
     ) -> list[Offer]:
         unique: dict[tuple[Any, ...], Offer] = {}
         for raw in raw_offers:
-            offer = self.map_one(raw, retailers)
+            offer = self.map_one(raw, retailers, reference_date)
             if offer is None:
                 continue
             benefit_key = tuple(
@@ -66,9 +68,10 @@ class OfferMapper:
         self,
         raw: dict[str, Any],
         retailers: dict[str, RetailerContext],
+        reference_date: date | None = None,
     ) -> Offer | None:
         retailer = identify_retailer(raw, retailers)
-        is_current, validity_label = offer_validity(raw)
+        is_current, validity_label = offer_validity(raw, reference_date)
         if retailer is None or not is_current:
             return None
 

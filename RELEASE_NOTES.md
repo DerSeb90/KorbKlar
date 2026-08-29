@@ -1,3 +1,29 @@
+# 0.1.7
+
+KorbKlar 0.1.7 ergänzt eine optionale Auswahl zwischen aktueller Angebotswoche
+und Folgewoche. Direkte Händlerquellen werden – soweit technisch verfügbar –
+gezielt für die Vorschauwoche geladen. Fehlt die Vorschau bei einem Händler,
+bleibt dessen aktueller Bestand sichtbar und die Oberfläche weist transparent
+auf den Fallback hin. Wochen besitzen getrennte Cache-Schlüssel; ältere
+Snapshots mit abweichender Angebots- oder Pfandsemantik werden nicht erneut
+verwendet.
+
+Persistente Schlagwortfilter prüfen ausschließlich Produktnamen mit
+ODER-Verknüpfung. Sie lassen sich im Browser hinzufügen, bearbeiten und
+löschen sowie in einem versionierten JSON-Format exportieren und importieren.
+Leere und doppelte Einträge werden bereinigt, fehlerhafte Dateien verständlich
+abgewiesen.
+
+Der strukturierte ALDI-Süd-Prospekt übernimmt jetzt vorhandene Marken und
+artikelbezogene Produktbilder vollständig. Pfand wird zentraler und
+quellengerecht behandelt: veröffentlichte Gesamtpfandwerte von Lidl, Netto,
+ALDI Nord und weiteren Quellen werden nicht erneut multipliziert; ausdrücklich
+je Behälter ausgewiesenes ALDI-Süd-Pfand wird für das Verkaufsgebinde summiert.
+Bei Mehrwegkästen können getrennt veröffentlichte Flaschen- und
+Verpackungspfandanteile addiert und transparent dargestellt werden. Ein bereits
+als Gesamtwert veröffentlichter Kastenpfand wird nicht mehr fälschlich als
+gleichmäßiger Einzelpfand pro Flasche ausgegeben.
+
 # 0.1.6
 
 KorbKlar 0.1.6 repariert die Filialauflösung für Orte, deren exakte
