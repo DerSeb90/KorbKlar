@@ -1,3 +1,20 @@
+# 0.1.8
+
+KorbKlar 0.1.8 löst HOL’AB!-Märkte anhand der tatsächlich angefragten PLZ auf.
+Damit werden regionale Angebote beispielsweise für 21423 korrekt dem Markt
+Winsen/Luhe zugeordnet, statt vom voreingestellten Kartenausschnitt der
+Marktseite abhängig zu sein.
+
+In den Ergebnissen lassen sich mehrere Händler per Umschalt-Klick gemeinsam
+auswählen. Händlerauswahl, Kategorie und Sortierung bleiben lokal im Browser
+gespeichert. Eigene Schlagwortfilter sind nun direkt unter „Filter und
+Sortierung“ aktivierbar und werden in einem separaten Dialog verwaltet.
+
+Produktbilder in der Einkaufsliste bleiben in einem festen Bildrahmen. Dadurch
+ragen insbesondere ALDI-Süd-Bilder nicht mehr in benachbarte Artikelzeilen.
+Zusätzlich verwendet die ALDI-Süd-Prospektprüfung wieder durchgängig das
+vorgegebene Referenzdatum.
+
 # 0.1.7
 
 KorbKlar 0.1.7 ergänzt eine optionale Auswahl zwischen aktueller Angebotswoche
