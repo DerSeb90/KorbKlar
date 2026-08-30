@@ -26,6 +26,27 @@ def test_home_and_static_assets():
     assert client.get("/static/results-v2.js").status_code == 200
 
 
+def test_theme_switcher_is_shared_persistent_and_overrides_system_theme():
+    client = TestClient(app)
+    pages = (
+        client.get("/").text,
+        client.get(access.build_result_path("synthetic-link-test")).text,
+        client.get("/shopping").text,
+    )
+    script = ui.static_text("theme.js")
+    styles = ui.static_text("home.css") + ui.static_text("results.css")
+
+    assert all('src="/static/theme.js"' in page for page in pages)
+    assert all('class="themeToggle"' in page for page in pages)
+    assert "korbklar.theme.v1" in script
+    assert 'value === "light" || value === "dark"' in script
+    assert "localStorage.setItem(storageKey, theme)" in script
+    assert "document.documentElement.dataset.theme = theme" in script
+    assert 'aria-label' in script and 'aria-pressed' in script
+    assert ':root:not([data-theme])' in styles
+    assert ':root[data-theme="dark"]' in styles
+
+
 def test_favicon_routes_are_local_and_cacheable():
     client = TestClient(app)
     for path in ("/favicon.svg", "/favicon.ico"):
