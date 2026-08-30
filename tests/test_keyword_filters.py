@@ -51,6 +51,9 @@ def test_keyword_ui_persists_and_supports_edit_delete_import_export():
     page = (ROOT / "src/supermarkt/static/results.html").read_text(encoding="utf-8")
     script = (ROOT / "src/supermarkt/static/results-v2.js").read_text(encoding="utf-8")
     assert 'id="keywordForm"' in page and 'id="keywordImport"' in page and 'id="keywordExport"' in page
+    assert 'id="keywordEnabled"' in page and 'id="keywordDialog"' in page
     assert "localStorage.getItem(KEYWORD_STORAGE_KEY)" in script
     assert "localStorage.setItem(KEYWORD_STORAGE_KEY" in script
     assert "parseKeywordDocument" in script and "downloadKeywords" in script
+    assert "KEYWORD_ENABLED_KEY" in script and "keywordEnabled" in script
+    assert "FILTER_STORAGE_KEY" in script and 'params.append("retailers",retailer)' in script

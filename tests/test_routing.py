@@ -62,6 +62,34 @@ def test_zero_hit_retailers_are_not_exposed_as_filter_chips():
     assert page["retailer_counts"] == {"Lidl": 1}
 
 
+def test_multiple_retailer_filters_keep_only_selected_retailers():
+    from dataclasses import asdict
+    from supermarkt.compare import OfferComparator
+    from supermarkt.models import Offer
+    from supermarkt.service import SupermarketEngine
+
+    contexts = SourceLoader._contexts()
+    offers = [Offer(
+        offer_id=name, retailer=name, category="Test", name=f"Produkt {name}", brand="",
+        description="", price=1.0, base_price=None, base_unit="", pack_signature="",
+        validity_label="Aktuell", match_key=f"unique:{name}", source_url="https://example.invalid/",
+    ) for name in ("Lidl", "PENNY", "REWE")]
+    engine = object.__new__(SupermarketEngine)
+    engine.comparator = OfferComparator()
+    snapshot = {
+        "search_id": "multi-retailer", "postal_code": "01067",
+        "offers": [asdict(offer) for offer in offers],
+        "retailers": {name: asdict(value) for name, value in contexts.items()},
+        "source_states": {}, "request_errors": [], "store_warnings": [], "created_at": 0,
+    }
+
+    page = engine.page(snapshot, retailer_filters=("Lidl", "PENNY"), view="all")
+
+    assert page["retailers"] == ["Lidl", "PENNY"]
+    assert {offer["retailer"] for offer in page["offers"]} == {"Lidl", "PENNY"}
+    assert page["filtered_offer_count"] == 2
+
+
 def test_results_expose_selected_market_labels_for_retailers_with_offers():
     from dataclasses import asdict, replace
     from supermarkt.compare import OfferComparator

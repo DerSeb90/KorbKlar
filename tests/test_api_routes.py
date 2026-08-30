@@ -6,6 +6,7 @@ from pydantic import ValidationError
 
 from supermarkt.asgi import app
 from supermarkt.api_models import SupermarketRequest
+from supermarkt import runtime
 
 
 def test_api_returns_one_absolute_result_url():
@@ -22,6 +23,28 @@ def test_api_preserves_loyalty_programs_and_optional_auth(monkeypatch):
     monkeypatch.setenv("SUPERMARKT_API_KEY", "correct-key")
     assert client.post("/api/v1/compare", json={"postal_code": "01067"}).status_code == 401
     assert client.post("/api/v1/compare", json={"postal_code": "01067"}, headers={"Authorization": "Bearer correct-key"}).status_code == 200
+
+
+def test_result_endpoint_passes_multiple_retailer_filters(monkeypatch):
+    from conftest import FakeEngine
+    engine = FakeEngine()
+    captured = {}
+    original_page = engine.page
+    def page(snapshot, **kwargs):
+        captured.update(kwargs)
+        return original_page(snapshot, **kwargs)
+    engine.page = page
+    monkeypatch.setattr(runtime, "get_engine", lambda: engine)
+    client = TestClient(app, base_url="https://offers.example.test")
+    result_url = client.post("/api/v1/compare", json={"postal_code": "01067"}).json()["result_url"]
+    parsed = urlsplit(result_url)
+    response = client.get(
+        f"/api/results/{parsed.path.rsplit('/', 1)[-1]}",
+        params={**{key: value[0] for key, value in parse_qs(parsed.query).items()}, "retailers": ["Lidl", "PENNY"]},
+    )
+
+    assert response.status_code == 200
+    assert captured["retailer_filters"] == ("Lidl", "PENNY")
 
 
 def test_request_rejects_unknown_loyalty_program():

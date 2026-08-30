@@ -552,6 +552,7 @@ class SupermarketEngine:
         filter_text: str = "",
         keywords: tuple[str, ...] = (),
         retailer: str = "",
+        retailer_filters: tuple[str, ...] = (),
         category: str = "",
         page: int = 1,
         page_size: int = 100,
@@ -577,16 +578,23 @@ class SupermarketEngine:
             if isinstance(name, str) and isinstance(value, dict)
         }
         selected_retailer = resolve_retailer_name(retailer, retailers)
+        selected_retailers = tuple(dict.fromkeys(
+            resolved for value in retailer_filters
+            if (resolved := resolve_retailer_name(value, retailers))
+        ))
+        if selected_retailer and not selected_retailers:
+            selected_retailers = (selected_retailer,)
+        selected_retailer_keys = {name.casefold() for name in selected_retailers}
         selected_category = clean_text(category)
 
         def scope(items: list[Offer]) -> list[Offer]:
             scoped = filter_offers(items, filter_text)
             scoped = filter_offers_by_keywords(scoped, keywords)
-            if selected_retailer:
+            if selected_retailer_keys:
                 scoped = [
                     offer
                     for offer in scoped
-                    if offer.retailer.casefold() == selected_retailer.casefold()
+                    if offer.retailer.casefold() in selected_retailer_keys
                 ]
             if selected_category:
                 scoped = [offer for offer in scoped if offer.category.casefold() == selected_category.casefold()]
@@ -605,7 +613,7 @@ class SupermarketEngine:
         counts: dict[str, int] = {}
         for offer in count_scope:
             counts[offer.retailer] = counts.get(offer.retailer, 0) + 1
-        category_scope = [offer for offer in count_scope if not selected_retailer or offer.retailer.casefold() == selected_retailer.casefold()]
+        category_scope = [offer for offer in count_scope if not selected_retailer_keys or offer.retailer.casefold() in selected_retailer_keys]
         category_counts: dict[str, int] = {}
         for offer in category_scope:
             category_counts[offer.category] = category_counts.get(offer.category, 0) + 1
@@ -645,6 +653,7 @@ class SupermarketEngine:
             "has_next": page < page_count,
             "has_previous": page > 1,
             "retailer": selected_retailer,
+            "retailers": list(selected_retailers),
             "view": normalized_view,
             "retailer_counts": counts,
             "retailer_markets": retailer_markets,

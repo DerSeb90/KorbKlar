@@ -63,7 +63,7 @@ def test_ui_javascript_keeps_expected_behaviour():
     assert "function syncLoyaltyUrl()" in script
     assert 'history.replaceState(null,"",url)' in script
     assert "Weitere Angebote werden beim Scrollen geladen" in script
-    assert 'classList.toggle("single-retailer",Boolean(retailer))' in script
+    assert 'classList.toggle("single-retailer",selectedRetailers.size===1)' in script
     assert 'category_counts' in script
     assert '.table.single-retailer .retailer{display:none}' in css
 

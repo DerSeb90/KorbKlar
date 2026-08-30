@@ -146,3 +146,12 @@ def test_shopping_frontend_is_local_only():
     assert "localStorage" not in shopping
     assert "document.cookie" not in shopping
     assert "navigator.share" in shopping
+
+
+def test_shopping_product_images_are_bounded_without_inline_layout():
+    shopping = (ROOT / "src/supermarkt/static/shopping.js").read_text(encoding="utf-8")
+    styles = (ROOT / "src/supermarkt/static/shopping.css").read_text(encoding="utf-8")
+    assert 'el("div","shoppingImage")' in shopping
+    assert "imageBox.style.cssText" not in shopping and "image.style.cssText" not in shopping
+    assert ".shoppingImage{" in styles and "flex:0 0 72px" in styles and "overflow:hidden" in styles
+    assert ".shoppingImage img{" in styles and "height:100%" in styles and "object-fit:contain" in styles

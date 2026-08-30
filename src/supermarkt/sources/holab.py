@@ -1,6 +1,6 @@
 from __future__ import annotations
 import json, re
-from urllib.parse import urljoin
+from urllib.parse import urlencode, urljoin
 from ..common import build_match_key, clean_text, format_validity, normalize_pack, parse_base_price_text, parse_deposit_text, parse_iso_date, parse_number
 from ..http import HttpClient
 from ..models import Offer, ToolError
@@ -15,7 +15,8 @@ class OfficialHolabSource:
     def load(self,postal_code:str)->list[Offer]:
         try:from bs4 import BeautifulSoup
         except Exception as exc:raise ToolError(f"HOL’AB! benötigt BeautifulSoup: {exc}") from exc
-        markets=BeautifulSoup(self._html(self.MARKETS_URL),"html.parser")
+        markets_url=f"{self.MARKETS_URL}?{urlencode({'q':postal_code})}"
+        markets=BeautifulSoup(self._html(markets_url),"html.parser")
         market=next((n for n in markets.select("li.store a[href*='/maerkte/']") if postal_code in clean_text(n.find_parent("li").get_text(" ",strip=True) if n.find_parent("li") else "")),None)
         if market is None:return []
         self.last_market_url=urljoin(self.BASE,clean_text(market.get("href")));self.last_market_label=clean_text(market.get_text(" ",strip=True)) or "HOL’AB!"

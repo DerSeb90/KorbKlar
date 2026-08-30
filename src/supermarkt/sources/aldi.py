@@ -546,6 +546,7 @@ class OfficialAldiSource:
         )
 
     def _south_brochure_offers(self, publication_url: str, reference_date: Optional[date] = None) -> list[Offer]:
+        reference_date = reference_date or offer_reference_date()
         page = self._south_get_html(publication_url)
         publication = self._south_publication_data(page)
         if publication is None:
