@@ -4,7 +4,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator
 
-from .common import validate_postal_code
+from .common import normalize_keywords, validate_postal_code
 from .loyalty import PROGRAMS, VALID_PROGRAM_IDS, normalize_program_ids
 from .models import resolve_retailer_names
 
@@ -15,7 +15,9 @@ class SupermarketRequest(BaseModel):
         default="auto",
         description="ALDI-Region. Explizite Nutzerangaben übernehmen, sonst auto.",
     )
+    offer_week: Literal["current", "next"] = Field(default="current", description="Aktuelle Angebote oder – soweit verfügbar – Vorschau der Folgewoche")
     filter_text: str = Field(default="", max_length=120, description="Optionaler Produkt- oder Markenfilter")
+    keywords: list[str] = Field(default_factory=list, max_length=50, description="Optionale Produktnamens-Schlagworte mit ODER-Verknüpfung")
     retailer: str = Field(default="", max_length=60, description="Optionaler Händlerfilter, z. B. Lidl oder Kaufland")
     retailers: list[str] = Field(
         default_factory=list,
@@ -28,6 +30,7 @@ class SupermarketRequest(BaseModel):
         pattern=r"^\d*$",
         description="Optional: zuvor über die REWE-Marktsuche gewählte Markt-ID.",
     )
+    netto_market_id: str = Field(default="", max_length=30, pattern=r"^\d*$", description="Optional gewählte Netto-Marken-Discount-Filial-ID.")
     page: int = Field(default=1, ge=1, le=10000)
     page_size: int = Field(default=100, ge=1, le=100, description="Maximal 100 Angebote pro API-Antwort")
     view: Literal["best_only", "all"] = Field(default="best_only", description="Nur günstigste sichere Treffer oder alle")
@@ -65,3 +68,8 @@ class SupermarketRequest(BaseModel):
         if unknown:
             raise ValueError("Unbekannte Händler: " + ", ".join(unknown))
         return list(resolved)
+
+    @field_validator("keywords")
+    @classmethod
+    def valid_keywords(cls, values: list[str]) -> list[str]:
+        return list(normalize_keywords(values))

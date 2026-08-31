@@ -1,10 +1,22 @@
+import threading
 import time
 
-from supermarkt.jobs import SearchJobStore
+import pytest
+
+from supermarkt.jobs import SearchCapacityError, SearchJobStore
+
+
+def test_job_progress_never_exceeds_total_sources():
+    store = SearchJobStore(object())
+    store._jobs["audit"] = {"updated_at": 0, "processed_sources": 0, "total_sources": 7}
+    store._progress("audit", processed_sources=12)
+    job = store.get("audit")
+    assert job is not None
+    assert job["processed_sources"] == 7
 
 
 class ProgressEngine:
-    def snapshot(self, postal_code, aldi_region, refresh, progress=None, retailers=(), rewe_market_id=""):
+    def snapshot(self, postal_code, aldi_region, refresh, progress=None, retailers=(), rewe_market_id="", netto_market_id=""):
         progress(status="loading", progress=35, source="Testquelle", retailer="Lidl",
                  category="Backwaren", step="Laden", processed_sources=2,
                  total_sources=6, processed_products=42)
@@ -28,7 +40,7 @@ def test_search_job_forwards_manual_aldi_choice():
     class RecordingEngine(ProgressEngine):
         seen = None
 
-        def snapshot(self, postal_code, aldi_region, refresh, progress=None, retailers=(), rewe_market_id=""):
+        def snapshot(self, postal_code, aldi_region, refresh, progress=None, retailers=(), rewe_market_id="", netto_market_id=""):
             self.seen = (postal_code, aldi_region)
             return super().snapshot(postal_code, aldi_region, refresh, progress, retailers)
 
@@ -58,12 +70,52 @@ def test_search_job_reports_failures():
     assert job["error"] == "synthetic failure"
 
 
+def test_search_job_queue_is_bounded_and_recovers_capacity():
+    started = threading.Event()
+    release = threading.Event()
+
+    class BlockingEngine:
+        def snapshot(self, *_args, **_kwargs):
+            started.set()
+            release.wait(timeout=2)
+            return {"search_id": "done", "offers": []}, False
+
+    jobs = SearchJobStore(BlockingEngine(), max_pending=2)
+    first = jobs.start("01067")
+    second = jobs.start("01067")
+    assert started.wait(timeout=1)
+    with pytest.raises(SearchCapacityError):
+        jobs.start("01067")
+
+    release.set()
+    for _ in range(100):
+        if jobs.get(first)["status"] == "completed" and jobs.get(second)["status"] == "completed":
+            break
+        time.sleep(0.01)
+    assert jobs.start("01067")
+
+
+def test_search_job_history_is_bounded_without_removing_active_jobs():
+    jobs = SearchJobStore(object(), max_pending=2, max_records=4)
+    jobs._jobs = {
+        f"done-{index}": {"status": "completed", "updated_at": float(index)}
+        for index in range(6)
+    }
+    jobs._jobs["active"] = {"status": "loading", "updated_at": 0.0}
+
+    jobs._purge(6.0)
+
+    assert "active" in jobs._jobs
+    assert len(jobs._jobs) == 3
+    assert set(jobs._jobs) == {"active", "done-4", "done-5"}
+
+
 def test_search_job_forwards_refresh_request():
     """Der Haken auf der Startseite muss den Servercache wirklich übergehen."""
     class RecordingEngine(ProgressEngine):
         seen = None
 
-        def snapshot(self, postal_code, aldi_region, refresh, progress=None, retailers=(), rewe_market_id=""):
+        def snapshot(self, postal_code, aldi_region, refresh, progress=None, retailers=(), rewe_market_id="", netto_market_id=""):
             self.seen = refresh
             return super().snapshot(postal_code, aldi_region, refresh, progress, retailers)
 
@@ -82,7 +134,7 @@ def test_search_job_forwards_retailer_selection():
     class RecordingEngine(ProgressEngine):
         seen = None
 
-        def snapshot(self, postal_code, aldi_region, refresh, progress=None, retailers=(), rewe_market_id=""):
+        def snapshot(self, postal_code, aldi_region, refresh, progress=None, retailers=(), rewe_market_id="", netto_market_id=""):
             self.seen = retailers
             return super().snapshot(postal_code, aldi_region, refresh, progress, retailers)
 

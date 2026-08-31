@@ -6,6 +6,7 @@ from pydantic import ValidationError
 
 from supermarkt.asgi import app
 from supermarkt.api_models import SupermarketRequest
+from supermarkt import runtime
 
 
 def test_api_returns_one_absolute_result_url():
@@ -24,6 +25,28 @@ def test_api_preserves_loyalty_programs_and_optional_auth(monkeypatch):
     assert client.post("/api/v1/compare", json={"postal_code": "01067"}, headers={"Authorization": "Bearer correct-key"}).status_code == 200
 
 
+def test_result_endpoint_passes_multiple_retailer_filters(monkeypatch):
+    from conftest import FakeEngine
+    engine = FakeEngine()
+    captured = {}
+    original_page = engine.page
+    def page(snapshot, **kwargs):
+        captured.update(kwargs)
+        return original_page(snapshot, **kwargs)
+    engine.page = page
+    monkeypatch.setattr(runtime, "get_engine", lambda: engine)
+    client = TestClient(app, base_url="https://offers.example.test")
+    result_url = client.post("/api/v1/compare", json={"postal_code": "01067"}).json()["result_url"]
+    parsed = urlsplit(result_url)
+    response = client.get(
+        f"/api/results/{parsed.path.rsplit('/', 1)[-1]}",
+        params={**{key: value[0] for key, value in parse_qs(parsed.query).items()}, "retailers": ["Lidl", "PENNY"]},
+    )
+
+    assert response.status_code == 200
+    assert captured["retailer_filters"] == ("Lidl", "PENNY")
+
+
 def test_request_rejects_unknown_loyalty_program():
     with pytest.raises(ValidationError):
         SupermarketRequest(postal_code="01067", loyalty_programs=["nicht_echt"])
@@ -37,11 +60,22 @@ def test_request_accepts_one_or_multiple_known_retailers():
     assert several.retailers == ["REWE", "Kaufland", "Globus"]
     assert all_retailers.retailers == []
     assert SupermarketRequest(postal_code="01067", rewe_market_id="123456").rewe_market_id == "123456"
+    assert SupermarketRequest(postal_code="01067", netto_market_id="5303").netto_market_id == "5303"
 
 
 def test_request_rejects_unknown_retailer():
     with pytest.raises(ValidationError, match="Unbekannte Händler"):
         SupermarketRequest(postal_code="01067", retailers=["REWE", "Nicht Echt"])
+
+
+def test_request_normalizes_persistent_product_keywords():
+    request = SupermarketRequest(postal_code="01067", keywords=[" Milka ", "milka", "", "Butter"])
+    assert request.keywords == ["Milka", "Butter"]
+
+
+def test_request_defaults_to_current_week_and_accepts_preview():
+    assert SupermarketRequest(postal_code="01067").offer_week == "current"
+    assert SupermarketRequest(postal_code="01067", offer_week="next").offer_week == "next"
 
 
 def test_openapi_exposes_only_compare_operation():

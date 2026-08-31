@@ -18,6 +18,31 @@ def test_deposit_is_parsed_only_when_explicitly_published():
     assert parse_deposit_text("Energy Drink in der Dose") is None
 
 
+def test_crate_deposit_adds_bottles_and_returnable_crate():
+    from supermarkt.common import parse_deposit_components, parse_deposit_text
+
+    assert parse_deposit_text(
+        "24 x 0,5-l-Flasche; Flaschenpfand je 0,08 €; Kastenpfand 1,50 €",
+        container_count=24,
+    ) == 3.42
+    assert parse_deposit_components(
+        "24 x 0,5-l-Flasche; Flaschenpfand je 0,08 €; Kastenpfand 1,50 €",
+        container_count=24,
+    ) == (3.42, 0.08, 1.50)
+
+
+def test_multipack_and_single_container_deposits_are_not_double_counted():
+    from supermarkt.common import parse_deposit_components, parse_deposit_text
+
+    assert parse_deposit_text("6 x 0,33 l; zzgl. 0,25 € Pfand", container_count=6) == 1.50
+    assert parse_deposit_text("0,5-l-Flasche; Pfand je 0,08 €") == 0.08
+    assert parse_deposit_text("Mehrwegflasche; Pfand 0,15 €") == 0.15
+    assert parse_deposit_text("12 x 0,75 l + 3,30 € Pfand/Kiste", container_count=12) == 3.30
+    assert parse_deposit_components(
+        "18 x 0,33 l; zzgl. Pfand 0,25", container_count=18,
+    ) == (4.50, 0.25, None)
+
+
 def test_black_cat_marktguru_deposit_notation_is_preserved():
     from supermarkt.common import parse_deposit_text
 
@@ -119,6 +144,13 @@ def test_marktguru_sunday_selects_upcoming_week():
     assert old_current is False
     assert next_current is True
     assert label == "10.08.–15.08.2026"
+
+
+def test_explicit_next_week_advances_offer_reference_by_seven_days():
+    from supermarkt.common import offer_week_reference
+
+    assert offer_week_reference("current", date(2026, 8, 10)) == date(2026, 8, 10)
+    assert offer_week_reference("next", date(2026, 8, 10)) == date(2026, 8, 17)
 
 
 def test_monday_switches_to_new_week_normally():

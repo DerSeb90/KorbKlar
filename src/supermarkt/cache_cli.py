@@ -66,8 +66,9 @@ def status() -> int:
     else:
         now = time.time()
         with connection:
+            # TABLE ist eine Modulkonstante, kein Nutzereingabewert.
             rows = connection.execute(
-                f"SELECT cache_key, created_at, fresh_until, expires_at FROM {TABLE} "
+                f"SELECT cache_key, created_at, fresh_until, expires_at FROM {TABLE} "  # nosec B608
                 "ORDER BY created_at DESC"
             ).fetchall()
         print(f"  {len(rows)} Snapshots")
@@ -102,12 +103,14 @@ def purge(postal_code: str, images: bool, stores: bool, everything: bool) -> int
         with connection:
             if postal_code:
                 # The cache key is "<postal code>:<aldi region>".
+                # TABLE ist konstant, die PLZ laeuft als Parameter.
                 cursor = connection.execute(
-                    f"DELETE FROM {TABLE} WHERE cache_key LIKE ?", (f"{postal_code}:%",)
+                    f"DELETE FROM {TABLE} WHERE cache_key LIKE ?",  # nosec B608
+                    (f"{postal_code}:%",),
                 )
                 scope = f"PLZ {postal_code}"
             else:
-                cursor = connection.execute(f"DELETE FROM {TABLE}")
+                cursor = connection.execute(f"DELETE FROM {TABLE}")  # nosec B608
                 scope = "alle PLZ"
             print(f"Snapshots gelöscht ({scope}): {cursor.rowcount}")
         # VACUUM cannot run inside the transaction the context manager opens.

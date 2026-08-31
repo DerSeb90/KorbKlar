@@ -16,8 +16,7 @@ from urllib.parse import parse_qs, quote, urlsplit, urlunsplit
 
 from bs4 import BeautifulSoup
 
-
-from ..common import build_match_key, clean_text, normalize_pack, parse_base_price_text, parse_number, strip_html, today_berlin
+from ..common import build_match_key, clean_text, normalize_pack, offer_week_reference, parse_base_price_text, parse_number, strip_html, today_berlin
 from ..http import HttpClient, PostalCodeLocator
 from ..images import is_rejected_image_url, normalize_image_url
 from ..models import LoyaltyBenefit, Offer, ToolError
@@ -329,7 +328,7 @@ class OfficialKauflandSource:
         if not re.fullmatch(r"\d{5}", requested or "") or not re.fullmatch(r"\d{5}", candidate or ""):
             return 0
         common = 0
-        for left, right in zip(requested, candidate):
+        for left, right in zip(requested, candidate, strict=True):
             if left != right:
                 break
             common += 1
@@ -355,7 +354,7 @@ class OfficialKauflandSource:
         folded = path.casefold()
         if host != OfficialKauflandSource.STORE_HOST:
             return ""
-        if not (folded.startswith("/service/filiale/") or folded.startswith("/service/filiale.storename%3d")):
+        if not folded.startswith(("/service/filiale/", "/service/filiale.storename%3d")):
             return ""
         if folded.rstrip("/") in {"/service/filiale", "/service/filiale/"}:
             return ""
@@ -474,11 +473,11 @@ class OfficialKauflandSource:
             return {}
         if not isinstance(value, dict):
             return {}
-        result: dict[str, dict[str, Any]] = {}
-        for postal, item in value.items():
-            if isinstance(postal, str) and isinstance(item, dict):
-                result[postal] = item
-        return result
+        return {
+            postal: item
+            for postal, item in value.items()
+            if isinstance(postal, str) and isinstance(item, dict)
+        }
 
     def _write_store_map(self, value: dict[str, dict[str, Any]]) -> None:
         path = self._store_cache_path
@@ -886,7 +885,7 @@ class OfficialKauflandSource:
             offers.append(offer)
         return offers
 
-    def _load_structured_offers(self, store_url: str) -> list[Offer]:
+    def _load_structured_offers(self, store_url: str, offer_week: str = "current") -> list[Offer]:
         selector = self._store_selector(store_url)
         if not selector:
             raise ToolError(f"Kaufland-Filialkennung fehlt in {store_url}")
@@ -900,7 +899,7 @@ class OfficialKauflandSource:
         if not isinstance(availability, list):
             raise ToolError("Kaufland-Verfügbarkeitsdaten haben ein unerwartetes Format")
 
-        reference = today_berlin().isoformat()
+        reference = offer_week_reference(offer_week).isoformat()
         available_ids = {
             clean_text(item.get("klNr"))
             for item in availability
@@ -976,11 +975,11 @@ class OfficialKauflandSource:
             raise ToolError(f"Kaufland-Strukturdaten für {selector} lieferten nur {len(result)} Angebote")
         return result
 
-    def load(self, postal_code: str, retailer_context: Any = None) -> list[Offer]:
+    def load(self, postal_code: str, retailer_context: Any = None, offer_week: str = "current") -> list[Offer]:
         store_url, _store_page, locality, store_postal = self._resolve_store_page(postal_code, retailer_context)
         used_cached_store = self.last_discovery == "24h-Filialcache"
         try:
-            offers = self._load_structured_offers(store_url)
+            offers = self._load_structured_offers(store_url, offer_week)
         except ToolError:
             try:
                 overview_page, overview_url = self._load_full_overview(store_url, locality)
@@ -990,7 +989,7 @@ class OfficialKauflandSource:
                     raise
                 self._drop_cached_store(postal_code)
                 store_url, _store_page, locality, store_postal = self._resolve_store_page(postal_code, retailer_context)
-                offers = self._load_structured_offers(store_url)
+                offers = self._load_structured_offers(store_url, offer_week)
         if len(offers) < 100:
             raise ToolError(
                 f"Kaufland-Angebotsübersicht für {store_url} lieferte nur "

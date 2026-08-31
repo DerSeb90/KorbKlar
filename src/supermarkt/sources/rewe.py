@@ -12,7 +12,7 @@ import uuid
 from typing import Any, Optional
 from urllib.parse import urljoin, urlsplit
 
-from ..common import build_match_key, clean_text, deduplicate_offers, normalize_pack, offer_reference_date, parse_base_price_text, parse_deposit_text, parse_number, today_berlin
+from ..common import build_match_key, clean_text, deduplicate_offers, normalize_offer_week, normalize_pack, offer_reference_date, offer_week_reference, parse_base_price_text, parse_deposit_text, parse_number, today_berlin
 from ..http import PostalCodeLocator
 from ..models import LoyaltyBenefit, Offer, ToolError
 from .browser import chromium_command
@@ -380,37 +380,53 @@ class OfficialReweSource:
         if not slug:
             raise ToolError(f"REWE konnte aus {locality!r} keinen Marktsuche-Pfad bilden")
 
-        search_url = f"{self.BASE}/marktsuche/{slug}/"
         session = self._session()
-        response = session.get(search_url, timeout=self.timeout_seconds)
-        if response.status_code != 200:
-            raise ToolError(f"REWE Marktsuche HTTP {response.status_code}")
-        soup = BeautifulSoup(response.text, "html.parser")
+        slugs = [slug]
+        state_getter = getattr(self.locator, "state", None)
+        state = clean_text(state_getter(postal_code)) if callable(state_getter) else ""
+        state_slug = self._slug(state)
+        if state_slug and state_slug not in slugs:
+            slugs.append(state_slug)
 
         exact: list[tuple[str, str, str]] = []
-        seen: set[str] = set()
-        for link in soup.select('a[href*="/angebote/"]'):
-            href = urljoin(self.BASE, clean_text(link.get("href")))
-            match = re.search(r"/angebote/[^/]+/(\d+)/[^/?#]+/?", href)
-            if not match or href in seen:
+        # The search page can expose more than one URL/slug for the same store.
+        # Only the numeric market id represents an independently selectable market.
+        seen_market_ids: set[str] = set()
+        successful_pages = 0
+        for page_slug in slugs:
+            response = session.get(f"{self.BASE}/marktsuche/{page_slug}/", timeout=self.timeout_seconds)
+            if response.status_code != 200:
                 continue
-            seen.add(href)
+            successful_pages += 1
+            soup = BeautifulSoup(response.text, "html.parser")
+            for link in soup.select('a[href*="/angebote/"]'):
+                href = urljoin(self.BASE, clean_text(link.get("href")))
+                match = re.search(r"/angebote/[^/]+/(\d+)/[^/?#]+/?", href)
+                if not match:
+                    continue
+                market_id = match.group(1)
+                if market_id in seen_market_ids:
+                    continue
 
-            node = link
-            local_text = clean_text(link.get_text(" ", strip=True))
-            for _ in range(8):
-                parent = getattr(node, "parent", None)
-                if parent is None:
-                    break
-                node = parent
-                offer_links = node.select('a[href*="/angebote/"]') if hasattr(node, "select") else []
-                candidate_text = clean_text(node.get_text(" ", strip=True)) if hasattr(node, "get_text") else ""
-                if len(offer_links) == 1:
-                    local_text = candidate_text
-                    break
-            if postal_code not in local_text:
-                continue
-            exact.append((match.group(1), href, local_text))
+                node = link
+                local_text = clean_text(link.get_text(" ", strip=True))
+                for _ in range(8):
+                    parent = getattr(node, "parent", None)
+                    if parent is None:
+                        break
+                    node = parent
+                    offer_links = node.select('a[href*="/angebote/"]') if hasattr(node, "select") else []
+                    candidate_text = clean_text(node.get_text(" ", strip=True)) if hasattr(node, "get_text") else ""
+                    if len(offer_links) == 1:
+                        local_text = candidate_text
+                        break
+                if postal_code not in local_text:
+                    continue
+                seen_market_ids.add(market_id)
+                exact.append((market_id, href, local_text))
+
+        if not successful_pages:
+            raise ToolError("REWE Marktsuche war nicht erreichbar")
 
         if not exact:
             raise ToolError(f"REWE fand in {locality} keinen Markt mit exakt PLZ {postal_code}")
@@ -506,7 +522,7 @@ class OfficialReweSource:
                     return amount
         return None
 
-    def _parse_card(self, card: Any, *, nan: str, category: str, market_id: str, market_url: str) -> tuple[Optional[Offer], bool]:
+    def _parse_card(self, card: Any, *, nan: str, category: str, market_id: str, market_url: str, reference_date: Optional[date] = None) -> tuple[Optional[Offer], bool]:
         title_node = card.select_one(".cor-offer-information__title") if card is not None else None
         title = self._offer_title(title_node)
         price = self._money(card.select_one(".cor-offer-price__tag-price") if card is not None else None)
@@ -526,6 +542,9 @@ class OfficialReweSource:
         pack = normalize_pack(f"{title} {description}")
         image_url = self._product_image(card, market_url)
         offer_id = f"rewe:{market_id}:{nan}"
+        reference = offer_reference_date(reference_date)
+        valid_from = reference.fromordinal(reference.toordinal() - reference.weekday())
+        valid_until = valid_from.fromordinal(valid_from.toordinal() + 6)
         product_url = ""
         for link in card.select("a[href]"):
             candidate = urljoin(self.BASE, clean_text(link.get("href")))
@@ -547,7 +566,7 @@ class OfficialReweSource:
             base_price=base_price,
             base_unit=base_unit,
             pack_signature=pack,
-            validity_label=self._week_label(),
+            validity_label=self._week_label(reference_date),
             match_key=build_match_key("", title, pack, offer_id),
             source_url=market_url,
             product_url=product_url or market_url,
@@ -557,9 +576,11 @@ class OfficialReweSource:
             benefits=(LoyaltyBenefit("rewe_bonus", "cashback", float(bonus), "REWE Bonus"),)
             if bonus is not None and bonus > 0
             else (),
+            valid_from=valid_from.isoformat(),
+            valid_until=valid_until.isoformat(),
         ), False
 
-    def load(self, postal_code: str, market_id: str = "") -> list[Offer]:
+    def load(self, postal_code: str, market_id: str = "", offer_week: str = "current") -> list[Offer]:
         try:
             from bs4 import BeautifulSoup
         except Exception as exc:
@@ -567,13 +588,23 @@ class OfficialReweSource:
 
         requested_market_id = clean_text(market_id)
         session, market_id, market_url, market_label = self._find_market(postal_code, market_id=requested_market_id)
-        target_week = self._target_week()
-        request_url = self._market_week_url(market_url)
+        requested_week = normalize_offer_week(offer_week)
+        reference_date = offer_week_reference(requested_week)
+        target_week = "next" if requested_week == "next" else self._target_week()
+        if requested_week == "next":
+            separator = "&" if "?" in market_url else "?"
+            request_url = f"{market_url}{separator}week=next"
+        else:
+            request_url = self._market_week_url(market_url)
         response = session.get(request_url, timeout=self.timeout_seconds)
         if response.status_code != 200 and self.last_discovery == "24h-Marktcache" and not requested_market_id:
             self._drop_cached_market(postal_code)
             session, market_id, market_url, market_label = self._find_market(postal_code, use_cache=False)
-            request_url = self._market_week_url(market_url)
+            if requested_week == "next":
+                separator = "&" if "?" in market_url else "?"
+                request_url = f"{market_url}{separator}week=next"
+            else:
+                request_url = self._market_week_url(market_url)
             response = session.get(request_url, timeout=self.timeout_seconds)
         if response.status_code != 200:
             raise ToolError(f"REWE Angebotsseite HTTP {response.status_code}")
@@ -656,6 +687,7 @@ class OfficialReweSource:
                 category=meta["category"],
                 market_id=market_id,
                 market_url=market_url,
+                reference_date=reference_date,
             )
             if is_bonus_only:
                 bonus_only += 1

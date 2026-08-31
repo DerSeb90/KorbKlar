@@ -7,6 +7,7 @@ from urllib.parse import urlencode
 
 from ..common import build_match_key, clean_text, format_validity, normalize_pack, parse_iso_date, parse_number
 from ..http import HttpClient
+from ..images import is_rejected_image_url, normalize_image_url
 from ..models import Offer, ToolError
 
 @dataclass(frozen=True)
@@ -79,10 +80,12 @@ class OfficialGlobusSource:
     def __init__(self, http_client: HttpClient, resolver: Optional[GlobusMarketResolver] = None) -> None:
         self.http, self.resolver = http_client, resolver or GlobusMarketResolver(http_client)
         self.last_market_label = self.last_market_url = ""
+        self.last_market: Optional[GlobusMarket] = None
 
     def load(self, postal_code: str) -> list[Offer]:
         market = self.resolver.resolve(postal_code)
         if market is None: return []
+        self.last_market = market
         self.last_market_label, self.last_market_url = f"Globus {market.name}", market.url
         url = self.FLYER_URL.format(code=market.code)
         return self.parse(self.http.get_json(url, {"Accept": "application/json"}), market, url)
@@ -94,7 +97,7 @@ class OfficialGlobusSource:
         result, seen = [], set()
         for page in pages:
             if not isinstance(page, dict) or not isinstance(page.get("articles"), list): continue
-            page_no, image_url = clean_text(page.get("page")), clean_text(page.get("image") or page.get("zoom-image"))
+            page_no = clean_text(page.get("page"))
             for item in page["articles"]:
                 if not isinstance(item, dict): continue
                 name, price = _text(item.get("title")), _price(item.get("price"))
@@ -109,8 +112,28 @@ class OfficialGlobusSource:
                 base_price, base_unit = _base_price(description, quantity, price)
                 offer_id, pack = f"globus:{market.market_id}:{identity}", normalize_pack(quantity or description)
                 url = source_url or cls.FLYER_URL.format(code=market.code)
+                image_url = _article_image(item, url)
                 result.append(Offer(offer_id=offer_id, retailer="Globus", category="Aktuelle Wochenangebote", name=name, brand="", description=description, price=price, base_price=base_price, base_unit=base_unit, pack_signature=pack, validity_label=format_validity(start, end), match_key=build_match_key("", name, pack, offer_id), source_url=url, image_url=image_url, source_category=f"Prospektseite {page_no}" if page_no else "Prospekt", product_url=url, retailer_url=market.url, coverage_note=f"Offizieller Globus-Prospekt für {market.name}", valid_from=start.isoformat() if start else None, valid_until=end.isoformat() if end else None))
         return result
+
+
+def _article_image(item: dict[str, Any], base_url: str = "") -> str:
+    """Return only explicitly article-scoped images, never a flyer page image."""
+    for field in (
+        "product_image", "productImage", "article_image", "articleImage",
+        "offer_image", "offerImage", "product_media", "productMedia",
+    ):
+        candidate = normalize_image_url(item.get(field), base_url=base_url)
+        if not candidate or is_rejected_image_url(candidate):
+            continue
+        folded = candidate.casefold()
+        if any(token in folded for token in (
+            "/ressources/img/fbs/", "/ressources/pdfs/", "faltblatt_", "flyer-page",
+            "flyer_page", "page-preview", "page_preview",
+        )):
+            continue
+        return candidate
+    return ""
 
 def _text(value: Any) -> str: return clean_text(html.unescape(clean_text(value)).replace("\x00", ""))
 def _price(value: Any) -> Optional[float]:

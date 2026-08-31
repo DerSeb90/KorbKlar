@@ -13,6 +13,18 @@ def test_signed_image_proxy_url():
     assert len(params["sig"][0]) == 32
 
 
+def test_kaufda_globus_image_uses_kaufda_referer_without_relabelling_offer_source():
+    offer = {
+        "retailer": "Globus",
+        "product": "Goldsteig Emmentaler",
+        "image_url": "https://content-media.bonial.biz/example/main.jpg?impolicy=SEO-offer-normal",
+        "source_url": "https://www.globus.de/faltblatt_online/aktuelle_woche/1017/",
+    }
+    params = parse_qs(urlsplit(access.build_image_proxy_url(offer)).query)
+    assert params["ref"] == ["https://www.kaufda.de/"]
+    assert offer["source_url"].startswith("https://www.globus.de/")
+
+
 def test_image_endpoint_returns_proxy_response(monkeypatch):
     class FakeImageService:
         def get(self, **kwargs):

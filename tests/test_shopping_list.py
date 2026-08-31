@@ -104,9 +104,20 @@ def test_json_roundtrip_schema_and_separate_ids():
     assert result["ean"] is None
 
 
-def test_bring_handoff_contains_only_open_items_without_credentials():
-    text = js("m.bringText([{name:'Milch',quantity:2,pack:'1 l',retailer:'REWE',checked:false},{name:'Brot',quantity:1,checked:true}])")
-    assert text == "2× Milch (1 l) – REWE"
+def test_kitchenowl_adapter_matches_installed_add_item_schema():
+    result = js("""(()=>{
+      const item=m.offerToItem({product:'Pom-Bär',brand:'FUNNY-FRISCH',pack:'75 g',ean:'4001234567890',category:'Snacks',retailer:'ALDI Nord',regular_price:0.99,valid_from:'2026-08-24',valid_until:'2026-08-29'});
+      return m.kitchenOwlItem(item);
+    })()""")
+    assert set(result) == {"name", "description"}
+    assert result["name"] == "FUNNY-FRISCH Pom-Bär"
+    assert "Menge: 1" in result["description"]
+    assert "Packung: 75 g" in result["description"]
+    assert "Kategorie: Snacks" in result["description"]
+    assert "Händler: ALDI Nord" in result["description"]
+    assert "Angebot: 0,99" in result["description"]
+    assert "Zeitraum: 2026-08-24 bis 2026-08-29" in result["description"]
+    assert "EAN: 4001234567890" in result["description"]
 
 
 def test_offer_image_uses_only_the_local_proxy_and_survives_json_roundtrip():
@@ -155,3 +166,12 @@ def test_an_offer_reaches_kitchenowl_without_the_local_basket():
     assert 'class="koSend"' in results
     assert "shoppingAdd" not in results
     assert 'koPath("items")' in results
+
+
+def test_shopping_product_images_are_bounded_without_inline_layout():
+    shopping = (ROOT / "src/supermarkt/static/shopping.js").read_text(encoding="utf-8")
+    styles = (ROOT / "src/supermarkt/static/shopping.css").read_text(encoding="utf-8")
+    assert 'el("div","shoppingImage")' in shopping
+    assert "imageBox.style.cssText" not in shopping and "image.style.cssText" not in shopping
+    assert ".shoppingImage{" in styles and "flex:0 0 72px" in styles and "overflow:hidden" in styles
+    assert ".shoppingImage img{" in styles and "height:100%" in styles and "object-fit:contain" in styles

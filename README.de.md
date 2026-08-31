@@ -46,6 +46,13 @@ http://SERVER-IP:8000
 
 Postleitzahl eingeben, Angebote suchen, fertig. Für den normalen Browserbetrieb müssen weder eine `.env` noch ein API-Schlüssel oder eine LLM eingerichtet werden.
 
+Vor der Suche kann zwischen der aktuellen Angebotswoche und der Folgewoche
+gewählt werden. Vorschauen werden nur verwendet, wenn die jeweilige
+Händlerquelle sie bereits veröffentlicht hat; andernfalls bleibt der aktuelle
+Bestand mit einem Hinweis sichtbar. In der Ergebnisansicht lassen sich außerdem
+dauerhafte Produktnamens-Schlagworte mit ODER-Logik verwalten und als
+versionierte JSON-Datei sichern oder wieder importieren.
+
 Status prüfen:
 
 ```bash
@@ -121,11 +128,17 @@ Der aktuelle Stand enthält Adapter beziehungsweise regionale Datenwege für:
 - Lidl
 - PENNY
 - Netto Marken-Discount
+- Netto schwarz
 - GLOBUS
+- HOL’AB!
+- Rossmann
+- Müller
 - Combi
 - famila Nordwest
 
-REWE, EDEKA, Marktkauf, Kaufland sowie die passende ALDI-Region werden bevorzugt direkt aus den jeweiligen Händlerquellen geladen. Lidl, PENNY, Netto Marken-Discount, GLOBUS, Combi und famila Nordwest werden über regionale Marktguru-Daten eingebunden. Fällt eine direkte Händlerquelle aus, kann der vorhandene regionale Datenweg gezielt für diesen Händler einspringen. Ein erfolgreicher Direktbestand wird dabei nicht mit einem zweiten vollständigen Bestand vermischt.
+REWE, EDEKA, Marktkauf, Kaufland, GLOBUS sowie die passende ALDI-Region werden bevorzugt direkt aus den jeweiligen Händlerquellen geladen. ALDI Süd verwendet den strukturierten offiziellen Wochenprospekt als vollständige Primärquelle; ALDI Nord liefert Preis, Grundpreis, ausdrückliches Pfand und Produktbild aus seinem offiziellen Angebotsdatensatz. Lidl, PENNY, Netto Marken-Discount, Combi und famila Nordwest werden über regionale Marktguru-Daten eingebunden. Netto schwarz, Rossmann, Müller und HOL’AB! besitzen getrennte, quellenspezifische Datenwege. Fällt eine direkte Händlerquelle aus, kann ein vorhandener regionaler Datenweg gezielt für diesen Händler einspringen. Ein erfolgreicher Direktbestand wird dabei nicht mit einem zweiten vollständigen Bestand vermischt.
+
+Bei mehreren exakten Filialtreffern innerhalb einer Postleitzahl können REWE- und Netto-Marken-Discount-Filialen gezielt ausgewählt werden. REWE-Angebote werden filialbezogen geladen. Bei Netto Marken-Discount bleibt der derzeitige Angebotskatalog regional; die gewählte offizielle Filiale wird deshalb transparent angezeigt, ohne filialgenaue Preise zu versprechen.
 
 Combi und famila Nordwest gehören zur Bünting-Gruppe und sind nur im Nordwesten vertreten. Beide sind deshalb optional wie Marktkauf und GLOBUS: Liefern sie nichts, wird das nicht als Quellenfehler gemeldet.
 
@@ -221,6 +234,8 @@ Beispiel mit mehreren Bonusprogrammen:
 ```json
 {
   "postal_code": "01067",
+  "offer_week": "next",
+  "keywords": ["Milka", "Kaffee"],
   "loyalty_programs": [
     "rewe_bonus",
     "lidl_plus",
@@ -230,6 +245,11 @@ Beispiel mit mehreren Bonusprogrammen:
   "view": "best_only"
 }
 ```
+
+`offer_week` akzeptiert `current` (Standard) oder `next`. Ist die Folgewoche
+für einen Händler noch nicht verfügbar, werden dessen aktuellen Angebote nicht
+verworfen. `keywords` werden normalisiert, dedupliziert und mit ODER-Logik nur
+gegen den Produktnamen geprüft.
 
 Ist die Einkaufslisten-Anbindung konfiguriert, kommen zwei Endpunkte dazu:
 
@@ -346,7 +366,6 @@ docker exec korbklar python -m supermarkt.cache_cli purge --all
 ```
 
 `purge` löscht Snapshots, optional zusätzlich Bildcache (`--images`) und Filialzuordnungen (`--stores`); `--all` umfasst beides. Der Signierschlüssel bleibt unangetastet, damit bereits verschickte Ergebnislinks anderer Suchen gültig bleiben.
-
 ## Daten, Cache und Bildproxy
 
 SQLite ist Bestandteil der Python-Standardbibliothek. Ein externer Datenbankserver wird nicht benötigt.
@@ -477,10 +496,15 @@ Die Live-Diagnose einer Postleitzahl läuft auch ohne Container:
 SUPERMARKT_DATA_DIR=.devdata python -m supermarkt.diagnostics 26123
 ```
 
+## Einkaufsliste und Export
+
+Der Bereich **Einkauf** speichert die persönliche Liste ausschließlich im IndexedDB-Speicher des jeweiligen Browserprofils. Es gibt keine Konten, serverseitigen persönlichen Listen, Tracker oder automatische Gerätesynchronisation. Angebote und manuelle Artikel lassen sich hinzufügen, bearbeiten, abhaken und nach Händler gruppieren. Warenwert und Pfand werden getrennt berechnet; fehlen Preise, zeigt KorbKlar nur die bekannte Gesamtsumme.
+
+Für die allgemeine Geräteübergabe stehen Textkopie, Web Share, TXT sowie ein versioniertes JSON-Backup mit lokaler Importvorschau bereit. Zusätzlich lässt sich ein Angebot direkt an KitchenOwl schicken, siehe oben.
+
 ## Roadmap
 
 Die oben beschriebene Anbindung an KitchenOwl ist umgesetzt. Weitere Integrationen sind für spätere Versionen vorgesehen, darunter Grocy und zusätzliche REST-/OpenAPI-Anbindungen für lokale Automationen und Agenten.
-
 
 ## Projekt freiwillig unterstützen
 
@@ -494,42 +518,10 @@ Wer die laufende Entwicklung, neue Händleradapter und die Pflege der Datenquell
 
 Eine Spende ist vollständig freiwillig und hat keinen Einfluss auf Funktionsumfang, Priorisierung einzelner Nutzer oder Zugang zu KorbKlar.
 
-## Neuerungen in 0.1.2
+## Lizenz und Marken
 
-Version 0.1.2 zeigt bei Mehrfachgebinden sowohl das Pfand je Behälter als auch das Gesamtpfand des Verkaufspacks. Beim BLACK-CAT-Energy-Viererpack erscheint damit klar „0,25 € je Dose · 1,00 € gesamt für 4“.
+Der Quellcode steht unter der [BSD-3-Clause-Lizenz](LICENSE).
 
-## Neuerungen in 0.1.1
+Copyright © 2026 lesecuritae für Tarnkappe.info.
 
-Version 0.1.1 ergänzt „Netto schwarz“ als vom rot-gelben Netto Marken-Discount getrennten Händler sowie offizielle Rossmann-Werbeangebote und klar als online gekennzeichnete Müller-Angebote. Öffentlich ausgewiesene Netto+-Mitgliederpreise sind ein eigenes Bonusprogramm; unbekannte Normalpreise werden nicht erfunden. Explizite Pfandangaben wie beim BLACK-CAT-Energy-Angebot bleiben getrennt vom Warenpreis erhalten. Die bestehende lokale Einkaufsliste kann offene Artikel optional und ohne gespeicherte Zugangsdaten über die Betriebssystem-App-Auswahl an Bring übergeben.
-
-## Neuerungen in 0.1.0
-
-Version 0.1.0 ergänzt einen nativen Globus-Adapter, optionale Händlerfilter in API und Startseite sowie eine manuelle REWE-Marktauswahl, wenn mehrere Märkte exakt zur eingegebenen PLZ gehören. ALDI-Süd-Mehrproduktkarten werden vollständig aufgeteilt. REWE-Bonusgutschriften werden separat angezeigt und nicht mehr als reduzierter Verkaufspreis bewertet.
-
-## Neuerungen in 0.0.7
-
-Version 0.0.7 ergänzt eine native Windows-Einrichtung und erkennt Chromium, Chrome sowie Edge portabel. Ein optionaler Schalter lädt Angebote bewusst neu und umgeht nur für diese Suche den serverseitigen Angebotscache. Leverkusener PLZ sind als exakte ALDI-Süd-Nachweise ergänzt; Präfixschätzungen bleiben ausgeschlossen. Die HTTPS-Prüfung nutzt einen reproduzierbaren CA-Satz bei weiterhin aktiver Zertifikats- und Hostnamenprüfung. Explizit in Euro ausgewiesene REWE-Bonusbeträge wurden erstmals strukturiert erfasst; seit 0.1.0 werden Gutschriften klar vom Verkaufspreis getrennt.
-
-## Neuerungen in 0.0.6
-
-Der ALDI-Resolver enthält zusätzliche PLZ-genaue, versionierte Nachweise aus den offiziellen Filialgebieten für Aachen, Düren, Heinsberg und ausgewählte Grenzregionen im Ruhrgebiet. Eine allgemeine Zuordnung anhand von `52xxx` findet ausdrücklich nicht statt; unbekannte PLZ werden weiterhin anhand begrenzter Standortdaten geprüft. Wer die örtliche Situation kennt, kann auf der Startseite optional ALDI Nord, ALDI Süd oder beide Regionen vorgeben. Diese bewusste Auswahl hat Vorrang vor der Automatik und lädt niemals die andere Region als Ersatz.
-
-## Neuerungen in 0.0.5
-
-Produktbilder aus Angeboten bleiben über das lokale, abgesicherte Bildproxy-Ziel in der browserlokalen Einkaufsliste sichtbar – auch nach einem Reload. Explizit veröffentlichte Pfandbeträge von ALDI, REWE und Marktguru werden getrennt gespeichert und mengenabhängig berechnet. KorbKlar erfindet weiterhin kein Pfand anhand einer Verpackungsart.
-
-## Neuerungen in 0.0.4
-
-Revision: Zenq & Enzo
-
-ALDI-Süd-Angebote übernehmen ihren Gültigkeitszeitraum jetzt vorrangig aus der einzelnen Produktkarte, danach aus der zugehörigen Aktionsgruppe und nur zuletzt aus dem allgemeinen Wochenzeitraum. Dadurch werden Wochen-, Donnerstag- sowie Freitag-/Samstag-Aktionen korrekt getrennt. Redundante Parserpfade und abgelaufene Tagesgruppen erzeugen keine Doppelangebote mehr; echte unterschiedliche Aktionen bleiben erhalten.
-
-## Neuerungen in 0.0.3
-
-Kategorien werden auf 18 feste deutsche Hauptkategorien normalisiert. HOL’AB! erscheint nur für PLZ aus der offiziellen Marktliste; sechs strukturierte Angebote sind ehrlich als Teilabdeckung markiert. Pfand und Mengenbedingungen bleiben getrennt. REWE nutzt vorhandene Karten-Deeplinks, Lidl ohne sichere Kennung eine offizielle Produktsuche. Lightbox, lokales Hintergrundmotiv und automatisches Hell-/Dunkeldesign laden keine Drittanbieter-Assets.
-
-Der Bereich **Einkauf** speichert die persönliche Liste ausschließlich im IndexedDB-Speicher des jeweiligen Browserprofils. Es gibt keine Konten, serverseitigen persönlichen Listen, Tracker oder automatische Gerätesynchronisation. Angebote und manuelle Artikel lassen sich hinzufügen, bearbeiten, abhaken und nach Händler gruppieren. Warenwert und Pfand werden mit Integer-Cent-Beträgen getrennt berechnet; fehlen Preise, heißt die Anzeige ehrlich „Bekannte Gesamtsumme“. Gespeicherte Angebotspreise werden durch spätere Suchen nicht still geändert, Ablauf und Mengenbedingungen bleiben sichtbar.
-
-Für die Geräteübergabe stehen lesbarer Text, Zwischenablage, Web Share, TXT sowie ein versioniertes JSON-Backup mit Importvorschau bereit. Importdaten sind auf 256 KiB begrenzt und werden ausschließlich lokal geparst. Das kanonische Datenmodell trennt Menge, Einheit, Packung, lokale ID, Angebots-ID, Quell-ID und optionalen Barcode. Eine kleine Adaptergrenze bereitet spätere KitchenOwl-/Grocy-Adapter vor; 0.0.3 enthält keine solche Verbindung und keinen Sync.
-
-ALDI wird aus exakten offiziellen PLZ-Nachweisen beziehungsweise belastbaren Filial-Tags bestimmt. Grenzgebiete laden Nord und Süd getrennt. Die Angebotskette verwendet offizielle Seiten, einen schema- und regionsgebundenen Last-known-good-Cache und erst danach austauschbare externe Katalogdaten; niemals ersetzt Nord die Süd-Region oder umgekehrt.
+KorbKlar ist unabhängig und steht in keiner Verbindung zu den genannten Händlern oder Bonusprogrammen. Marken-, Händler- und Produktnamen gehören den jeweiligen Rechteinhabern.

@@ -123,7 +123,7 @@ def test_runtime_version_matches_package_metadata():
     metadata = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
     assert metadata["project"]["version"] == __version__
     assert USER_AGENT == f"korb-klar/{__version__}"
-    assert __version__ == "0.1.4"
+    assert __version__ == "0.1.8+kk1"
 
 
 def test_default_host_port_is_configurable_without_changing_container_port():
@@ -281,9 +281,11 @@ def test_every_relative_documentation_link_resolves():
     pages += sorted((ROOT / "docs").glob("*.md"))
     broken = []
     for page in pages:
-        for target in re.findall(r"\]\(([^)#:]+\.md)\)", page.read_text(encoding="utf-8")):
-            if not (page.parent / target).resolve().is_file():
-                broken.append(f"{page.name} -> {target}")
+        broken.extend(
+            f"{page.name} -> {target}"
+            for target in re.findall(r"\]\(([^)#:]+\.md)\)", page.read_text(encoding="utf-8"))
+            if not (page.parent / target).resolve().is_file()
+        )
     assert not broken, broken
 
 

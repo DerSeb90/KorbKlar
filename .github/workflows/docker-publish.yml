@@ -48,6 +48,10 @@ jobs:
           tags: |
             type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
             type=semver,pattern={{version}}
+            # semver wirft Build-Metadaten weg: aus v0.1.8+kk1 wuerde nur
+            # 0.1.8, und das naechste kk-Release ueberschriebe dieses Image.
+            # Diese Zeile behaelt die volle Nummer (+ wird zu -).
+            type=match,pattern=v(.*),group=1
             type=sha,prefix=sha-
           labels: |
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}

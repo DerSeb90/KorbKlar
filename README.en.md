@@ -46,6 +46,12 @@ http://SERVER-IP:8000
 
 Normal browser use requires no account, no LLM, no API key, and no mandatory `.env` file.
 
+Before starting a search, users can choose the current offer week or the next
+week. A preview is used only where the retailer has already published it;
+otherwise current offers remain visible with a transparent notice. Persistent
+product-name keyword filters use OR semantics and can be backed up or restored
+as versioned JSON.
+
 ## Running with Docker
 
 The Compose project, service, and container are all named `korbklar`; persistent data is stored in the `korbklar-data` volume.
@@ -97,11 +103,13 @@ The browser interface and REST API use the same comparison engine. Retailer adap
 
 ## Supported retailers and data paths
 
-KorbKlar currently supports REWE, EDEKA, Marktkauf, ALDI Nord, ALDI Süd, Kaufland, Lidl, PENNY, Netto Marken-Discount, GLOBUS, Combi, and famila Nordwest.
+KorbKlar currently supports REWE, EDEKA, Marktkauf, ALDI Nord, ALDI Süd, Kaufland, Lidl, PENNY, Netto Marken-Discount, Netto schwarz, GLOBUS, HOL’AB!, Rossmann, Müller, Combi, and famila Nordwest.
 
-REWE, EDEKA, Marktkauf, and Kaufland are loaded preferentially from direct retailer sources. For ALDI, the postal code determines the region and only ALDI Nord or ALDI Süd is retrieved directly. If the region cannot be determined unambiguously, ALDI is omitted and a warning is shown.
+REWE, EDEKA, Marktkauf, Kaufland, GLOBUS, and the applicable ALDI region are loaded preferentially from direct retailer sources. ALDI Süd uses its structured official weekly publication as its complete primary source. ALDI Nord takes price, unit price, explicitly published deposit, and product image from its official offer data. If the ALDI region cannot be determined unambiguously and no explicit selection was made, ALDI is omitted and a warning is shown.
 
-Lidl, PENNY, Netto Marken-Discount, GLOBUS, Combi, and famila Nordwest are loaded from regional Marktguru data. KorbKlar combines a broad regional search with supplementary retailer-name searches; the name queries alone are never treated as a complete catalogue.
+Lidl, PENNY, Netto Marken-Discount, Combi, and famila Nordwest are loaded from regional Marktguru data. Netto schwarz, Rossmann, Müller, and HOL’AB! use separate source-specific data paths. KorbKlar combines a broad regional search with supplementary retailer-name searches where applicable; the name queries alone are never treated as a complete catalogue.
+
+When a postal code has multiple exact store matches, users can select a specific REWE or Netto Marken-Discount store. REWE offers are loaded for that store. Netto Marken-Discount currently remains a regional catalogue, so KorbKlar displays the selected official store transparently without claiming store-specific prices.
 
 Combi and famila Nordwest belong to the Bünting group and only trade in north-western Germany. Both are therefore optional in the same sense as Marktkauf and GLOBUS: where they return nothing, that is not reported as a source error.
 
@@ -201,16 +209,22 @@ Minimal request:
 }
 ```
 
-Optional fields include loyalty programs, product or brand filters, retailer, pagination, view, sorting, ALDI region, and forced refresh:
+Optional fields include offer week, persistent product-name keywords, loyalty programs, retailer, pagination, view, sorting, ALDI region, and forced refresh:
 
 ```json
 {
   "postal_code": "01067",
+  "offer_week": "next",
+  "keywords": ["Milka", "coffee"],
   "loyalty_programs": ["rewe_bonus", "lidl_plus", "kaufland_xtra", "payback"],
   "view": "best_only",
   "sort": "unit_price"
 }
 ```
+
+`offer_week` accepts `current` (the default) or `next`. Retailers without an
+available preview fall back to their current catalogue. `keywords` are cleaned,
+deduplicated, and matched against product names using OR semantics.
 
 Two further endpoints exist once the shopping-list integration is configured:
 
@@ -463,6 +477,12 @@ Retailer websites and undocumented interfaces may change at any time. An individ
 The Kaufland adapter needs a Chromium-compatible browser. The Docker image ships one; a local checkout probes the usual names and install locations for Chromium, Chrome and Edge, and `SUPERMARKT_CHROMIUM` sets the path explicitly. Without a browser only that one adapter fails and Marktguru stands in for it.
 
 KorbKlar does not invent missing prices or estimate unknown loyalty benefits. Completeness and freshness depend on reachable regional source data.
+
+## Shopping list and export
+
+The **Einkauf** area stores the personal list exclusively in IndexedDB in the current browser profile. There are no accounts, server-side personal lists, trackers, or automatic device synchronisation. Offers and manual items can be added, edited, checked, and grouped by retailer. Goods and deposits are calculated separately; when prices are missing, KorbKlar shows only the known total.
+
+General transfer options include text copy, Web Share, TXT, and a versioned JSON backup with a local import preview. KorbKlar has no app-specific Bring or KitchenOwl connection.
 
 ## Roadmap
 

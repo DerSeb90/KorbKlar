@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from typing import Any
-from urllib.parse import quote, urlencode
+from urllib.parse import quote, urlencode, urlsplit
 
 from fastapi import HTTPException, Request
 
@@ -68,7 +68,11 @@ def build_image_proxy_url(offer: dict[str, Any]) -> str:
     product = clean_text(offer.get("product"))
     if not product:
         return ""
-    referer = MARKTGURU_HOME if retailer in AGGREGATOR_RETAILERS else normalize_image_url(offer.get("source_url"))
+    image_host = (urlsplit(source_url).hostname or "").casefold()
+    if image_host == "content-media.bonial.biz":
+        referer = "https://www.kaufda.de/"
+    else:
+        referer = MARKTGURU_HOME if retailer in AGGREGATOR_RETAILERS else normalize_image_url(offer.get("source_url"))
     return "/image?" + urlencode({
         "src": source_url,
         "ref": referer,

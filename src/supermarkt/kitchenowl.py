@@ -233,6 +233,12 @@ class KitchenOwlShoppingList:
         category_prefix: str = KITCHENOWL_CATEGORY_PREFIX,
     ) -> None:
         self.base_url = clean_text(base_url).rstrip("/")
+        # urlopen oeffnet auch file:/ und ftp:/. Eine falsch gesetzte
+        # SUPERMARKT_KITCHENOWL_URL wuerde damit lokale Dateien lesen statt
+        # eine Anfrage zu stellen, also gilt die Anbindung dann als nicht
+        # konfiguriert.
+        if self.base_url and urlsplit(self.base_url).scheme not in ("http", "https"):
+            self.base_url = ""
         self.token = clean_text(token)
         self.default_list_id = clean_text(default_list_id)
         self.verify_tls = bool(verify_tls)
@@ -284,7 +290,9 @@ class KitchenOwlShoppingList:
             },
         )
         try:
-            with urlopen(request, timeout=self.timeout_seconds, context=self._ssl_context()) as response:
+            # Das Schema ist im Konstruktor auf http/https begrenzt, file:/
+            # und ftp:/ erreichen diese Zeile also nicht.
+            with urlopen(request, timeout=self.timeout_seconds, context=self._ssl_context()) as response:  # nosec B310
                 raw = response.read()
         except HTTPError as exc:
             if exc.code in (401, 403):
