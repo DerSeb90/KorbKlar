@@ -229,6 +229,15 @@ Für Automationen und externe Clients gibt es zusätzlich den Vergleichsendpunkt
 POST /api/v1/compare
 ```
 
+Ist die KitchenOwl-Anbindung konfiguriert, kommen drei weitere dokumentierte
+Endpunkte hinzu, gleich geschützt:
+
+```text
+GET  /api/v1/shopping-list/targets
+GET  /api/v1/shopping-list/entries
+POST /api/v1/shopping-list/items
+```
+
 Minimaler Request:
 
 ```json
@@ -373,11 +382,46 @@ KorbKlar erfindet keine fehlenden Preise und schätzt keine unbekannten Bonusvor
 
 Der Bereich **Einkauf** speichert die persönliche Liste ausschließlich im IndexedDB-Speicher des jeweiligen Browserprofils. Es gibt keine Konten, serverseitigen persönlichen Listen, Tracker oder automatische Gerätesynchronisation. Angebote und manuelle Artikel lassen sich hinzufügen, bearbeiten, abhaken und nach Händler gruppieren. Warenwert und Pfand werden getrennt berechnet; fehlen Preise, zeigt KorbKlar nur die bekannte Gesamtsumme.
 
-Für die allgemeine Geräteübergabe stehen Textkopie, Web Share, TXT sowie ein versioniertes JSON-Backup mit lokaler Importvorschau bereit. KorbKlar enthält keine app-spezifische Bring- oder KitchenOwl-Verbindung.
+Für die allgemeine Geräteübergabe stehen Textkopie, Web Share, TXT sowie ein versioniertes JSON-Backup mit lokaler Importvorschau bereit.
+
+## Einkaufsliste über KitchenOwl
+
+Optional schreibt KorbKlar Angebote auf eine Liste in [KitchenOwl](https://kitchenowl.org),
+einer selbst gehosteten Einkaufsliste mit gemeinsamen Haushalten. Die
+browserlokale Liste von oben bleibt, wie sie ist; KitchenOwl ist ein zweites
+Ziel daneben. Ohne Konfiguration ist die Funktion aus und die Oberfläche
+blendet sie aus.
+
+In KitchenOwl unter Profil, Sitzungen einen Long-lived Token anlegen, dann in
+der `.env`:
+
+```bash
+SUPERMARKT_KITCHENOWL_URL=https://kitchenowl.deine-domain.example
+SUPERMARKT_KITCHENOWL_TOKEN=dein-long-lived-token
+```
+
+Jedes Angebot in der Ergebnisansicht hat dann neben **Zur Einkaufsliste** einen
+Knopf **→ KitchenOwl**; ein Klick legt es in der oben gewählten Liste ab. Der
+Reiter **Einkauf** kann eine Kopie der lokalen Liste genauso senden. Gibt es im
+Haushalt schon einen passenden Artikel, landet das Angebot dort statt als
+Beinahe-Dublette daneben, und der Händler wird zur Kategorie, damit die Liste
+nach Markt gruppiert. Die Android-App kann ihre eigene KitchenOwl direkt
+anbinden; ist auf dem Telefon keine eingetragen, nutzt sie diese serverseitige
+Anbindung.
+
+KitchenOwl neben KorbKlar zu betreiben ist eine Compose-Datei entfernt:
+
+```bash
+docker compose -f compose.yml -f compose.kitchenowl.yml up -d
+```
+
+Artikelabgleich, Notiz, Kategorien und die REST-Endpunkte beschreibt
+[docs/kitchenowl.de.md](docs/kitchenowl.de.md), die Compose-Dateien
+[docs/deployment.de.md](docs/deployment.de.md).
 
 ## Roadmap
 
-Für spätere Versionen sind zusätzliche REST-/OpenAPI-Anbindungen für lokale Automationen denkbar. Der aktuelle Stand enthält keine Verbindung oder Synchronisation mit einer externen Einkaufslisten-App.
+Für spätere Versionen sind weitere REST-/OpenAPI-Anbindungen für lokale Automationen und weitere Listenziele neben KitchenOwl, etwa Grocy, denkbar.
 
 ## Projekt freiwillig unterstützen
 

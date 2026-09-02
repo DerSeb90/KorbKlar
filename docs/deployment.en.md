@@ -9,13 +9,16 @@ file, so an installation that needs none of it reads and starts only
 | File | Adds | Required in `.env` |
 | --- | --- | --- |
 | `compose.yml` | KorbKlar | none |
+| `compose.kitchenowl.yml` | KitchenOwl as a shopping list KorbKlar writes to | `KITCHENOWL_JWT_SECRET` |
 | `compose.proxy.yml` | Caddy with Let's Encrypt certificates | `KORBKLAR_DOMAIN`, `KORBKLAR_ACME_EMAIL` |
 
 The files are combined, not chosen between:
 
 ```bash
 docker compose up -d
+docker compose -f compose.yml -f compose.kitchenowl.yml up -d
 docker compose -f compose.yml -f compose.proxy.yml up -d
+docker compose -f compose.yml -f compose.kitchenowl.yml -f compose.proxy.yml up -d
 ```
 
 Order matters: `compose.yml` comes first and the overlays add to it. For a
@@ -23,7 +26,7 @@ combination you keep, state it once in `.env` and a bare `docker compose up -d`
 is enough again, for `pull`, `logs` and `down` as well:
 
 ```bash
-COMPOSE_FILE=compose.yml:compose.proxy.yml
+COMPOSE_FILE=compose.yml:compose.kitchenowl.yml:compose.proxy.yml
 ```
 
 The separator is `:` on Linux and macOS, `;` on Windows.
@@ -40,6 +43,43 @@ docker compose up -d
 
 Reachable on `http://<host>:8000`. `SUPERMARKT_PORT` changes the host port;
 the container stays on 8000. No `.env` is needed for this.
+
+## With the shopping list
+
+```bash
+openssl rand -base64 48        # becomes KITCHENOWL_JWT_SECRET in .env
+docker compose -f compose.yml -f compose.kitchenowl.yml up -d
+```
+
+KitchenOwl then answers on `http://127.0.0.1:8080` and KorbKlar reaches it
+over the compose network. Create the account and household on first visit,
+then create a token under profile, sessions, long-lived tokens, put it in
+`.env` and start once more:
+
+```bash
+SUPERMARKT_KITCHENOWL_TOKEN=your-long-lived-token
+```
+
+The secret is required and checked before startup, because KitchenOwl itself
+**does not reject a missing value**: it quietly falls back to a published
+default, and an empty value yields an empty signing key, which would make its
+tokens forgeable. Once set, leave it alone; a new one invalidates every
+session and long-lived token.
+
+KitchenOwl's port is bound to `127.0.0.1` by default, because the common case
+is a reverse proxy in front (next section) and a household list has no
+business facing the internet. Reaching it from another machine without a
+proxy means setting `KITCHENOWL_BIND_ADDRESS=0.0.0.0` deliberately.
+
+If you already run KitchenOwl elsewhere you do not need this overlay. Two
+values in `.env` and the plain `compose.yml` are enough:
+
+```bash
+SUPERMARKT_KITCHENOWL_URL=https://kitchenowl.your-domain.example
+SUPERMARKT_KITCHENOWL_TOKEN=your-long-lived-token
+```
+
+The integration itself is described in [shopping list](kitchenowl.en.md).
 
 ## With HTTPS
 
@@ -92,7 +132,7 @@ proxy, the VPN reaches the container directly, and the two paths stay apart.
 `deploy/caddy/Caddyfile.kitchenowl` serves a KitchenOwl in the same compose
 project on its own domain next to KorbKlar. It expects the KitchenOwl web
 container to answer as `kitchenowl-web` on the compose network, which is what
-a KitchenOwl overlay for this compose project provides.
+`compose.kitchenowl.yml` provides.
 
 ```bash
 KORBKLAR_CADDYFILE=./deploy/caddy/Caddyfile.kitchenowl

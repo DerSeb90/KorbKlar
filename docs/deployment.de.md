@@ -9,13 +9,16 @@ Compose-Datei, damit eine Installation, die nichts davon braucht, nur
 | Datei | Bringt | Pflicht in `.env` |
 | --- | --- | --- |
 | `compose.yml` | KorbKlar | nichts |
+| `compose.kitchenowl.yml` | KitchenOwl als Einkaufsliste, auf die KorbKlar schreibt | `KITCHENOWL_JWT_SECRET` |
 | `compose.proxy.yml` | Caddy mit Let's-Encrypt-Zertifikaten | `KORBKLAR_DOMAIN`, `KORBKLAR_ACME_EMAIL` |
 
 Die Dateien werden kombiniert, nicht ausgewählt:
 
 ```bash
 docker compose up -d
+docker compose -f compose.yml -f compose.kitchenowl.yml up -d
 docker compose -f compose.yml -f compose.proxy.yml up -d
+docker compose -f compose.yml -f compose.kitchenowl.yml -f compose.proxy.yml up -d
 ```
 
 Die Reihenfolge zählt: `compose.yml` kommt zuerst, die Overlays ergänzen sie.
@@ -23,7 +26,7 @@ Eine Kombination, die bleibt, steht einmal in der `.env`; danach genügt wieder
 ein blankes `docker compose up -d`, auch für `pull`, `logs` und `down`:
 
 ```bash
-COMPOSE_FILE=compose.yml:compose.proxy.yml
+COMPOSE_FILE=compose.yml:compose.kitchenowl.yml:compose.proxy.yml
 ```
 
 Getrennt wird mit `:` unter Linux und macOS, mit `;` unter Windows.
@@ -40,6 +43,44 @@ docker compose up -d
 
 Erreichbar unter `http://<host>:8000`. `SUPERMARKT_PORT` ändert den Host-Port,
 der Container bleibt auf 8000. Eine `.env` ist dafür nicht nötig.
+
+## Mit der Einkaufsliste
+
+```bash
+openssl rand -base64 48        # wird KITCHENOWL_JWT_SECRET in der .env
+docker compose -f compose.yml -f compose.kitchenowl.yml up -d
+```
+
+KitchenOwl antwortet dann unter `http://127.0.0.1:8080`, und KorbKlar erreicht
+es über das Compose-Netz. Beim ersten Besuch Konto und Haushalt anlegen, dann
+unter Profil, Sitzungen, Long-lived Tokens einen Token erzeugen, in die `.env`
+eintragen und noch einmal starten:
+
+```bash
+SUPERMARKT_KITCHENOWL_TOKEN=dein-long-lived-token
+```
+
+Der Schlüssel ist Pflicht und wird vor dem Start geprüft, weil KitchenOwl
+selbst **einen fehlenden Wert nicht ablehnt**: Es fällt still auf einen
+veröffentlichten Standard zurück, und ein leerer Wert ergibt einen leeren
+Signierschlüssel, mit dem sich seine Tokens fälschen ließen. Einmal gesetzt,
+in Ruhe lassen; ein neuer Wert macht jede Sitzung und jeden Long-lived Token
+ungültig.
+
+KitchenOwls Port ist standardmäßig an `127.0.0.1` gebunden, weil davor
+üblicherweise der Reverse Proxy steht (nächster Abschnitt) und eine
+Haushaltsliste nichts im Internet verloren hat. Von einem anderen Rechner ohne
+Proxy heißt das: `KITCHENOWL_BIND_ADDRESS=0.0.0.0` bewusst setzen.
+
+Wer KitchenOwl schon woanders betreibt, braucht dieses Overlay nicht. Zwei
+Werte in der `.env` und die blanke `compose.yml` genügen:
+
+```bash
+SUPERMARKT_KITCHENOWL_URL=https://kitchenowl.deine-domain.example
+SUPERMARKT_KITCHENOWL_TOKEN=dein-long-lived-token
+```
+
+Die Anbindung selbst beschreibt [Einkaufsliste](kitchenowl.de.md).
 
 ## Mit HTTPS
 
@@ -95,7 +136,7 @@ getrennt.
 `deploy/caddy/Caddyfile.kitchenowl` bedient neben KorbKlar eine KitchenOwl im
 selben Compose-Projekt auf einer eigenen Domain. Es erwartet, dass der
 KitchenOwl-Web-Container im Compose-Netz als `kitchenowl-web` antwortet, was
-ein KitchenOwl-Overlay für dieses Compose-Projekt bereitstellt.
+`compose.kitchenowl.yml` bereitstellt.
 
 ```bash
 KORBKLAR_CADDYFILE=./deploy/caddy/Caddyfile.kitchenowl

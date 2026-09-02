@@ -138,14 +138,38 @@ def test_import_limits_and_future_schema_are_rejected():
     assert js("(()=>{try{m.validateDocument({schema_version:99,items:[]});return false}catch{return true}})()") is True
 
 
-def test_shopping_frontend_is_local_only():
+def test_shopping_frontend_keeps_the_list_local():
     shopping = (ROOT / "src/supermarkt/static/shopping.js").read_text(encoding="utf-8")
     assert "indexedDB.open" in shopping
-    assert "fetch(" not in shopping
     assert "XMLHttpRequest" not in shopping
     assert "localStorage" not in shopping
     assert "document.cookie" not in shopping
     assert "navigator.share" in shopping
+
+
+def test_the_list_only_leaves_the_browser_when_the_user_sends_it():
+    shopping = (ROOT / "src/supermarkt/static/shopping.js").read_text(encoding="utf-8")
+    # The basket stays local. The only network calls are reading the available
+    # KitchenOwl lists, which carries no list content, and the send the user
+    # asks for by clicking. Both go through the signed result route.
+    calls = [line for line in shopping.splitlines() if "fetch(" in line]
+    assert calls and all("koResultPath(" in line for line in calls), calls
+    assert '$("kitchenowlSend").onclick=koSend' in shopping
+    # Without a result token, i.e. on the standalone /shopping page, nothing
+    # is fetched at all.
+    assert "if(!koSearchId||!koToken)return" in shopping
+
+
+def test_the_results_page_keeps_the_local_list_and_adds_kitchenowl_beside_it():
+    results = (ROOT / "src/supermarkt/static/results-v2.js").read_text(encoding="utf-8")
+    styles = (ROOT / "src/supermarkt/static/results.css").read_text(encoding="utf-8")
+    # The browser-local list is unchanged; KitchenOwl is a second button in the
+    # same row, invisible until the server reports a configured integration.
+    assert 'class="shoppingAdd"' in results
+    assert 'class="koSend"' in results
+    assert 'koPath("items")' in results
+    assert 'document.body.classList.add("koReady")' in results
+    assert ".koSend{display:none" in styles and "body.koReady .koSend{display:inline-block}" in styles
 
 
 def test_shopping_product_images_are_bounded_without_inline_layout():

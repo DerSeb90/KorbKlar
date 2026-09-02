@@ -149,7 +149,7 @@ def test_release_has_no_development_machine_references():
 
 def test_release_carries_no_stray_compose_file():
     compose_files = sorted(path.name for path in ROOT.glob("compose*.yml"))
-    assert compose_files == ["compose.proxy.yml", "compose.yml"]
+    assert compose_files == ["compose.kitchenowl.yml", "compose.proxy.yml", "compose.yml"]
     for name in compose_files:
         assert "supermarkt-ts" not in (ROOT / name).read_text(encoding="utf-8")
 
@@ -159,7 +159,7 @@ def test_all_supported_compose_environment_variables_are_documented():
         path.read_text(encoding="utf-8") for path in sorted(ROOT.glob("compose*.yml"))
     )
     env_example = (ROOT / ".env.example").read_text(encoding="utf-8")
-    names = set(re.findall(r"\$\{((?:SUPERMARKT|KORBKLAR)_[A-Z0-9_]+)", compose))
+    names = set(re.findall(r"\$\{((?:SUPERMARKT|KORBKLAR|KITCHENOWL)_[A-Z0-9_]+)", compose))
     names.add("SUPERMARKT_PORT")
     for name in names:
         assert f"{name}=" in env_example, name
@@ -190,6 +190,32 @@ def test_the_proxy_never_forwards_a_client_supplied_source_address():
         # Both entry points import the same site file, so the header handling
         # above cannot drift apart between them.
         assert "import /etc/caddy/sites/korbklar.caddy" in entry
+
+
+def test_the_shopping_list_is_a_separate_compose_file():
+    """KitchenOwl must never be needed to run the comparison."""
+    base = (ROOT / "compose.yml").read_text(encoding="utf-8")
+    assert "kitchenowl" not in base.casefold()
+    overlay = (ROOT / "compose.kitchenowl.yml").read_text(encoding="utf-8")
+    assert "image: ghcr.io/lesecuritae/korbklar" not in overlay
+    # The backend speaks uwsgi rather than HTTP, so KorbKlar goes through the
+    # web container, which proxies /api/.
+    assert "SUPERMARKT_KITCHENOWL_URL:-http://kitchenowl-web}" in overlay
+    # The image defaults its upstream to the service name from its own compose
+    # example; nginx refuses to start when that host does not resolve.
+    assert "BACK_URL: kitchenowl-back:5000" in overlay
+    # A household list is not published on every interface by default.
+    assert "${KITCHENOWL_BIND_ADDRESS:-127.0.0.1}" in overlay
+
+
+def test_kitchenowl_cannot_start_without_a_signing_key():
+    compose = (ROOT / "compose.kitchenowl.yml").read_text(encoding="utf-8")
+    # KitchenOwl falls back to a published default and accepts an empty key,
+    # so the stack has to refuse before its backend comes up.
+    assert "kitchenowl-secret-check:" in compose
+    assert "condition: service_completed_successfully" in compose
+    assert "KITCHENOWL_JWT_SECRET} -lt 32" in compose
+    assert 'OPEN_REGISTRATION: "false"' in compose
 
 
 def test_every_relative_documentation_link_resolves():

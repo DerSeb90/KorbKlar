@@ -11,6 +11,7 @@ from .config import (
     TIMEOUT_SECONDS,
 )
 from .images import ImageService
+from .kitchenowl import KitchenOwlShoppingList
 from .service import SupermarketEngine
 from .jobs import SearchJobStore
 
@@ -20,6 +21,8 @@ _image_service: Optional[ImageService] = None
 _image_service_lock = threading.Lock()
 _jobs: Optional[SearchJobStore] = None
 _jobs_lock = threading.Lock()
+_shopping_list: Optional[KitchenOwlShoppingList] = None
+_shopping_list_lock = threading.Lock()
 
 
 def get_engine() -> SupermarketEngine:
@@ -50,3 +53,11 @@ def get_jobs() -> SearchJobStore:
         if _jobs is None:
             _jobs = SearchJobStore(get_engine())
         return _jobs
+
+
+def get_shopping_list() -> KitchenOwlShoppingList:
+    global _shopping_list
+    with _shopping_list_lock:
+        if _shopping_list is None:
+            _shopping_list = KitchenOwlShoppingList()
+        return _shopping_list

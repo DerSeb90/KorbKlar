@@ -156,10 +156,16 @@ def test_request_defaults_to_current_week_and_accepts_preview():
     assert SupermarketRequest(postal_code="01067", offer_week="next").offer_week == "next"
 
 
-def test_openapi_exposes_only_compare_operation():
+def test_openapi_exposes_only_the_documented_v1_operations():
     operations=[]
     for path, methods in app.openapi()["paths"].items():
         for method, operation in methods.items():
             if method.lower() in {"get", "post", "put", "patch", "delete"}:
                 operations.append((method.lower(), path, operation.get("operationId")))
-    assert operations == [("post", "/api/v1/compare", "supermarkt_preisvergleich")]
+    # Browser routes, the image proxy and the app aliases stay out of the schema.
+    assert sorted(operations) == sorted([
+        ("post", "/api/v1/compare", "supermarkt_preisvergleich"),
+        ("get", "/api/v1/shopping-list/targets", "einkaufsliste_ziele"),
+        ("get", "/api/v1/shopping-list/entries", "einkaufsliste_eintraege"),
+        ("post", "/api/v1/shopping-list/items", "einkaufsliste_ergaenzen"),
+    ])

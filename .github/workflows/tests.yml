@@ -47,6 +47,19 @@ jobs:
             KORBKLAR_CADDYFILE=./deploy/caddy/Caddyfile.kitchenowl \
             docker compose -f compose.yml -f compose.proxy.yml config >/dev/null
 
+          # The KitchenOwl overlay must refuse to start without its signing
+          # key, and all three files have to combine.
+          if docker compose -f compose.yml -f compose.kitchenowl.yml config >/dev/null 2>&1; then
+            echo "compose.kitchenowl.yml must require KITCHENOWL_JWT_SECRET" >&2
+            exit 1
+          fi
+          KITCHENOWL_JWT_SECRET=$(openssl rand -base64 48) \
+            docker compose -f compose.yml -f compose.kitchenowl.yml config | grep -q 'BACK_URL: kitchenowl-back:5000'
+          KITCHENOWL_JWT_SECRET=$(openssl rand -base64 48) \
+            KORBKLAR_DOMAIN=korbklar.example.org KORBKLAR_ACME_EMAIL=ops@example.org \
+            KORBKLAR_CADDYFILE=./deploy/caddy/Caddyfile.kitchenowl \
+            docker compose -f compose.yml -f compose.kitchenowl.yml -f compose.proxy.yml config >/dev/null
+
           docker compose up -d --build
           trap 'docker compose down -v' EXIT
 

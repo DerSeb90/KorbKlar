@@ -20,6 +20,8 @@ def health() -> dict[str, Any]:
         "backend": "persistent-sqlite-cache",
         "cache_ttl_minutes": CACHE_TTL_MINUTES,
         "api_auth_configured": api_auth_configured(),
+        # Host and configured flag only; the token never appears here.
+        "shopping_list": runtime.get_shopping_list().health(),
         **runtime.get_image_service().health(),
         "sources": {
             "REWE": "official primary with Marktguru fallback",

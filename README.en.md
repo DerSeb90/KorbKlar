@@ -208,6 +208,15 @@ External clients and automations use:
 POST /api/v1/compare
 ```
 
+Once the KitchenOwl integration is configured, three more documented
+endpoints exist, protected the same way:
+
+```text
+GET  /api/v1/shopping-list/targets
+GET  /api/v1/shopping-list/entries
+POST /api/v1/shopping-list/items
+```
+
 Minimal request:
 
 ```json
@@ -283,6 +292,19 @@ The default setup needs no `.env`. [`.env.example`](.env.example) documents ever
 - `SUPERMARKT_IMAGE_CACHE_TTL_SECONDS`
 - `SUPERMARKT_IMAGE_CACHE_MAX_BYTES`
 - `SUPERMARKT_IMAGE_MAX_FILE_BYTES`
+- `SUPERMARKT_KITCHENOWL_URL`
+- `SUPERMARKT_KITCHENOWL_TOKEN`
+- `SUPERMARKT_KITCHENOWL_LIST_ID`
+- `SUPERMARKT_KITCHENOWL_VERIFY_TLS`
+- `SUPERMARKT_KITCHENOWL_TIMEOUT_SECONDS`
+- `SUPERMARKT_KITCHENOWL_MAX_ITEMS`
+- `SUPERMARKT_KITCHENOWL_MATCH_ITEMS`
+- `SUPERMARKT_KITCHENOWL_RETAILER_CATEGORIES`
+- `SUPERMARKT_KITCHENOWL_CATEGORY_PREFIX`
+
+The optional compose files read their own values, `KITCHENOWL_*` for the
+bundled KitchenOwl and `KORBKLAR_*` for the reverse proxy; both are documented
+in `.env.example` as well.
 
 The historical internal prefixes remain part of the current technical interface. `.env.example` is authoritative for meanings, defaults, and Docker paths.
 
@@ -354,11 +376,45 @@ KorbKlar does not invent missing prices or estimate unknown loyalty benefits. Co
 
 The **Einkauf** area stores the personal list exclusively in IndexedDB in the current browser profile. There are no accounts, server-side personal lists, trackers, or automatic device synchronisation. Offers and manual items can be added, edited, checked, and grouped by retailer. Goods and deposits are calculated separately; when prices are missing, KorbKlar shows only the known total.
 
-General transfer options include text copy, Web Share, TXT, and a versioned JSON backup with a local import preview. KorbKlar has no app-specific Bring or KitchenOwl connection.
+General transfer options include text copy, Web Share, TXT, and a versioned JSON backup with a local import preview.
+
+## Shopping list through KitchenOwl
+
+Optionally, KorbKlar writes offers to a list in [KitchenOwl](https://kitchenowl.org),
+a self-hosted shopping list with shared households. The browser-local list
+above stays as it is; KitchenOwl is a second destination next to it. Unconfigured,
+the feature is off and the interface hides it.
+
+Create a long-lived token in KitchenOwl under profile, sessions, then in `.env`:
+
+```bash
+SUPERMARKT_KITCHENOWL_URL=https://kitchenowl.your-domain.example
+SUPERMARKT_KITCHENOWL_TOKEN=your-long-lived-token
+```
+
+Every offer in the results then has a **→ KitchenOwl** button next to
+**Zur Einkaufsliste**; one click files it in the list selected in the bar
+above. The **Einkauf** tab can send a copy of the local list the same way.
+Where the household already keeps a fitting article, the offer lands there
+instead of as a near duplicate, and the retailer becomes the category so the
+list groups by shop. The Android app can connect its own KitchenOwl directly;
+where none is configured on the phone it uses this server-side integration.
+
+Running KitchenOwl next to KorbKlar is one compose file away:
+
+```bash
+docker compose -f compose.yml -f compose.kitchenowl.yml up -d
+```
+
+Article matching, the note, categories and the REST endpoints are described in
+[docs/kitchenowl.en.md](docs/kitchenowl.en.md); the compose files in
+[docs/deployment.en.md](docs/deployment.en.md).
 
 ## Roadmap
 
-Future versions may add REST or OpenAPI connections for local automations. The current release does not connect or synchronise with an external shopping-list application. The existing REST API can already support custom automations.
+Further REST or OpenAPI connections for local automations, and shopping-list
+targets beyond KitchenOwl such as Grocy, are possible in later versions. The
+existing REST API can already support custom automations.
 
 ## Support the project
 

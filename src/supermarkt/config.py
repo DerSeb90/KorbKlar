@@ -73,6 +73,37 @@ TIMEOUT_SECONDS = _env_int("SUPERMARKT_TIMEOUT_SECONDS", 25, 5, 120)
 MARKTGURU_PAGE_SIZE = _env_int("SUPERMARKT_MARKTGURU_PAGE_SIZE", 500, 100, 1000)
 MAX_WORKERS = _env_int("SUPERMARKT_MAX_WORKERS", 8, 2, 24)
 
+
+def _env_bool(name: str, default: bool) -> bool:
+    raw = os.getenv(name)
+    if raw is None or not raw.strip():
+        return default
+    return raw.strip().casefold() in {"1", "true", "yes", "on", "ja"}
+
+
+# KitchenOwl shopping-list integration. Disabled unless a base URL and a
+# long-lived token are configured. The instance normally runs on the same
+# host or a private network, so this client deliberately does not share the
+# SSRF guard used for untrusted product images.
+KITCHENOWL_URL = _env_text("SUPERMARKT_KITCHENOWL_URL", "").rstrip("/")
+KITCHENOWL_TOKEN = _env_text("SUPERMARKT_KITCHENOWL_TOKEN", "")
+# Optional preselection; empty lets the interface offer every list.
+KITCHENOWL_LIST_ID = _env_text("SUPERMARKT_KITCHENOWL_LIST_ID", "")
+KITCHENOWL_VERIFY_TLS = _env_bool("SUPERMARKT_KITCHENOWL_VERIFY_TLS", True)
+KITCHENOWL_TIMEOUT_SECONDS = _env_int("SUPERMARKT_KITCHENOWL_TIMEOUT_SECONDS", 15, 3, 60)
+KITCHENOWL_MAX_ITEMS_PER_REQUEST = _env_int("SUPERMARKT_KITCHENOWL_MAX_ITEMS", 50, 1, 200)
+# Reuse an article the household already keeps instead of creating a near
+# duplicate for every offer name.
+KITCHENOWL_MATCH_EXISTING_ITEMS = _env_bool("SUPERMARKT_KITCHENOWL_MATCH_ITEMS", True)
+# File the article under its retailer so the list groups by shop. A category
+# belongs to the article, not to one list entry, so an article moves when
+# another retailer offers it more cheaply; the note keeps the retailer when
+# this is off.
+KITCHENOWL_RETAILER_CATEGORIES = _env_bool("SUPERMARKT_KITCHENOWL_RETAILER_CATEGORIES", True)
+# KitchenOwl categories carry a name and nothing else, so an icon can only
+# be an emoji in front of it. Empty disables the prefix.
+KITCHENOWL_CATEGORY_PREFIX = _env_text("SUPERMARKT_KITCHENOWL_CATEGORY_PREFIX", "🛒 ")
+
 MARKTGURU_HOME = "https://www.marktguru.de/"
 MARKTGURU_SEARCH_API = "https://api.marktguru.de/api/v1/offers/search"
 USER_AGENT = _env_text("SUPERMARKT_USER_AGENT", f"korb-klar/{__version__}")

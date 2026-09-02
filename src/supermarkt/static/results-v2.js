@@ -63,7 +63,7 @@ function render(data){
   for(const offer of data.offers){
     offerById.set(offer.offer_id,offer);const row=document.createElement("div");row.className="row";
     const image=offer.image_url?`<button type="button" class="imageButton" data-src="${esc(offer.image_url)}" data-alt="${esc(offer.product)}"><img class="thumb" loading="lazy" src="${esc(offer.image_url)}" alt="${esc(offer.product)}"></button>`:`<div class="thumb" aria-hidden="true"></div>`,target=safeUrl(offer.product_url),linkLabel=offer.product_link_kind==="search"?"Offizielle Produktsuche":offer.product_link_kind==="market_offer"?"Angebotsseite des gewählten Markts":"",linkNote=target&&linkLabel?`<div class="small">${linkLabel}</div>`:"",product=target?`<a href="${esc(target)}" target="_blank" rel="noopener noreferrer">${esc(offer.product)}</a>${linkNote}`:esc(offer.product),deposit=offer.deposit_note?`<div class="small">${esc(offer.deposit_note)}</div>`:"",cashback=offer.cashback_credit_note?`<div class="small cashbackCredit">${esc(offer.cashback_credit_note)}</div>`:"",condition=offer.offer_condition?`<div class="small">${esc(offer.offer_condition)}</div>`:"";
-    row.innerHTML=`<div>${image}</div><div class="retailer"><strong>${esc(offer.retailer)}</strong></div><div class="productblock"><div class="product">${product}</div><div class="categoryLabel">${esc(offer.category)}</div><div class="small">${esc(offer.description)}</div>${condition}<button type="button" class="shoppingAdd" data-offer-id="${esc(offer.offer_id)}">Zur Einkaufsliste</button></div><div class="regularPrice price ${esc(offer.regular_comparison_state)}" data-label="Ohne Bonus">${esc(offer.regular_price_text)}</div><div class="selectedPrice price ${esc(offer.selected_comparison_state)}" data-label="Mit Bonuswahl">${esc(offer.effective_price_text)}${cashback}${deposit}</div><div class="details"><div>${esc(offer.pack)}</div><div class="small">${esc(offer.unit_price)}</div></div><div class="validity small">${esc(offer.validity)}</div>`;
+    row.innerHTML=`<div>${image}</div><div class="retailer"><strong>${esc(offer.retailer)}</strong></div><div class="productblock"><div class="product">${product}</div><div class="categoryLabel">${esc(offer.category)}</div><div class="small">${esc(offer.description)}</div>${condition}<div class="offerActions"><button type="button" class="shoppingAdd" data-offer-id="${esc(offer.offer_id)}">Zur Einkaufsliste</button><button type="button" class="koSend" data-offer-id="${esc(offer.offer_id)}">→ KitchenOwl</button></div></div><div class="regularPrice price ${esc(offer.regular_comparison_state)}" data-label="Ohne Bonus">${esc(offer.regular_price_text)}</div><div class="selectedPrice price ${esc(offer.selected_comparison_state)}" data-label="Mit Bonuswahl">${esc(offer.effective_price_text)}${cashback}${deposit}</div><div class="details"><div>${esc(offer.pack)}</div><div class="small">${esc(offer.unit_price)}</div></div><div class="validity small">${esc(offer.validity)}</div>`;
     fragment.appendChild(row);
   }
   $("rows").appendChild(fragment);
@@ -93,3 +93,30 @@ $("sort").onchange=()=>{persistFilters();query(true)};
 document.querySelectorAll(".viewTab").forEach(button=>button.onclick=()=>{view=button.dataset.view;document.querySelectorAll(".viewTab").forEach(item=>item.classList.toggle("active",item===button));query(true)});
 new IntersectionObserver(entries=>{if(entries.some(entry=>entry.isIntersecting))query()},{rootMargin:"600px"}).observe($("sentinel"));query(true);
 document.querySelectorAll(".mainTab").forEach(button=>button.onclick=()=>{document.querySelectorAll(".mainTab").forEach(item=>item.classList.toggle("active",item===button));$("resultsPanel").hidden=button.dataset.panel!=="resultsPanel";$("shoppingPanel").hidden=button.dataset.panel!=="shoppingPanel"});
+
+/* KitchenOwl: optional second destination next to the local list. The buttons
+   exist in every row but stay hidden until the server reports a configured
+   integration, so an instance without one looks exactly as before. */
+function koPayload(offer){return {product:offer.product||"",retailer:offer.retailer||"",price_text:offer.effective_price_text||offer.regular_price_text||"",pack:offer.pack||"",validity:offer.validity||""}}
+const koPath=suffix=>`/results/${encodeURIComponent(searchId)}/shopping-list/${suffix}?token=${encodeURIComponent(token)}`;
+const koStatus=(message,state="")=>{const node=$("koStatus");node.textContent=message;node.className="small"+(state?` ${state}`:"")};
+async function koInitResults(){let data;
+try{const response=await fetch(koPath("targets"),{cache:"no-store"});if(!response.ok)return;data=await response.json()}catch{return}
+if(!data||!data.configured||!(data.targets||[]).length)return;
+const select=$("koList");select.innerHTML="";
+for(const target of data.targets){const option=document.createElement("option");option.value=target.entity_id;option.textContent=target.label;select.appendChild(option)}
+if(data.default_entity)select.value=data.default_entity;
+if(!select.value)select.selectedIndex=0;
+$("koBar").hidden=false;document.body.classList.add("koReady")}
+$("rows").addEventListener("click",async event=>{const button=event.target.closest(".koSend");if(!button||button.disabled)return;
+const offer=offerById.get(button.dataset.offerId);if(!offer)return;
+const listName=$("koList").selectedOptions[0]?.textContent||"KitchenOwl";
+button.disabled=true;const original=button.textContent;button.textContent="…";
+try{const response=await fetch(koPath("items"),{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({entity_id:$("koList").value,items:[koPayload(offer)]})});
+const data=await response.json().catch(()=>({}));
+if(!response.ok)throw new Error(data.detail||`HTTP ${response.status}`);
+const name=(data.added||[])[0]||"Angebot";
+button.dataset.state="done";button.textContent=`✓ in ${listName}`;
+koStatus(`„${name}“ liegt in „${listName}“.`,"done")}
+catch(error){button.dataset.state="error";button.textContent=original;button.disabled=false;koStatus(error.message,"error")}});
+koInitResults();

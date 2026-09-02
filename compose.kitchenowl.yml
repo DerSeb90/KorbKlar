@@ -1,0 +1,101 @@
+# Optional: a self-hosted KitchenOwl next to KorbKlar, and the settings that
+# let KorbKlar write offers to it.
+#
+#   docker compose -f compose.yml -f compose.kitchenowl.yml up -d
+#
+# Requires KITCHENOWL_JWT_SECRET in .env:
+#
+#   openssl rand -base64 48
+#
+# Pointing KorbKlar at a KitchenOwl you already run needs none of this: set
+# SUPERMARKT_KITCHENOWL_URL and SUPERMARKT_KITCHENOWL_TOKEN and stay with the
+# plain compose.yml. This overlay is added to compose.yml, never used on its
+# own. See docs/kitchenowl.md.
+
+services:
+  korbklar:
+    environment:
+      # In this stack KorbKlar talks to the web container: the backend speaks
+      # uwsgi, not HTTP, and the web image proxies /api to it.
+      SUPERMARKT_KITCHENOWL_URL: ${SUPERMARKT_KITCHENOWL_URL:-http://kitchenowl-web}
+      # A long-lived token, created in KitchenOwl under profile, sessions.
+      # Until it is set the integration stays off and the interface hides it.
+      SUPERMARKT_KITCHENOWL_TOKEN: ${SUPERMARKT_KITCHENOWL_TOKEN:-}
+      SUPERMARKT_KITCHENOWL_LIST_ID: ${SUPERMARKT_KITCHENOWL_LIST_ID:-}
+      SUPERMARKT_KITCHENOWL_VERIFY_TLS: ${SUPERMARKT_KITCHENOWL_VERIFY_TLS:-1}
+      SUPERMARKT_KITCHENOWL_TIMEOUT_SECONDS: ${SUPERMARKT_KITCHENOWL_TIMEOUT_SECONDS:-15}
+      SUPERMARKT_KITCHENOWL_MAX_ITEMS: ${SUPERMARKT_KITCHENOWL_MAX_ITEMS:-50}
+      SUPERMARKT_KITCHENOWL_MATCH_ITEMS: ${SUPERMARKT_KITCHENOWL_MATCH_ITEMS:-1}
+      SUPERMARKT_KITCHENOWL_RETAILER_CATEGORIES: ${SUPERMARKT_KITCHENOWL_RETAILER_CATEGORIES:-1}
+      SUPERMARKT_KITCHENOWL_CATEGORY_PREFIX: ${SUPERMARKT_KITCHENOWL_CATEGORY_PREFIX-🛒 }
+
+  kitchenowl-secret-check:
+    # KitchenOwl does not reject a missing signing key: its get_secret falls
+    # back to a published default, and an empty value yields an empty key,
+    # which makes its tokens forgeable. Compose can require the variable to
+    # exist; only a container can check that it is long enough.
+    image: alpine:3
+    container_name: korbklar-kitchenowl-secret-check
+    restart: "no"
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      KITCHENOWL_JWT_SECRET: "${KITCHENOWL_JWT_SECRET:?KitchenOwl braucht KITCHENOWL_JWT_SECRET in .env, mindestens 32 Zeichen. Erzeugen mit openssl rand -base64 48}"
+    command:
+      - sh
+      - -c
+      - |
+        if [ $${#KITCHENOWL_JWT_SECRET} -lt 32 ]; then
+          echo "KitchenOwl nicht gestartet: KITCHENOWL_JWT_SECRET ist kuerzer als 32 Zeichen." >&2
+          echo "Erzeugen mit: openssl rand -base64 48" >&2
+          exit 1
+        fi
+
+  kitchenowl-back:
+    image: tombursch/kitchenowl-backend:latest
+    container_name: korbklar-kitchenowl-back
+    restart: unless-stopped
+    init: true
+    depends_on:
+      kitchenowl-secret-check:
+        condition: service_completed_successfully
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      # Verified by kitchenowl-secret-check before this container starts.
+      JWT_SECRET_KEY: ${KITCHENOWL_JWT_SECRET}
+      # Lets KitchenOwl build correct absolute links to its own frontend.
+      FRONT_URL: ${KITCHENOWL_PUBLIC_URL:-}
+      # Stated rather than inherited: the signup route only exists when this
+      # is true, and an upstream default is not a guarantee.
+      OPEN_REGISTRATION: "false"
+      # Onboarding closes itself once the first account exists, but saying so
+      # keeps a wiped data volume from reopening it unnoticed.
+      DISABLE_ONBOARDING: ${KITCHENOWL_DISABLE_ONBOARDING:-false}
+    volumes:
+      - kitchenowl-data:/data
+
+  kitchenowl-web:
+    image: tombursch/kitchenowl-web:latest
+    container_name: korbklar-kitchenowl-web
+    restart: unless-stopped
+    init: true
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      # The image defaults this to "back:5000", the service name from its own
+      # compose example. Ours is named differently, and nginx refuses to start
+      # when the upstream host does not resolve.
+      BACK_URL: kitchenowl-back:5000
+    depends_on:
+      - kitchenowl-back
+    ports:
+      # Bound to the loopback interface, because the common case is a reverse
+      # proxy in front (compose.proxy.yml with Caddyfile.kitchenowl) and a
+      # household list has no business facing the internet by default.
+      # Reaching it from another machine without a proxy means setting
+      # KITCHENOWL_BIND_ADDRESS to 0.0.0.0 deliberately.
+      - "${KITCHENOWL_BIND_ADDRESS:-127.0.0.1}:${KITCHENOWL_PORT:-8080}:80"
+
+volumes:
+  kitchenowl-data:
