@@ -147,20 +147,63 @@ def test_release_has_no_development_machine_references():
         assert marker not in text
 
 
-def test_release_has_only_the_base_compose_file():
+def test_release_carries_no_stray_compose_file():
     compose_files = sorted(path.name for path in ROOT.glob("compose*.yml"))
-    assert compose_files == ["compose.yml"]
-    compose = (ROOT / "compose.yml").read_text(encoding="utf-8")
-    assert "supermarkt-ts" not in compose
+    assert compose_files == ["compose.proxy.yml", "compose.yml"]
+    for name in compose_files:
+        assert "supermarkt-ts" not in (ROOT / name).read_text(encoding="utf-8")
 
 
 def test_all_supported_compose_environment_variables_are_documented():
-    compose = (ROOT / "compose.yml").read_text(encoding="utf-8")
+    compose = "\n".join(
+        path.read_text(encoding="utf-8") for path in sorted(ROOT.glob("compose*.yml"))
+    )
     env_example = (ROOT / ".env.example").read_text(encoding="utf-8")
-    names = set(re.findall(r"\$\{(SUPERMARKT_[A-Z0-9_]+)", compose))
+    names = set(re.findall(r"\$\{((?:SUPERMARKT|KORBKLAR)_[A-Z0-9_]+)", compose))
     names.add("SUPERMARKT_PORT")
     for name in names:
         assert f"{name}=" in env_example, name
+
+
+def test_the_proxy_is_a_separate_compose_file():
+    """TLS must never be needed to run the comparison."""
+    base = (ROOT / "compose.yml").read_text(encoding="utf-8")
+    assert "caddy" not in base.casefold()
+    overlay = (ROOT / "compose.proxy.yml").read_text(encoding="utf-8")
+    # The overlay adds to the base rather than repeating it, and it takes the
+    # published port off the public interfaces instead of adding a second one.
+    assert "image: ghcr.io/lesecuritae/korbklar" not in overlay
+    assert "ports: !override" in overlay
+    assert "${KORBKLAR_BIND_ADDRESS:-127.0.0.1}:${SUPERMARKT_PORT:-8000}:8000" in overlay
+    assert "condition: service_healthy" in overlay
+
+
+def test_the_proxy_never_forwards_a_client_supplied_source_address():
+    site = (ROOT / "deploy/caddy/sites/korbklar.caddy").read_text(encoding="utf-8")
+    # Overwriting rather than appending is what keeps anything behind the
+    # proxy from ever seeing an address the client chose.
+    assert "header_up X-Forwarded-For {remote_host}" in site
+    assert "{$KORBKLAR_DOMAIN}" in site
+    for name in ("Caddyfile", "Caddyfile.kitchenowl"):
+        entry = (ROOT / "deploy/caddy" / name).read_text(encoding="utf-8")
+        assert "{$KORBKLAR_ACME_EMAIL}" in entry
+        # Both entry points import the same site file, so the header handling
+        # above cannot drift apart between them.
+        assert "import /etc/caddy/sites/korbklar.caddy" in entry
+
+
+def test_every_relative_documentation_link_resolves():
+    """A moved section must not leave a dead link behind."""
+    pages = [ROOT / "README.md", ROOT / "README.de.md", ROOT / "README.en.md"]
+    pages += sorted((ROOT / "docs").glob("*.md"))
+    broken = []
+    for page in pages:
+        broken.extend(
+            f"{page.name} -> {target}"
+            for target in re.findall(r"\]\(([^)#:]+\.md)\)", page.read_text(encoding="utf-8"))
+            if not (page.parent / target).resolve().is_file()
+        )
+    assert not broken, broken
 
 
 def test_release_has_no_private_or_internal_revision_markers():

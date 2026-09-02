@@ -88,6 +88,29 @@ Die Oberfläche ist dann unter `http://SERVER-IP:8080` erreichbar. Dauerhaft kan
 
 Die Laufzeitdaten liegen im Docker-Volume `korbklar-data` und bleiben bei normalen Container-Neustarts erhalten.
 
+## HTTPS mit Caddy
+
+Eine optionale zweite Compose-Datei stellt Caddy vor KorbKlar und lässt es die
+Let's-Encrypt-Zertifikate selbst holen und erneuern. Sie wird zur Basisdatei
+dazugenommen, nicht an ihrer Stelle gewählt:
+
+```bash
+KORBKLAR_DOMAIN=korbklar.deine-domain.example
+KORBKLAR_ACME_EMAIL=du@deine-domain.example
+docker compose -f compose.yml -f compose.proxy.yml up -d
+```
+
+Ohne sie startet der Stack unverändert; der Proxy-Container wird nie angelegt
+und seine beiden Pflichtwerte werden nie gelesen. Mit ihr wird KorbKlars
+eigener Port auf `127.0.0.1` umgebunden, damit niemand an der Verschlüsselung
+vorbeikommt, und `KORBKLAR_BIND_ADDRESS` kann einen Klartext-Weg fürs VPN
+offenhalten. Die Browser-Oberfläche hat keine eigene Anmeldung; eine
+öffentliche Domain will deshalb entweder ein VPN davor oder den
+`basic_auth`-Block in `deploy/caddy/sites/korbklar.caddy`.
+
+Kombinationen der Compose-Dateien, `COMPOSE_FILE`, eine zweite Domain und das
+Aktualisieren stehen in [docs/deployment.de.md](docs/deployment.de.md).
+
 ## Was bei einer Suche passiert
 
 ```text

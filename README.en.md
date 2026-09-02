@@ -74,6 +74,28 @@ SUPERMARKT_PORT=8080 docker compose up -d --no-build
 
 The interface is then available at `http://SERVER-IP:8080`. The value may also be stored in an optional `.env` file.
 
+## HTTPS with Caddy
+
+An optional second compose file puts Caddy in front of KorbKlar and lets it
+obtain and renew Let's Encrypt certificates on its own. It is added to the base
+file rather than chosen instead of it:
+
+```bash
+KORBKLAR_DOMAIN=korbklar.your-domain.example
+KORBKLAR_ACME_EMAIL=you@your-domain.example
+docker compose -f compose.yml -f compose.proxy.yml up -d
+```
+
+Without it the stack starts unchanged; the proxy container is never created
+and its two required values are never read. With it, KorbKlar's own port is
+rebound to `127.0.0.1` so the encryption cannot be walked around, and
+`KORBKLAR_BIND_ADDRESS` can keep a plain path open for a VPN. The browser
+interface has no login of its own, so a public domain wants either a VPN in
+front or the `basic_auth` block in `deploy/caddy/sites/korbklar.caddy`.
+
+Compose file combinations, `COMPOSE_FILE`, a second domain and updating are in
+[docs/deployment.en.md](docs/deployment.en.md).
+
 ## What happens during a search
 
 ```text

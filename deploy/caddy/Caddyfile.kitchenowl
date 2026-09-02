@@ -1,0 +1,12 @@
+# KorbKlar and a KitchenOwl in the same compose project, each on its own
+# domain. Select with KORBKLAR_CADDYFILE=./deploy/caddy/Caddyfile.kitchenowl
+# and set KORBKLAR_KITCHENOWL_DOMAIN. The KitchenOwl web container has to be
+# reachable as "kitchenowl-web" on the compose network; compose.kitchenowl.yml
+# provides exactly that.
+
+{
+	email {$KORBKLAR_ACME_EMAIL}
+}
+
+import /etc/caddy/sites/korbklar.caddy
+import /etc/caddy/sites/kitchenowl.caddy

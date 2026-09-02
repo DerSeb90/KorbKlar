@@ -1,0 +1,62 @@
+# Optional: Caddy as a TLS terminator in front of KorbKlar.
+#
+#   docker compose -f compose.yml -f compose.proxy.yml up -d
+#
+# Caddy obtains and renews Let's Encrypt certificates on its own; there is no
+# certbot container and no cron job. Requires KORBKLAR_DOMAIN and
+# KORBKLAR_ACME_EMAIL in .env, and port 80 and 443 reachable from the internet
+# so the ACME challenge can complete.
+#
+# This overlay is added to compose.yml, never used on its own. It needs Docker
+# Compose v2.24 or newer for the !override tag below. See docs/deployment.md.
+
+services:
+  korbklar:
+    # With the proxy in front, KorbKlar's own port must not stay published on
+    # every interface, or the encryption can simply be walked around. !override
+    # replaces the mapping from compose.yml instead of adding a second one.
+    # 127.0.0.1 keeps it reachable for curl on the host; a VPN address
+    # (KORBKLAR_BIND_ADDRESS=10.8.0.1) keeps the plain http path open for that
+    # network alone. The container port stays 8000 either way.
+    ports: !override
+      - "${KORBKLAR_BIND_ADDRESS:-127.0.0.1}:${SUPERMARKT_PORT:-8000}:8000"
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: korbklar-caddy
+    restart: unless-stopped
+    init: true
+    security_opt:
+      - no-new-privileges:true
+    depends_on:
+      korbklar:
+        condition: service_healthy
+    environment:
+      KORBKLAR_DOMAIN: "${KORBKLAR_DOMAIN:?Der Reverse Proxy braucht KORBKLAR_DOMAIN in .env}"
+      KORBKLAR_ACME_EMAIL: "${KORBKLAR_ACME_EMAIL:?Let's Encrypt braucht KORBKLAR_ACME_EMAIL in .env}"
+      # Only read by Caddyfile.kitchenowl.
+      KORBKLAR_KITCHENOWL_DOMAIN: ${KORBKLAR_KITCHENOWL_DOMAIN:-}
+      # Only read when the basic_auth block in sites/korbklar.caddy is enabled.
+      KORBKLAR_BASIC_AUTH_HASH: ${KORBKLAR_BASIC_AUTH_HASH:-}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      # KORBKLAR_CADDYFILE selects the entry point; the default knows KorbKlar
+      # only, Caddyfile.kitchenowl adds a second domain for KitchenOwl.
+      - ${KORBKLAR_CADDYFILE:-./deploy/caddy/Caddyfile}:/etc/caddy/Caddyfile:ro
+      # Both entry points import from here, so neither repeats the other.
+      - ./deploy/caddy/sites:/etc/caddy/sites:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    healthcheck:
+      test: ["CMD", "caddy", "version"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  caddy-data:
+  caddy-config:

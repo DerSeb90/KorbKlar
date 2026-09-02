@@ -1,0 +1,38 @@
+{$KORBKLAR_DOMAIN} {
+	encode zstd gzip
+
+	# The browser interface has no login of its own; SUPERMARKT_API_KEY guards
+	# the REST routes only. Facing the internet, either keep this domain for a
+	# VPN or enable the block below. The hash comes from
+	#   docker compose exec caddy caddy hash-password
+	# and goes into .env as KORBKLAR_BASIC_AUTH_HASH.
+	#
+	# basic_auth {
+	# 	korbklar {$KORBKLAR_BASIC_AUTH_HASH}
+	# }
+
+	reverse_proxy korbklar:8000 {
+		# Overwrite rather than append. Caddy would otherwise keep whatever the
+		# client sent and add the real address behind it. Setting the header to
+		# the immediate peer makes it say exactly one thing, so nothing behind
+		# the proxy can be talked into believing a client-chosen address.
+		header_up X-Forwarded-For {remote_host}
+		header_up X-Real-IP {remote_host}
+		header_up X-Forwarded-Proto {scheme}
+		header_up Host {host}
+	}
+
+	header {
+		# Caddy already redirects to HTTPS; this tells browsers to skip the
+		# plaintext attempt next time.
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "no-referrer"
+		-Server
+	}
+
+	log {
+		output stderr
+		format console
+	}
+}
