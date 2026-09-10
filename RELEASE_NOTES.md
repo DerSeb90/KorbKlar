@@ -1,3 +1,18 @@
+# 0.1.17
+
+Die Android-App bezieht Updates jetzt ausschließlich aus den Releases dieses
+Forks (DerSeb90/KorbKlar). Das ursprüngliche Projekt wurde in „Korbunio“
+umbenannt und veröffentlicht unter dem alten Namen eine andere, nativ gebaute
+App mit eigenem Paketnamen; sie wurde bislang als „universelles“ Update
+angeboten und installiert. Die App akzeptiert nur noch APKs, die wie ihre
+eigenen Builds heißen (`app-<abi>-release.apk` oder `app-release.apk`), und
+meldet andere Releases als Fehler statt sie anzubieten.
+
+Ein Versions-Tag `v*` veröffentlicht die signierten APKs nun automatisch als
+GitHub-Release des Forks. Der Fork signiert mit einem eigenen Schlüssel; eine
+App aus einem früheren Upstream-Release muss deshalb einmalig deinstalliert
+und neu installiert werden.
+
 # 0.1.16
 
 Angebote können nun direkt aus der Android-App als vorhandene Haushaltsartikel

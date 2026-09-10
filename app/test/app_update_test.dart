@@ -9,7 +9,7 @@ const _sha = '497df04a44a36054fe9fa78eabb43c1ce887ced6fcfb1e0cff5215b11153f431';
 
 Map<String, dynamic> _release(String tag, {bool withDigest = true}) => {
   'tag_name': tag,
-  'html_url': 'https://github.com/lesecuritae/KorbKlar/releases/tag/$tag',
+  'html_url': 'https://github.com/DerSeb90/KorbKlar/releases/tag/$tag',
   'body': 'Neue Angebote schneller.',
   'published_at': '2026-09-02T01:55:32Z',
   'assets': [
@@ -18,7 +18,7 @@ Map<String, dynamic> _release(String tag, {bool withDigest = true}) => {
         'name': 'app-$abi-release.apk',
         'size': 18917885,
         'browser_download_url':
-            'https://github.com/lesecuritae/KorbKlar/releases/download/$tag/app-$abi-release.apk',
+            'https://github.com/DerSeb90/KorbKlar/releases/download/$tag/app-$abi-release.apk',
         if (withDigest) 'digest': 'sha256:$_sha',
       },
   ],
@@ -32,7 +32,7 @@ AppUpdateService _service(
 }) => AppUpdateService(
   client: MockClient((request) async {
     expect(request.url.host, 'api.github.com');
-    expect(request.url.path, '/repos/lesecuritae/KorbKlar/releases/latest');
+    expect(request.url.path, '/repos/DerSeb90/KorbKlar/releases/latest');
     return http.Response(jsonEncode(body), status);
   }),
   abi: abi,
@@ -87,6 +87,52 @@ void main() {
         ).check()).status,
         AppUpdateStatus.current,
       );
+    });
+
+    test('ignores APKs that are not this app', () async {
+      // Upstream became "Korbunio" and publishes a different, natively built
+      // app. Its release must never be offered as a KorbKlar update.
+      final foreign = {
+        'tag_name': 'v0.1.32',
+        'html_url': 'https://github.com/lesecuritae/Korbunio/releases/tag/v0.1.32',
+        'body': 'Korbunio',
+        'published_at': '2026-09-09T18:05:09Z',
+        'assets': [
+          {
+            'name': 'korbunio-0.1.32.apk',
+            'size': 9105362,
+            'browser_download_url':
+                'https://github.com/lesecuritae/Korbunio/releases/download/v0.1.32/korbunio-0.1.32.apk',
+            'digest': 'sha256:$_sha',
+          },
+        ],
+      };
+      final result = await _service(foreign).check();
+      expect(result.status, AppUpdateStatus.error);
+      expect(result.error, contains('keine KorbKlar-APK'));
+    });
+
+    test('falls back to a universal app-release.apk only', () async {
+      final release = _release('v0.1.13');
+      release['assets'] = [
+        {
+          'name': 'app-release.apk',
+          'size': 40000000,
+          'browser_download_url':
+              'https://github.com/DerSeb90/KorbKlar/releases/download/v0.1.13/app-release.apk',
+          'digest': 'sha256:$_sha',
+        },
+        {
+          'name': 'other-universal.apk',
+          'size': 40000000,
+          'browser_download_url':
+              'https://github.com/DerSeb90/KorbKlar/releases/download/v0.1.13/other-universal.apk',
+          'digest': 'sha256:$_sha',
+        },
+      ];
+      final result = await _service(release).check();
+      expect(result.status, AppUpdateStatus.available);
+      expect(result.info!.apkName, 'app-release.apk');
     });
 
     test('refuses an asset GitHub has no digest for', () async {
