@@ -1,3 +1,10 @@
+# 0.1.18
+
+Die Android-App akzeptiert als Server auch eine Instanz, die aus dem
+umbenannten Upstream-Projekt (Korbunio) gebaut wurde. Dessen HTTP-API ist
+unverändert, der Server meldet sich nur unter dem neuen Namen; bisher lehnte
+die App ihn mit „Unter dieser Adresse antwortet kein KorbKlar“ ab.
+
 # 0.1.17
 
 Die Android-App bezieht Updates jetzt ausschließlich aus den Releases dieses
