@@ -11,7 +11,18 @@ import 'package:path_provider/path_provider.dart';
 
 /// Where the app is published. The releases of this repository carry one
 /// signed APK per ABI, and GitHub records a SHA-256 digest for each asset.
-const String kUpdateRepository = 'lesecuritae/KorbKlar';
+///
+/// This is the fork, not the original project: upstream was renamed to
+/// Korbunio and its releases now ship a different, natively built app under
+/// another package name. Following those would replace KorbKlar on the phone.
+const String kUpdateRepository = 'DerSeb90/KorbKlar';
+
+/// Names the Flutter build gives its release APKs: `app-<abi>-release.apk`
+/// per ABI, or `app-release.apk` for a universal build. Anything else in a
+/// release is not this app and is never offered as an update.
+final RegExp kReleaseApkName = RegExp(
+  r'^app-(?:(arm64-v8a|armeabi-v7a|x86_64|x86)-)?release\.apk$',
+);
 
 enum AppUpdateStatus { available, current, error }
 
@@ -81,8 +92,9 @@ class AppUpdateInfo {
   final DateTime? date;
 
   /// Reads one entry of the GitHub releases API and picks the APK built for
-  /// [abi] (`arm64-v8a`, `armeabi-v7a`, `x86_64`). A universal APK is taken
-  /// when no split one matches.
+  /// [abi] (`arm64-v8a`, `armeabi-v7a`, `x86_64`). A universal
+  /// `app-release.apk` is taken when no split one matches. Assets that are not
+  /// named like this app's builds are ignored, see [kReleaseApkName].
   factory AppUpdateInfo.fromRelease(Map<String, dynamic> json, String abi) {
     final tag = json['tag_name']?.toString().trim() ?? '';
     final version = AppVersion.tryParse(tag);
@@ -91,15 +103,15 @@ class AppUpdateInfo {
     }
     final assets = (json['assets'] as List<dynamic>? ?? const [])
         .whereType<Map<String, dynamic>>()
-        .where((a) => (a['name']?.toString() ?? '').endsWith('.apk'))
+        .where((a) => kReleaseApkName.hasMatch(a['name']?.toString() ?? ''))
         .toList(growable: false);
     if (assets.isEmpty) {
-      throw const FormatException('Das Release enthält keine APK.');
+      throw const FormatException('Das Release enthält keine KorbKlar-APK.');
     }
     final asset = assets.firstWhere(
-      (a) => a['name'].toString().contains('-$abi-'),
+      (a) => a['name'].toString() == 'app-$abi-release.apk',
       orElse: () => assets.firstWhere(
-        (a) => a['name'].toString().contains('universal'),
+        (a) => a['name'].toString() == 'app-release.apk',
         orElse: () => throw FormatException('Keine APK für $abi im Release.'),
       ),
     );

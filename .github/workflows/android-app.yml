@@ -11,10 +11,15 @@ on:
     paths:
       - "app/**"
       - ".github/workflows/android-app.yml"
+    # A version tag additionally publishes the APKs as a GitHub release. The
+    # app's update check reads the latest release of this repository, so a
+    # tag is what makes a new version reach the phones.
+    tags:
+      - "v*"
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   apk:
@@ -85,6 +90,16 @@ jobs:
           path: app/build/app/outputs/flutter-apk/*.apk
           if-no-files-found: error
           retention-days: 30
+
+      - name: Publish release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        # GitHub computes the SHA-256 digest of each asset; the app verifies
+        # the download against it before installing.
+        run: |
+          gh release create "$TAG"             --repo "$GITHUB_REPOSITORY"             --title "KorbKlar $TAG"             --generate-notes             app/build/app/outputs/flutter-apk/*.apk
 
       - name: Explain how to install it
         run: |
