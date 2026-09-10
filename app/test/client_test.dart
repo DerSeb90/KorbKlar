@@ -117,6 +117,53 @@ void main() {
     expect(markets.map((market) => market.label), ['Netto A', 'Netto B']);
   });
 
+  group('server check', () {
+    KorbKlarClient serving(String service, {int clientStatus = 200}) =>
+        KorbKlarClient(
+          baseUrl: 'https://korb.example',
+          httpClient: MockClient((request) {
+            if (request.url.path == '/health') {
+              return http.Response(
+                jsonEncode({'status': 'ok', 'service': service}),
+                200,
+              );
+            }
+            expect(request.url.path, '/api/v1/client');
+            return http.Response(
+              jsonEncode({'status': 'ok', 'service': service}),
+              clientStatus,
+            );
+          }),
+        );
+
+    test('accepts a KorbKlar server', () async {
+      final client = serving('korbklar');
+      addTearDown(client.close);
+      expect(await client.check(), ServerCheck.ok);
+    });
+
+    test(
+      'accepts a server built from the renamed upstream (Korbunio)',
+      () async {
+        final client = serving('korbunio');
+        addTearDown(client.close);
+        expect(await client.check(), ServerCheck.ok);
+      },
+    );
+
+    test('rejects anything else answering at the address', () async {
+      final client = serving('grafana');
+      addTearDown(client.close);
+      expect(await client.check(), ServerCheck.notKorbKlar);
+    });
+
+    test('reports a missing API key', () async {
+      final client = serving('korbunio', clientStatus: 401);
+      addTearDown(client.close);
+      expect(await client.check(), ServerCheck.needsApiKey);
+    });
+  });
+
   test('reads instance defaults from the server', () async {
     final client = KorbKlarClient(
       baseUrl: 'https://korb.example',

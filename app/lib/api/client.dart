@@ -163,6 +163,14 @@ class KorbKlarClient {
     }
   }
 
+  /// Service identifiers a compatible server may report. The upstream project
+  /// was renamed to Korbunio and now announces itself under that name; its
+  /// HTTP API is unchanged, so a server built from it still works.
+  static const Set<String> compatibleServices = {'korbklar', 'korbunio'};
+
+  static bool _isCompatible(Map<String, dynamic> payload) =>
+      compatibleServices.contains('${payload['service'] ?? ''}'.toLowerCase());
+
   /// Confirms the base URL points at a KorbKlar instance this client may use.
   ///
   /// ``/health`` stays reachable without authorisation but withholds its
@@ -173,15 +181,13 @@ class KorbKlarClient {
     if (securityError != null) throw KorbKlarException(securityError);
     final health = await _http.get(_uri('/health')).timeout(_timeout);
     final healthPayload = _json(health);
-    if (healthPayload['service'] != 'korbklar') return ServerCheck.notKorbKlar;
+    if (!_isCompatible(healthPayload)) return ServerCheck.notKorbKlar;
     final response = await _http
         .get(_uri('/api/v1/client'), headers: _headers())
         .timeout(_timeout);
     if (response.statusCode == 401) return ServerCheck.needsApiKey;
     final payload = _json(response);
-    return payload['service'] == 'korbklar'
-        ? ServerCheck.ok
-        : ServerCheck.notKorbKlar;
+    return _isCompatible(payload) ? ServerCheck.ok : ServerCheck.notKorbKlar;
   });
 
   Future<ServerDefaults> defaults() => _guard(() async {
