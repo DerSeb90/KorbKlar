@@ -11,6 +11,7 @@ from datetime import datetime
 from typing import Any
 
 from .cache import PersistentSnapshotStore
+from .challenges import clear_mueller_cookie, get_mueller_cookie
 from .categories import category_decision
 from .common import clean_text, deduplicate_offers, filter_offers, filter_offers_by_keywords, normalize_aldi_region, normalize_keywords, normalize_offer_week, normalize_pack, normalize_view, offer_week_reference, parse_iso_date
 from .compare import OfferComparator, OfferMapper
@@ -63,7 +64,7 @@ class SourceLoader:
         self.official_netto_scottie = OfficialNettoScottieSource(http, self.netto_scottie_markets.resolve)
         self.netto_marken_markets = NettoMarkenMarketResolver(http)
         self.official_rossmann = OfficialRossmannSource(timeout_seconds=TIMEOUT_SECONDS)
-        self.official_mueller = OfficialMuellerSource(http)
+        self.official_mueller = OfficialMuellerSource(http, get_mueller_cookie, clear_mueller_cookie)
         self.official_dm = OfficialDmSource(http)
         self.official_marktkauf = OfficialMarktkaufSource(TIMEOUT_SECONDS)
         self.official_kaufland = OfficialKauflandSource(
@@ -150,6 +151,7 @@ class SourceLoader:
             contexts = {name: context for name, context in contexts.items() if name in selected_retailers}
         request_errors: list[str] = []
         store_warnings: list[str] = []
+        challenge_urls: dict[str, str] = {}
         requested_week = normalize_offer_week(offer_week)
         target_date = offer_week_reference(requested_week)
 
@@ -181,7 +183,10 @@ class SourceLoader:
                 if selected_netto:
                     option = self.netto_marken_markets._option(selected_netto, "exact" if clean_text(selected_netto.get("post_code")) == postal_code else "nearby")
                     active_contexts["Netto Marken-Discount"] = self._context_with_market(active_contexts["Netto Marken-Discount"], option["label"], option["market_url"])
-                    store_warnings.append("Netto Marken-Discount: Filiale ausgewählt; der aktuelle Angebotskatalog ist regional und nicht filialgenau.")
+                    store_warnings.append(
+                        "Netto Marken-Discount: Filiale ausgewählt; der aktuelle Angebotskatalog ist regional und nicht filialgenau. "
+                        "Die Filiale dient hier als Standortkontext, nicht als Bestandsnachweis."
+                    )
             except Exception as exc:
                 if netto_market_id:
                     raise
@@ -252,6 +257,8 @@ class SourceLoader:
                     offers = deduplicate_offers(list(future.result()))
                 except Exception as exc:
                     failed_primary.add(name)
+                    if name == "Müller" and "manuelle Browser-Bestätigung" in str(exc):
+                        challenge_urls[name] = self.official_mueller.OFFERS_URL
                     if name in {"Marktkauf", "HOL’AB!"}:
                         source_states[name] = "kein Markt"
                     else:
@@ -346,7 +353,7 @@ class SourceLoader:
                 total_sources += 1
                 notify(total_sources=max(1, total_sources), processed_sources=completed_sources)
             completed_sources += 1
-            notify(status="loading", progress=62, source="Marktguru", retailer="Lidl, PENNY, Netto Marken-Discount, Combi, famila", category="Händlerkategorien", step="Regionale Angebote werden geladen", processed_sources=completed_sources, processed_products=processed_products)
+            notify(status="loading", progress=62, source="Marktguru", retailer="Lidl, PENNY, Netto Marken-Discount, famila", category="Händlerkategorien", step="Regionale Angebote werden geladen", processed_sources=completed_sources, processed_products=processed_products)
             raw: list[dict[str, Any]] = []
             if aggregator_names or fallback_names:
                 try:
@@ -373,7 +380,7 @@ class SourceLoader:
                         self.mapper.map_all(raw, active_contexts, offer_week_reference("current"))
                     )
                 processed_products += len(marktguru_mapped)
-            notify(status="processing", progress=88, source="Marktguru", retailer="Lidl, PENNY, Netto Marken-Discount, Combi, famila", category="Händlerkategorien", step="Angebote zugeordnet", processed_sources=completed_sources, processed_products=processed_products)
+            notify(status="processing", progress=88, source="Marktguru", retailer="Lidl, PENNY, Netto Marken-Discount, famila", category="Händlerkategorien", step="Angebote zugeordnet", processed_sources=completed_sources, processed_products=processed_products)
 
         for name in sorted(aggregator_names, key=str.casefold):
             offers = deduplicate_offers([
@@ -508,6 +515,7 @@ class SourceLoader:
             "offers": [offer_to_dict(offer) for offer in offers],
             "retailers": {name: asdict(context) for name, context in active_contexts.items()},
             "source_states": source_states,
+            "challenge_urls": challenge_urls,
             "request_errors": list(dict.fromkeys(clean_text(x) for x in request_errors if clean_text(x))),
             "store_warnings": list(dict.fromkeys(clean_text(x) for x in store_warnings if clean_text(x))),
         }
@@ -694,6 +702,7 @@ class SupermarketEngine:
                 "Personalisierte Coupons oder Punkte ohne konkreten Angebotswert werden nicht geschätzt."
             ),
             "source_states": snapshot.get("source_states", {}),
+            "challenge_urls": snapshot.get("challenge_urls", {}),
             "warnings": list(dict.fromkeys([
                 *snapshot.get("request_errors", []),
                 *snapshot.get("store_warnings", []),

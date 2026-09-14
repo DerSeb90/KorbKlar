@@ -115,7 +115,7 @@ def test_runtime_version_matches_package_metadata():
     metadata = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
     assert metadata["project"]["version"] == __version__
     assert USER_AGENT == f"korb-klar/{__version__}"
-    assert __version__ == "0.1.18"
+    assert __version__ == "0.1.19"
 
 
 def test_default_host_port_is_configurable_without_changing_container_port():
@@ -131,7 +131,16 @@ def test_release_contains_no_runtime_state_or_patch_residue():
     forbidden_suffixes = {".rej", ".orig", ".bak", ".log", ".sqlite3", ".sqlite3-wal", ".sqlite3-shm"}
     for path in _release_paths():
         relative = path.relative_to(ROOT)
-        assert not any(part in forbidden_dirs for part in relative.parts), relative
+        # `android/app/src/<source-set>/java/.../data` is a Kotlin package;
+        # only runtime data directories are forbidden in a release checkout.
+        parts = relative.parts
+        source_data_package = (
+            len(parts) > 5
+            and parts[:3] == ("android", "app", "src")
+            and parts[4] == "java"
+            and "data" in parts[5:]
+        )
+        assert source_data_package or not any(part in forbidden_dirs for part in relative.parts), relative
         if path.is_file():
             assert path.name != ".env", relative
             assert not any(path.name.endswith(suffix) for suffix in forbidden_suffixes), relative
