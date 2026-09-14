@@ -1,3 +1,20 @@
+# 0.1.19
+
+Der Server übernimmt den Stand des Upstream-Projekts (Korbunio 0.1.36):
+
+- Combi ist aus Händlerregister, Datenwegen, Oberfläche und Tests entfernt.
+  famila Nordwest bleibt als optionale regionale Marktguru-Quelle erhalten.
+- Müller: Lehnt die Händlerseite den Abruf mit einer Browser-Prüfung ab
+  (HTTP 403/429), meldet der Server das als manuelle Bestätigung. Unter
+  `/mueller/challenge` kann die im Browser bestätigte Session ausdrücklich
+  und zeitlich befristet an den Server übergeben werden; der Cookie wird
+  nicht gespeichert, protokolliert oder zurückgegeben.
+- ALDI Süd: Ist nur der separate Prospekt-Host nicht erreichbar, wird der
+  Web-Katalog verwendet und der Hinweis entsprechend formuliert.
+- Die Startseite zeigt die laufende Version im Seitenfuß.
+
+Die Android-App ändert sich nur in der Versionsnummer.
+
 # 0.1.18
 
 Die Android-App akzeptiert als Server auch eine Instanz, die aus dem
