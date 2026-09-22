@@ -1,8 +1,25 @@
 # 0.1.20
 
-Der Server übernimmt den Stand des Upstream-Projekts (Korbunio 0.1.37 bis
-0.1.55). Die Android-App dieses Forks ändert sich nur in der Versionsnummer;
-die Upstream-Änderungen an der Flutter-App sind noch nicht übernommen.
+Server und Android-App übernehmen den Stand des Upstream-Projekts (Korbunio
+0.1.37 bis 0.1.55). Die App bleibt die Flutter-App dieses Forks mit eigener
+Update-Quelle, eigenem Paketnamen und eigenem Signierschlüssel.
+
+Android-App:
+
+- Warengruppen als Reiter über der Ergebnisliste und Abschnitte bei der
+  Sortierung nach Warengruppe.
+- trinkgut in der Händlerauswahl.
+- Einkaufsliste: Artikel löschen mit „Rückgängig“, der Händler steht am
+  Artikel, „Im Angebot?“ sucht ihn in den geladenen Angeboten.
+- KitchenOwl: Artikel, die aus der lokalen Liste gelöscht wurden, werden auch
+  in KitchenOwl entfernt, aber nur solche, die die App selbst dort angelegt
+  hat. Zeichen ohne Buchstaben oder Ziffern bleiben aus Artikelnamen heraus.
+- Inhalt und Schaltflächen überlappen Status- und Navigationsleiste nicht mehr
+  (Android 15 zeichnet randlos).
+- Angebote vom Server erscheinen mit Produktbildern.
+- „Netto mit Hund“ heißt „Netto schwarz“.
+
+Server:
 
 - MCP-Server unter `/mcp` für KI-Assistenten: `find_offers`, `list_retailers`,
   `list_bonus_programs`, `price_history`, `watch_product`/`list_watches`/
