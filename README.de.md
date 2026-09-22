@@ -31,7 +31,7 @@ docker compose pull
 docker compose up -d --no-build
 ```
 
-Damit wird das fertig veröffentlichte Image `ghcr.io/lesecuritae/korbklar:latest` aus der GitHub Container Registry verwendet. Für den Standardbetrieb ist keine `.env` erforderlich.
+Damit wird das fertig veröffentlichte Image `ghcr.io/derseb90/korbklar:latest` aus der GitHub Container Registry verwendet. Für den Standardbetrieb ist keine `.env` erforderlich.
 
 ### Lokaler Build aus dem Quellcode
 

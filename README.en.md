@@ -31,7 +31,7 @@ docker compose pull
 docker compose up -d --no-build
 ```
 
-This uses the prebuilt `ghcr.io/lesecuritae/korbklar:latest` image published through GitHub Container Registry. The default setup does not require a `.env` file.
+This uses the prebuilt `ghcr.io/derseb90/korbklar:latest` image published through GitHub Container Registry. The default setup does not require a `.env` file.
 
 ### Local source build
 

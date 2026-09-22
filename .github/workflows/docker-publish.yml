@@ -2,6 +2,11 @@ name: Publish Docker image
 
 on:
   workflow_dispatch:
+    inputs:
+      version:
+        description: "Release version to build from its tag, e.g. 0.1.20. Empty builds the branch."
+        required: false
+        default: ""
   push:
     branches:
       - main
@@ -14,7 +19,9 @@ permissions:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: lesecuritae/korbklar
+  # The image lives next to the repository that builds it, so a fork publishes
+  # under its own account instead of failing against the upstream package.
+  IMAGE_NAME: ${{ github.repository }}
 
 jobs:
   publish:
@@ -23,6 +30,8 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.version != '' && format('v{0}', inputs.version) || github.ref }}
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v4
@@ -45,6 +54,7 @@ jobs:
           tags: |
             type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
             type=semver,pattern={{version}}
+            type=raw,value=${{ inputs.version }},enable=${{ inputs.version != '' }}
             type=sha,prefix=sha-
           labels: |
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
