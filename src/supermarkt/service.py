@@ -11,7 +11,6 @@ from datetime import datetime
 from typing import Any
 
 from .cache import PersistentSnapshotStore
-from .challenges import clear_mueller_cookie, get_mueller_cookie
 from .categories import category_decision
 from .common import clean_text, deduplicate_offers, filter_offers, filter_offers_by_keywords, normalize_aldi_region, normalize_keywords, normalize_offer_week, normalize_pack, normalize_view, offer_week_reference, parse_iso_date
 from .compare import OfferComparator, OfferMapper
@@ -24,11 +23,17 @@ from .config import (
     KAUFLAND_STORE_CACHE_TTL_SECONDS,
     REWE_CACHE_DIR,
     REWE_STORE_CACHE_TTL_SECONDS,
+    TRINKGUT_CACHE_DIR,
+    TRINKGUT_DEPOSIT_CACHE_TTL_SECONDS,
+    TRINKGUT_DEPOSIT_FETCH_WORKERS,
+    TRINKGUT_MAX_DISTANCE_KM,
+    TRINKGUT_STORE_CACHE_TTL_SECONDS,
     MARKTGURU_PAGE_SIZE,
     MAX_WORKERS,
     RESULT_RETENTION_HOURS,
     TIMEOUT_SECONDS,
 )
+from . import history
 from .http import HttpClient, PostalCodeLocator
 from .loyalty import available_programs, normalize_program_ids
 from .offer_week import next_change_timestamp
@@ -37,7 +42,7 @@ from .presentation import offer_for_response, offer_sort_key, resolve_retailer_n
 from .region import AldiRegionResolver
 
 LOGGER = logging.getLogger(__name__)
-from .sources import KaufdaGlobusImageSource, MarktguruClient, NettoMarkenMarketResolver, OfficialAldiSource, OfficialDmSource, OfficialEdekaSource, OfficialGlobusSource, OfficialKauflandSource, OfficialMarktkaufSource, OfficialReweSource, OfficialHolabSource, OfficialNettoScottieSource, OfficialMuellerSource, OfficialRossmannSource
+from .sources import KaufdaGlobusImageSource, KaufdaRetailerSource, MarktguruClient, NettoMarkenMarketResolver, OfficialAldiSource, OfficialDmSource, OfficialEdekaSource, OfficialGlobusSource, OfficialKauflandSource, OfficialMarktkaufSource, OfficialReweSource, OfficialHolabSource, OfficialNettoScottieSource, OfficialMuellerSource, OfficialRossmannSource, OfficialTrinkgutSource
 from .sources.netto_scottie import NettoScottieMarketResolver
 from .sources.aldi_chain import AldiOfferChain
 
@@ -64,7 +69,8 @@ class SourceLoader:
         self.official_netto_scottie = OfficialNettoScottieSource(http, self.netto_scottie_markets.resolve)
         self.netto_marken_markets = NettoMarkenMarketResolver(http)
         self.official_rossmann = OfficialRossmannSource(timeout_seconds=TIMEOUT_SECONDS)
-        self.official_mueller = OfficialMuellerSource(http, get_mueller_cookie, clear_mueller_cookie)
+        self.official_mueller = OfficialMuellerSource(http)
+        self.kaufda_mueller = KaufdaRetailerSource(http, "Müller", "Müller", "Mueller", use_viewer=True)
         self.official_dm = OfficialDmSource(http)
         self.official_marktkauf = OfficialMarktkaufSource(TIMEOUT_SECONDS)
         self.official_kaufland = OfficialKauflandSource(
@@ -73,6 +79,15 @@ class SourceLoader:
             TIMEOUT_SECONDS,
             cache_dir=KAUFLAND_CACHE_DIR,
             store_cache_ttl_seconds=KAUFLAND_STORE_CACHE_TTL_SECONDS,
+        )
+        self.official_trinkgut = OfficialTrinkgutSource(
+            locator,
+            TIMEOUT_SECONDS,
+            cache_dir=TRINKGUT_CACHE_DIR,
+            store_cache_ttl_seconds=TRINKGUT_STORE_CACHE_TTL_SECONDS,
+            max_distance_km=TRINKGUT_MAX_DISTANCE_KM,
+            deposit_workers=TRINKGUT_DEPOSIT_FETCH_WORKERS,
+            deposit_cache_ttl_seconds=TRINKGUT_DEPOSIT_CACHE_TTL_SECONDS,
         )
         self.mapper = OfferMapper()
 
@@ -142,7 +157,7 @@ class SourceLoader:
             count += 1
         return enriched, count
 
-    def load(self, postal_code: str, aldi_region: str, progress=None, retailers: tuple[str, ...] = (), rewe_market_id: str = "", netto_market_id: str = "", offer_week: str = "current", netto_scottie_market_id: str = "") -> dict[str, Any]:
+    def load(self, postal_code: str, aldi_region: str, progress=None, retailers: tuple[str, ...] = (), rewe_market_id: str = "", netto_market_id: str = "", offer_week: str = "current", netto_scottie_market_id: str = "", trinkgut_market_id: str = "") -> dict[str, Any]:
         notify = progress or (lambda **_fields: None)
         notify(status="loading", progress=5, source="Standortdienst", retailer="Alle Händler", category="Region", step="Region und Filialen werden ermittelt")
         contexts = self._contexts()
@@ -240,6 +255,15 @@ class SourceLoader:
             official_jobs["dm"] = lambda: self.official_dm.load(postal_code)
         if hasattr(self, "official_holab") and "HOL’AB!" in active_contexts:
             official_jobs["HOL’AB!"] = lambda: self.official_holab.load(postal_code)
+        if hasattr(self, "official_trinkgut") and "trinkgut" in active_contexts:
+            def load_trinkgut() -> list[Offer]:
+                if requested_week == "next":
+                    try:
+                        return self.official_trinkgut.load(postal_code, trinkgut_market_id, "next")
+                    except Exception:
+                        store_warnings.append("trinkgut: Noch keine Angebote der Folgewoche verfügbar; aktuelle Angebote werden angezeigt.")
+                return self.official_trinkgut.load(postal_code, trinkgut_market_id) if trinkgut_market_id else self.official_trinkgut.load(postal_code)
+            official_jobs["trinkgut"] = load_trinkgut
         initial_aggregator = any(
             name in active_contexts and name != "Globus" for name in AGGREGATOR_RETAILERS
         )
@@ -257,16 +281,14 @@ class SourceLoader:
                     offers = deduplicate_offers(list(future.result()))
                 except Exception as exc:
                     failed_primary.add(name)
-                    if name == "Müller" and "manuelle Browser-Bestätigung" in str(exc):
-                        challenge_urls[name] = self.official_mueller.OFFERS_URL
-                    if name in {"Marktkauf", "HOL’AB!"}:
+                    if name in {"Marktkauf", "HOL’AB!", "trinkgut"}:
                         source_states[name] = "kein Markt"
                     else:
                         request_errors.append(f"{name} offiziell: {type(exc).__name__}: {exc}")
                     continue
                 if not offers:
                     failed_primary.add(name)
-                    if name in {"Marktkauf", "HOL’AB!"}:
+                    if name in {"Marktkauf", "HOL’AB!", "trinkgut"}:
                         source_states[name] = "kein Markt"
                     else:
                         request_errors.append(f"{name} offiziell: keine Angebote für die Zielwoche")
@@ -332,6 +354,23 @@ class SourceLoader:
             name for name in AGGREGATOR_RETAILERS
             if name in active_contexts and name != "Globus"
         }
+        if "Müller" in failed_primary and "Müller" in active_contexts and "Müller" not in final_by_retailer:
+            # Müller's own site answers a plain request with a browser challenge.
+            # KaufDA's public page of the retailer is the first fallback; only when
+            # it has nothing does Marktguru get asked, below.
+            try:
+                kaufda_offers = deduplicate_offers(self.kaufda_mueller.load(target_date))
+            except Exception as exc:
+                request_errors.append(f"Müller KaufDA: {type(exc).__name__}: {exc}")
+            else:
+                if kaufda_offers:
+                    final_by_retailer["Müller"] = kaufda_offers
+                    source_states["Müller"] = "KaufDA-Fallback"
+                    failed_primary.discard("Müller")
+                    store_warnings.append(
+                        "Müller: offizielle Seite war nicht lesbar; KaufDA wurde als Fallback verwendet "
+                        "(nur ein Ausschnitt der Angebote)."
+                    )
         fallback_names = {
             name for name in failed_primary
             if name in active_contexts
@@ -462,6 +501,10 @@ class SourceLoader:
             active_contexts["Kaufland"] = self._context_with_market(
                 active_contexts["Kaufland"], label, self.official_kaufland.last_store_url
             )
+        if source_states.get("trinkgut") == "offiziell" and self.official_trinkgut.last_market_url:
+            active_contexts["trinkgut"] = self._context_with_market(
+                active_contexts["trinkgut"], self.official_trinkgut.last_market_label, self.official_trinkgut.last_market_url
+            )
 
         if requested_week == "next":
             for name, retailer_offers in list(final_by_retailer.items()):
@@ -531,15 +574,16 @@ class SupermarketEngine:
         self._refresh_lock = threading.Lock()
 
     @staticmethod
-    def cache_key(postal_code: str, aldi_region: str, retailers: tuple[str, ...] = (), rewe_market_id: str = "", netto_market_id: str = "", offer_week: str = "current", netto_scottie_market_id: str = "") -> str:
+    def cache_key(postal_code: str, aldi_region: str, retailers: tuple[str, ...] = (), rewe_market_id: str = "", netto_market_id: str = "", offer_week: str = "current", netto_scottie_market_id: str = "", trinkgut_market_id: str = "") -> str:
         selected = ",".join(sorted(retailers, key=str.casefold)) or "all"
         rewe = clean_text(rewe_market_id) or "auto"
         netto = clean_text(netto_market_id) or "auto"
         scottie = clean_text(netto_scottie_market_id) or "auto"
-        return f"v{SupermarketEngine.SNAPSHOT_SCHEMA}:{postal_code}:{normalize_aldi_region(aldi_region)}:{selected}:rewe-{rewe}:netto-{netto}:scottie-{scottie}:week-{normalize_offer_week(offer_week)}"
+        trinkgut = clean_text(trinkgut_market_id) or "auto"
+        return f"v{SupermarketEngine.SNAPSHOT_SCHEMA}:{postal_code}:{normalize_aldi_region(aldi_region)}:{selected}:rewe-{rewe}:netto-{netto}:scottie-{scottie}:trinkgut-{trinkgut}:week-{normalize_offer_week(offer_week)}"
 
-    def snapshot(self, postal_code: str, aldi_region: str, refresh: bool = False, progress=None, retailers: tuple[str, ...] = (), rewe_market_id: str = "", netto_market_id: str = "", offer_week: str = "current", netto_scottie_market_id: str = "") -> tuple[dict[str, Any], bool]:
-        key = self.cache_key(postal_code, aldi_region, retailers, rewe_market_id, netto_market_id, offer_week, netto_scottie_market_id)
+    def snapshot(self, postal_code: str, aldi_region: str, refresh: bool = False, progress=None, retailers: tuple[str, ...] = (), rewe_market_id: str = "", netto_market_id: str = "", offer_week: str = "current", netto_scottie_market_id: str = "", trinkgut_market_id: str = "") -> tuple[dict[str, Any], bool]:
+        key = self.cache_key(postal_code, aldi_region, retailers, rewe_market_id, netto_market_id, offer_week, netto_scottie_market_id, trinkgut_market_id)
         if not refresh:
             cached = self.store.get_by_key(key)
             if cached is not None:
@@ -553,8 +597,11 @@ class SupermarketEngine:
                     if progress:
                         progress(status="processing", progress=90, source="Cache", retailer="Alle Händler", category="Alle Kategorien", step="Gespeicherter Vergleich wird geöffnet", processed_sources=1, total_sources=1, processed_products=len(cached.get("offers", [])))
                     return cached, True
-            fresh = self.loader.load(postal_code, aldi_region, progress=progress, retailers=retailers, rewe_market_id=rewe_market_id, netto_market_id=netto_market_id, offer_week=offer_week, netto_scottie_market_id=netto_scottie_market_id)
-            return self.store.put(key, fresh, fresh_until=self.freshness_deadline(fresh, offer_week)), False
+            fresh = self.loader.load(postal_code, aldi_region, progress=progress, retailers=retailers, rewe_market_id=rewe_market_id, netto_market_id=netto_market_id, offer_week=offer_week, netto_scottie_market_id=netto_scottie_market_id, trinkgut_market_id=trinkgut_market_id)
+            stored = self.store.put(key, fresh, fresh_until=self.freshness_deadline(fresh, offer_week))
+            if normalize_offer_week(offer_week) == "current":
+                history.record(postal_code, stored)
+            return stored, False
 
     @staticmethod
     def freshness_deadline(snapshot: dict[str, Any], offer_week: str = "current", now: datetime | None = None, weekly: bool = CACHE_WEEKLY) -> float | None:

@@ -18,7 +18,9 @@ CATEGORIES = (
 
 # Concrete product kinds precede terms which can merely describe a flavour.
 _PRODUCT_RULES = (
-    ("Tiefkühl / Eis & Dessert", r"\b(?:ice cream|eiscreme|speiseeis|stieleis|wassereis|gelato|calippo|pirulo|dessert|mousse|\w*eis)\b"),
+    # „eis“ nur als Speiseeis: Das frühere `\w*eis` traf auch Reis, Preis, Hinweis (Netto schreibt „HINWEIS: MIT NETTO PLUS APP …“
+# in fast jede Beschreibung) und sortierte Fleisch, Gemüse und Getränke in diese Gruppe (Issue #46).
+    ("Tiefkühl / Eis & Dessert", r"\b(?:ice cream|eiscreme|eisbecher|eiskonfekt|eistorte|eiskugel|eiswaffel|speiseeis|stieleis|wassereis|softeis|milcheis|sahneeis|cremeeis|fruchteis|joghurteis|vanilleeis|schokoladeneis|erdbeereis|gelato|calippo|pirulo|dessert|mousse|eis)\b"),
     ("Haushalt & Reinigung", r"\b(?:bodenkehrer|kehrmaschine|besen|wischmopp|staubsauger|wc reiniger|\w*reiniger|grillanzuender|grillanzünder)\b"),
     ("Tierbedarf", r"\b(?:katzenfutter|hundefutter|katzenstreu|tierzubehoer|tierzubehör|tierfutter)\b"),
     ("Snacks", r"\b(?:pom bär|pom baer|chips|flips|knabber\w*|snacks?|smarties|chocolate|schokolade)\b"),
@@ -39,7 +41,7 @@ _SOURCE_RULES = (
     ("Obst & Gemüse", r"obst|gemuese|gemüse|salat|(?<!meeres)frucht|(?<!meeres)fruechte|(?<!meeres)früchte|beere|zitrus|melone"),
     ("Fleisch & Wurst", r"fleisch|wurst|wuerst|würst|gefluegel|geflügel|steak|schnitzel"),
     ("Fisch & Meeresfrüchte", r"fisch|meeresfr"),
-    ("Molkereiprodukte & Eier", r"molkerei|milch|kaese|käse|eier|sahne|schmand"),
+    ("Molkereiprodukte & Eier", r"molkerei|milch|kaese|käse|eier|sahne|schmand|joghurt|jogurt|quark|butter|frischk"),
     ("Tiefkühl / Eis & Dessert", r"tiefkuehl|tiefkühl|tk\b|eiscreme|speiseeis|dessert|\beis\b"),
     ("Backwaren", r"backwaren|baeck|bäck|brot"),
     ("Kühlprodukte", r"kuehl|kühl|frische convenience|feinkost"),

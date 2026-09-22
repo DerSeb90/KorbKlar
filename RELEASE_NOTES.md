@@ -1,3 +1,42 @@
+# 0.1.20
+
+Der Server übernimmt den Stand des Upstream-Projekts (Korbunio 0.1.37 bis
+0.1.55). Die Android-App dieses Forks ändert sich nur in der Versionsnummer;
+die Upstream-Änderungen an der Flutter-App sind noch nicht übernommen.
+
+- MCP-Server unter `/mcp` für KI-Assistenten: `find_offers`, `list_retailers`,
+  `list_bonus_programs`, `price_history`, `watch_product`/`list_watches`/
+  `remove_watch` (Benachrichtigung per ntfy oder Webhook), `check_shopping_list`
+  und optional `add_to_shopping_list` (nur mit eingerichtetem KitchenOwl).
+  Ein Schlüssel ist nur nötig, wenn `SUPERMARKT_API_KEY` gesetzt ist;
+  abschalten mit `SUPERMARKT_MCP=0`. Stdio-Adapter: `python -m
+  supermarkt.mcp_bridge` (Schlüssel aus `KORBKLAR_MCP_KEY`). Neue
+  Abhängigkeit `mcp`.
+- Neue Seite `/settings`: KitchenOwl-Adresse, Token und Liste eintragen (der
+  Token bleibt nur auf dem Server), Benachrichtigungsadresse, Einrichtungszeilen
+  für den MCP und eine Tabelle, wann je Händler zuletzt Angebote gesehen wurden
+  (`/health/sources`).
+- KitchenOwl: Artikel aus Suchergebnissen und Einkaufsliste gehen wieder direkt
+  an die auf dem Server eingerichtete Liste; die von der App erwarteten
+  Endpunkte sind implementiert. Beim Übertragen vieler Artikel wird die Liste
+  nur einmal abgerufen.
+- Der Server schreibt den Tagespreis je Händler und Artikel mit
+  (Preisverlauf).
+- Warengruppen als Reiter und Abschnitte in der Ergebnisliste, neue Sortierung
+  `sort=category` (Ladenrundgang). Die Suche berücksichtigt die Warengruppe
+  nicht mehr; „Tiefkühl / Eis & Dessert“ fängt „Hinweis“ nicht mehr als Eis.
+- Neuer Händler trinkgut (Markt bis `SUPERMARKT_TRINKGUT_MAX_DISTANCE_KM`,
+  sonst regional über Marktguru).
+- Müller: Angebote aus dem KaufDA-Prospekt-Viewer, ersatzweise KaufDA-Seite
+  und Marktguru. Die Cookie-Übergabe unter `/mueller/challenge` entfällt.
+- Kaufland: Preise der Filialregion statt der Standardregion; Gültigkeit im
+  deutschen Datumsformat.
+- EDEKA: probiert mehrere nahe Märkte, statt beim ersten aufzugeben.
+- `/api/v1/compare` kann optional `include_image_urls` liefern.
+- „Netto mit Hund“ heißt „Netto schwarz“; Händlerlinks auf die Produktsuche
+  stehen als Tooltip statt als Zeile unter jedem Treffer.
+- Bandit-Funde behoben (SQL-Aufbau, urlopen-Schema).
+
 # 0.1.19
 
 Der Server übernimmt den Stand des Upstream-Projekts (Korbunio 0.1.36):

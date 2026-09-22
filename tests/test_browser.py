@@ -17,31 +17,21 @@ def test_home_and_static_assets():
     assert 'src="/static/home-v2.js"' in response.text
     assert '<progress id="statusProgress"' in response.text
     assert "Welche Märkte möchtest du vergleichen?" in response.text
-    assert response.text.count('name="retailers"') == 15
+    assert response.text.count('name="retailers"') == 16
     assert 'value="dm" checked' in response.text
     assert 'value="Globus" checked' in response.text
     assert 'name="rewe_market_id"' in response.text
     assert 'name="offer_week"' in response.text
     assert 'value="next"' in response.text
-    assert "KorbKlar 0.1.19" in response.text
+    assert "KorbKlar 0.1.20" in response.text
+    assert "Korbuino" not in response.text
     assert "Korbunio" not in response.text
     assert client.get("/static/home.css").status_code == 200
     assert client.get("/static/results-v2.js").status_code == 200
 
 
-def test_mueller_challenge_explains_explicit_session_handoff():
-    response = TestClient(app).get("/mueller/challenge")
-    assert response.status_code == 200
-    assert "www.mueller.de/c/online-angebote/" in response.text
-    assert "Cookie-Header" in response.text
 
 
-def test_mueller_session_handoff_does_not_echo_cookie():
-    client = TestClient(app)
-    response = client.post("/mueller/session", data={"cookie": "__Secure-test=temporary"}, follow_redirects=False)
-    assert response.status_code == 303
-    assert "temporary" not in response.text
-    client.post("/mueller/session/clear", follow_redirects=False)
 
 
 def test_theme_switcher_is_shared_persistent_and_overrides_system_theme():
@@ -122,7 +112,7 @@ def test_search_job_route_passes_refresh_to_the_job_store(monkeypatch):
     recorded = {}
 
     class RecordingJobs:
-        def start(self, postal_code, aldi_region="auto", refresh=False, retailers=(), rewe_market_id="", netto_market_id=""):
+        def start(self, postal_code, aldi_region="auto", refresh=False, retailers=(), rewe_market_id="", netto_market_id="", trinkgut_market_id=""):
             recorded["value"] = refresh
             recorded["retailers"] = retailers
             return "job-id"
@@ -146,7 +136,7 @@ def test_search_job_passes_explicit_next_week(monkeypatch):
     recorded = {}
 
     class RecordingJobs:
-        def start(self, postal_code, aldi_region="auto", refresh=False, retailers=(), rewe_market_id="", netto_market_id="", offer_week="current"):
+        def start(self, postal_code, aldi_region="auto", refresh=False, retailers=(), rewe_market_id="", netto_market_id="", offer_week="current", trinkgut_market_id=""):
             recorded["offer_week"] = offer_week
             return "job-id"
 
@@ -297,3 +287,36 @@ def test_browser_netto_market_lookup_returns_all_exact_matches(monkeypatch):
     response = TestClient(app).get("/netto/markets", params={"postal_code": "12345"})
     assert response.status_code == 200
     assert [market["market_id"] for market in response.json()["markets"]] == ["10", "20"]
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+def test_results_page_has_category_tabs_and_a_sort_by_category():
+    page = TestClient(app).get("/results")
+    text = page.text if page.status_code == 200 else ""
+    if not text:
+        from pathlib import Path
+        text = (Path(__file__).parents[1] / "src/supermarkt/static/results.html").read_text(encoding="utf-8")
+    assert 'id="categoryChips"' in text
+    assert 'value="category"' in text
+    script = TestClient(app).get("/static/results-v2.js").text
+    assert "renderCategoryTabs" in script
+    assert "collapsedGroups" in script
+
+
+def test_the_cookie_handoff_pages_are_gone():
+    client = TestClient(app)
+    assert client.get("/mueller/challenge").status_code == 404
+    assert client.post("/mueller/session", data={"cookie": "a=b"}, follow_redirects=False).status_code in {404, 405}

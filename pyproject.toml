@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "korb-klar"
-version = "0.1.19"
+version = "0.1.20"
 description = "KorbKlar: self-hosted comparison of regional supermarket offers in Germany."
 readme = "README.md"
 requires-python = ">=3.12"
@@ -20,6 +20,8 @@ dependencies = [
   "beautifulsoup4>=4.12,<5",
   "uvicorn>=0.52,<1",
   "python-multipart>=0.0.20,<1",
+  # MCP server (/mcp) so that AI assistants can query offers. From 2.0 FastMCP is called MCPServer.
+  "mcp>=2.2,<3",
   # Windows ships no IANA time zone database; zoneinfo needs this for Europe/Berlin.
   "tzdata>=2025.2; sys_platform == 'win32'",
 ]

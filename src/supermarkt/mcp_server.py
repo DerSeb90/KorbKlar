@@ -1,0 +1,627 @@
+"""MCP-Server: KorbKlar-Angebote für LLMs abfragbar machen (nur Lesen).
+
+Ein KI-Programm fragt zum Beispiel „Wo ist Kaffee im Angebot?“ und bekommt Händler, den
+Preis ohne Bonusprogramm und, wenn es einen öffentlich ausgewiesenen gibt, den Preis mit
+Bonusprogramm, dazu Bilder. Der Server bindet ihn unter ``/mcp`` ein (Streamable HTTP);
+``python -m supermarkt.mcp_server`` startet ihn für lokale Programme über stdio.
+
+Die Wartezeit ist der schwierige Teil: Für eine neue Postleitzahl lädt der Server alle
+Händler, das dauert meist 10 bis 20 Sekunden, bei einer langsamen Quelle länger. Deshalb
+
+* wird die Standard-Postleitzahl (und zuletzt gefragte) im Hintergrund frisch gehalten,
+* läuft ein Laden im Hintergrund weiter, auch wenn die Frage abgebrochen wird,
+* melden lange Abfragen ihren Fortschritt, und
+* bekommt das Programm nach der Frist eine freundliche „gleich noch einmal fragen“-Antwort
+  statt eines Zeitüberschreitungsfehlers.
+"""
+from __future__ import annotations
+
+import asyncio
+import base64
+import contextlib
+import logging
+import os
+import re
+import time
+from typing import Any, Optional
+
+from mcp.server.mcpserver import Context, MCPServer
+from mcp.types import CallToolResult, ImageContent, TextContent, ToolAnnotations
+from pydantic import BaseModel, Field
+
+from . import history, kitchenowl, notify, runtime
+from .common import validate_postal_code
+from .images import ImageServiceError
+from .loyalty import PROGRAMS
+from .models import RETAILER_SPECS, ToolError, resolve_retailer_names
+
+log = logging.getLogger(__name__)
+
+# So lange wartet eine Frage auf das Laden, bevor sie um Geduld bittet.
+LOAD_DEADLINE_SECONDS = float(os.environ.get("SUPERMARKT_MCP_DEADLINE_SECONDS", "45"))
+MAX_IMAGES = 3
+# Schreib-Werkzeug: höchstens so viele neue Artikel pro Stunde (schützt die Einkaufsliste vor Fluten).
+SHOPPING_ADDS_PER_HOUR = int(os.environ.get("SUPERMARKT_MCP_SHOPPING_ADDS_PER_HOUR", "30"))
+CHECK_LIST_MAX_ITEMS = 30
+# Neue Postleitzahlen (Kaltladen) pro 10 Minuten; schützt den Server vor Dauerabfragen.
+NEW_POSTAL_CODE_LIMIT = int(os.environ.get("SUPERMARKT_MCP_NEW_POSTAL_CODES_PER_10MIN", "10"))
+# Die Angebote wechseln wöchentlich (Donnerstag/Sonntag): Einmal am Tag nachsehen genügt. Der Zwischenspeicher
+# entscheidet, ob wirklich neu geladen wird; so ist die Antwort nach dem Wechsel schon warm.
+WARM_INTERVAL_SECONDS = 24 * 3600
+WARM_WHILE_USED_SECONDS = 7 * 86400
+MAX_WARM_POSTAL_CODES = 3
+
+INSTRUCTIONS = (
+    "Aktuelle Supermarkt-Angebote in Deutschland. Mit find_offers fragst du, wo ein Produkt gerade "
+    "im Angebot ist: Die Antwort nennt Händler und Preis ohne Bonusprogramm (Kundenkarte oder App) und, wo "
+    "es einen öffentlich ausgewiesenen Vorteil gibt, den Preis mit Bonusprogramm. Bei manchen Händlern "
+    "(zum Beispiel EDEKA, Globus, PAYBACK, Rossmann, Müller) gibt es keinen berechenbaren Bonuspreis; das ist "
+    "dann keine Aussage, dass es keinen Vorteil gibt. Preise gelten für die genannte Postleitzahl. Suche mit "
+    "dem Produktnamen und, wenn nötig, Synonymen in also_search; die Suche ist eine Textsuche. Wenn es "
+    "das Werkzeug add_to_shopping_list gibt, setzt es einen Artikel auf die Einkaufsliste; frage vorher, ob das "
+    "gewünscht ist, und nimm Händler und Preis aus dem Fund mit. check_shopping_list zeigt, was von der "
+    "Einkaufsliste gerade im Angebot ist."
+)
+
+
+# Häufige Alltagswörter, die im Prospekt anders heißen. Bewusst klein und von Hand gepflegt.
+SYNONYMS: dict[str, tuple[str, ...]] = {
+    "osterhase": ("schokohase", "schoko-osterhase", "osterhasen"),
+    "schokohase": ("osterhase", "osterhasen"),
+    "weihnachtsmann": ("schoko-weihnachtsmann", "schokoweihnachtsmann", "nikolaus"),
+    "klopapier": ("toilettenpapier", "hygienepapier"),
+    "toilettenpapier": ("klopapier", "hygienepapier"),
+    "brötchen": ("semmel", "schrippe"),
+    "hackfleisch": ("gehacktes", "hack"),
+    "sprudel": ("mineralwasser", "sprudelwasser"),
+    "mineralwasser": ("sprudel", "wasser"),
+    "joghurt": ("jogurt",),
+    "jogurt": ("joghurt",),
+    "ketchup": ("catchup", "tomatenketchup"),
+    "mayo": ("mayonnaise",),
+    "pommes": ("pommes frites", "fritten"),
+    "eis": ("speiseeis", "eiscreme"),
+    "spülmittel": ("geschirrspülmittel", "handspülmittel"),
+    "waschmittel": ("vollwaschmittel", "colorwaschmittel", "feinwaschmittel"),
+    "cola": ("coca-cola", "pepsi"),
+    "nutella": ("nuss-nougat-creme", "nussnougatcreme"),
+    "kaffeebohnen": ("bohnenkaffee", "ganze bohne"),
+    "schmelzkäse": ("schmelzkäsezubereitung", "streichkäse"),
+    "frischkäse": ("doppelrahmfrischkäse", "streichkäse"),
+    "tiefkühlpizza": ("pizza", "steinofenpizza"),
+    "chips": ("kartoffelchips", "kartoffelsnack"),
+}
+# Händler, bei denen die Angebotsdaten keinen berechenbaren Bonuspreis hergeben.
+NO_COMPUTED_BONUS = ("EDEKA", "Globus", "Rossmann", "Müller")
+
+
+def _synonyms(product: str) -> list[str]:
+    key = " ".join(product.split()).casefold()
+    return list(SYNONYMS.get(key, ()))
+
+
+class Offer(BaseModel):
+    retailer: str = Field(description="Händler, z. B. Kaufland")
+    product: str
+    pack: str = Field(default="", description="Packungsgröße")
+    unit_price: str = Field(default="", description="Grundpreis, z. B. 8,95 €/kg")
+    price_without_bonus: str = Field(description="Preis ohne Bonusprogramm")
+    price_with_bonus: Optional[str] = Field(default=None, description="Preis mit Bonusprogramm, nur wenn es einen gibt")
+    bonus_program: Optional[str] = Field(default=None, description="Welches Programm dafür nötig ist, z. B. Kaufland Card XTRA")
+    valid: str = Field(default="", description="Gültigkeit")
+    image_url: Optional[str] = Field(default=None, description="Bild des Angebots (Adresse beim Händler)")
+
+
+class OfferResult(BaseModel):
+    postal_code: str
+    query: str
+    found: int = Field(description="Anzahl Treffer insgesamt")
+    offers: list[Offer] = Field(description="Die günstigsten Treffer zuerst")
+
+
+class StillLoading(Exception):
+    """Die Angebote dieser Postleitzahl werden noch geladen."""
+
+
+mcp = MCPServer("korbklar", instructions=INSTRUCTIONS)
+
+_inflight: dict[tuple, asyncio.Task] = {}
+_last_used: dict[str, float] = {}
+_warm_started = False
+_new_postal_codes: list[float] = []
+_shopping_adds: list[float] = []
+
+
+# ---- laden -------------------------------------------------------------------------------
+
+
+def _postal_code(value: str) -> str:
+    plz = validate_postal_code((value or os.environ.get("SUPERMARKT_DEFAULT_POSTAL_CODE", "")).strip())
+    if not plz:
+        raise ValueError("Bitte eine gültige deutsche Postleitzahl (fünf Ziffern) angeben.")
+    return plz
+
+
+def _retailers(values: list[str] | None) -> tuple[str, ...]:
+    if not values:
+        return ()
+    resolved, unknown = resolve_retailer_names(values)
+    if unknown:
+        raise ValueError("Unbekannte Händler: " + ", ".join(unknown) + ". Gültig: " + ", ".join(spec.name for spec in RETAILER_SPECS))
+    return tuple(resolved)
+
+
+def _load_snapshot(plz: str, retailers: tuple[str, ...], refresh: bool = False) -> dict[str, Any]:
+    snapshot, _from_cache = runtime.get_engine().snapshot(plz, "auto", refresh, retailers=retailers)
+    return snapshot
+
+
+def _check_new_postal_code(plz: str) -> None:
+    if plz in _last_used:
+        return
+    now = time.time()
+    _new_postal_codes[:] = [t for t in _new_postal_codes if now - t < 600]
+    if len(_new_postal_codes) >= NEW_POSTAL_CODE_LIMIT:
+        raise ValueError("Zu viele verschiedene Postleitzahlen in kurzer Zeit. Bitte in ein paar Minuten noch einmal fragen.")
+    _new_postal_codes.append(now)
+
+
+async def _snapshot(plz: str, retailers: tuple[str, ...], ctx: Context | None = None) -> dict[str, Any]:
+    """Angebote laden, mit Frist. Ein begonnenes Laden läuft weiter und wird gemeinsam genutzt."""
+    _check_new_postal_code(plz)
+    _last_used[plz] = time.time()
+    _start_warmup()
+    key = (plz, retailers)
+    task = _inflight.get(key)
+    if task is None or task.done():
+        task = asyncio.ensure_future(asyncio.to_thread(_load_snapshot, plz, retailers))
+        _inflight[key] = task
+        task.add_done_callback(lambda finished, key=key: _inflight.pop(key, None) if _inflight.get(key) is finished else None)
+    waited = 0.0
+    step = 3.0
+    while not task.done():
+        if waited >= LOAD_DEADLINE_SECONDS:
+            raise StillLoading
+        await asyncio.wait({task}, timeout=step)
+        waited += step
+        if ctx is not None and not task.done():
+            with contextlib.suppress(Exception):
+                await ctx.report_progress(min(waited, LOAD_DEADLINE_SECONDS), LOAD_DEADLINE_SECONDS, "Angebote werden geladen …")
+    try:
+        return task.result()
+    except ToolError as exc:
+        raise ValueError(f"Die Angebote konnten nicht geladen werden: {exc}") from exc
+
+
+def _start_warmup() -> None:
+    """Hält die zuletzt gefragten Postleitzahlen frisch, solange der MCP benutzt wird."""
+    global _warm_started
+    if _warm_started or os.environ.get("SUPERMARKT_MCP_WARMUP", "1") == "0":
+        return
+    with contextlib.suppress(RuntimeError):
+        asyncio.get_running_loop().create_task(_warm_loop())
+        _warm_started = True
+
+
+def _watch_postal_codes() -> list[str]:
+    try:
+        return sorted({watch["postal_code"] for watch in history.list_watches()})
+    except Exception:  # noqa: BLE001
+        return []
+
+
+def _check_watches(plz: str, snapshot: dict[str, Any]) -> None:
+    """Meldet neue Treffer für die Beobachtungen dieser Postleitzahl (jeder Treffer nur einmal)."""
+    for watch in history.list_watches(plz):
+        matches = []
+        for offer in _offers_from(snapshot, watch["query"], None, ()):
+            shown = offer.price_with_bonus or offer.price_without_bonus
+            if watch["max_cents"] is None or _euro(shown) * 100 <= watch["max_cents"] + 0.5:
+                matches.append(offer)
+        keys = {f"{o.retailer}|{o.product}|{o.price_with_bonus or o.price_without_bonus}|{o.valid}": o for o in matches}
+        fresh = history.unnotified(watch["id"], list(keys))
+        if not fresh:
+            continue
+        lines = []
+        for key in fresh[:5]:
+            offer = keys[key]
+            extra = f" mit {offer.bonus_program}" if offer.price_with_bonus else ""
+            lines.append(f"{offer.retailer}: {offer.product} {offer.price_with_bonus or offer.price_without_bonus}{extra}")
+        title = f"KorbKlar: {watch['query']} im Angebot"
+        try:
+            notify.send(title, "\n".join(lines))
+        except notify.NotifyError:
+            log.warning("Benachrichtigung für Beobachtung %s fehlgeschlagen", watch["id"], exc_info=True)
+            continue
+        history.mark_notified(watch["id"], fresh)
+
+
+async def _warm_loop() -> None:
+    default = validate_postal_code(os.environ.get("SUPERMARKT_DEFAULT_POSTAL_CODE", "")) or ""
+    if default:
+        _last_used.setdefault(default, time.time())
+    delay = 60.0  # kurz nach dem Start einmal nachsehen, danach im Takt
+    while True:
+        await asyncio.sleep(delay)
+        delay, now = WARM_INTERVAL_SECONDS, time.time()
+        recent = sorted((p for p, used in _last_used.items() if now - used < WARM_WHILE_USED_SECONDS), key=lambda p: -_last_used[p])
+        for plz in dict.fromkeys([*recent[:MAX_WARM_POSTAL_CODES], *_watch_postal_codes()]):
+            try:
+                snapshot = await asyncio.to_thread(_load_snapshot, plz, (), False)
+                await asyncio.to_thread(_check_watches, plz, snapshot)
+            except Exception:  # noqa: BLE001 - Vorwärmen darf nie stören
+                log.warning("Vorwärmen für %s fehlgeschlagen", plz, exc_info=True)
+
+
+# ---- Werkzeuge ---------------------------------------------------------------------------
+
+
+def _euro(text: str) -> float:
+    try:
+        return float(text.replace("€", "").replace(".", "").replace(",", ".").strip())
+    except ValueError:
+        return float("inf")
+
+
+def _offers_from(snapshot: dict[str, Any], product: str, also_search: list[str] | None, retailers: tuple[str, ...]) -> list[Offer]:
+    engine = runtime.get_engine()
+    common = {"filter_text": product, "keywords": tuple(also_search or ()), "page": 1, "page_size": 100, "view": "all", "sort": "price", "include_image_urls": True}
+    plain = engine.page(snapshot, loyalty_programs=(), **common)
+    programs = tuple(p["id"] for p in plain.get("available_loyalty_programs", []) if p.get("priced_offer_count"))
+    with_bonus = engine.page(snapshot, loyalty_programs=programs, **common) if programs else plain
+    bonus_by_id = {offer["offer_id"]: offer for offer in with_bonus.get("offers", [])}
+    result: list[Offer] = []
+    for item in plain.get("offers", []):
+        other = bonus_by_id.get(item["offer_id"], item)
+        cheaper = (
+            other.get("effective_price") is not None
+            and item.get("effective_price") is not None
+            and other["effective_price"] < item["effective_price"]
+        )
+        result.append(Offer(
+            retailer=item["retailer"], product=item["product"], pack=item.get("pack", ""), unit_price=item.get("unit_price", ""),
+            price_without_bonus=item["regular_price_text"],
+            price_with_bonus=other["effective_price_text"] if cheaper else None,
+            bonus_program=(other.get("loyalty_benefit") or None) if cheaper else None,
+            valid=item.get("validity", ""), image_url=item.get("image_url") or None,
+        ))
+    result.sort(key=lambda offer: _euro(offer.price_with_bonus or offer.price_without_bonus))
+    return result
+
+
+def _search_variants(product: str) -> list[str]:
+    """Einzelwörter und gekürzte Beugungsformen („Joghurts“ → „Joghurt“), wenn die ganze Wortgruppe nichts findet."""
+    variants: list[str] = []
+    for word in re.findall(r"[\wäöüß-]{3,}", product, flags=re.IGNORECASE):
+        for form in (word, word[:-1] if word.lower().endswith(("s", "n", "e")) else "", word[:-2] if word.lower().endswith(("en", "er")) else ""):
+            if len(form) >= 4 and form.lower() != product.lower() and form not in variants:
+                variants.append(form)
+    return variants
+
+
+def _image_block(offer: Offer) -> ImageContent | None:
+    """Bild des Angebots über den Bilddienst des Servers (Adressprüfung, Zwischenspeicher, Größenlimit)."""
+    if not offer.image_url:
+        return None
+    try:
+        image = runtime.get_image_service().get(source_url=offer.image_url, product=offer.product, retailer=offer.retailer)
+    except (ImageServiceError, ToolError, OSError, ValueError):
+        return None
+    return ImageContent(type="image", data=base64.b64encode(image.data).decode("ascii"), mime_type=image.content_type)
+
+
+def _valid_text(offer: Offer) -> str:
+    """Gültigkeit lesbar: deutsche Daten, ohne vorangestellten Händlernamen."""
+    text = re.sub(r"(\d{4})-(\d{2})-(\d{2})", r"\3.\2.\1", offer.valid)
+    prefix = offer.retailer + ", "
+    return text[len(prefix):] if text.startswith(prefix) else text
+
+
+def _summary(result: OfferResult) -> str:
+    lines = [f"{result.found} Treffer für „{result.query}“ (PLZ {result.postal_code}), günstigste zuerst:"]
+    for offer in result.offers:
+        line = f"- {offer.retailer}: {offer.product} {offer.pack}".rstrip() + f" – {offer.price_without_bonus} ohne Bonus"
+        if offer.price_with_bonus:
+            line += f", {offer.price_with_bonus} mit {offer.bonus_program or 'Bonusprogramm'}"
+        if offer.unit_price:
+            line += f" ({offer.unit_price})"
+        valid = _valid_text(offer)
+        if valid:
+            # Manche Quellen schreiben schon "gültig ..." in die Angabe.
+            line += ", " + (valid if "gültig" in valid.casefold() else f"gültig {valid}")
+        lines.append(line)
+    return "\n".join(lines)
+
+
+def _waiting_result(plz: str, query: str) -> CallToolResult:
+    text = (
+        f"Die Angebote für die Postleitzahl {plz} werden gerade zum ersten Mal geladen. Das läuft im Hintergrund weiter "
+        "und dauert höchstens eine Minute. Bitte frage in etwa 30 Sekunden noch einmal genau dasselbe, dann kommt die Antwort sofort."
+    )
+    return CallToolResult(content=[TextContent(type="text", text=text)], structured_content={"status": "loading", "postal_code": plz, "query": query})
+
+
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=True))
+async def find_offers(
+    product: str,
+    postal_code: str = "",
+    retailers: list[str] | None = None,
+    also_search: list[str] | None = None,
+    limit: int = 8,
+    with_images: bool = True,
+    max_images: int = 1,
+    ctx: Context | None = None,
+) -> CallToolResult:
+    """Wo ist ein Produkt gerade im Angebot? Liefert Händler und Preis ohne und, falls vorhanden, mit Bonusprogramm.
+
+    Args:
+        product: Suchbegriff, z. B. "Kaffee" oder "Hochland Schmelzkäse".
+        postal_code: Deutsche Postleitzahl (fünf Ziffern). Leer = Standard des Servers.
+        retailers: Nur diese Händler, z. B. ["Kaufland", "REWE"]. Leer = alle. Gültige Namen liefert list_retailers.
+        also_search: Weitere Suchbegriffe für dieselbe Frage (ODER), z. B. Synonyme oder Schreibweisen.
+        limit: Höchstens so viele Treffer, die günstigsten zuerst (1 bis 25).
+        with_images: Bilder der ersten Treffer mitschicken.
+        max_images: Wie viele Bilder (0 bis 3, Standard 1); jedes Bild kostet Kontext.
+    """
+    if not product.strip():
+        raise ValueError("Bitte sage, welches Produkt gesucht wird.")
+    plz = _postal_code(postal_code)
+    wanted = _retailers(retailers)
+    limit = max(1, min(int(limit), 25))
+    try:
+        snapshot = await _snapshot(plz, wanted, ctx)
+    except StillLoading:
+        return _waiting_result(plz, product)
+    also_search = [*(also_search or []), *_synonyms(product)]
+    offers = await asyncio.to_thread(_offers_from, snapshot, product.strip(), also_search, wanted)
+    widened = False
+    if not offers:
+        variants = _search_variants(product)
+        if variants:
+            offers = await asyncio.to_thread(_offers_from, snapshot, product.strip(), [*(also_search or []), *variants], wanted)
+            widened = bool(offers)
+    result = OfferResult(postal_code=plz, query=product.strip(), found=len(offers), offers=offers[:limit])
+    if not result.offers:
+        text = f"Keine Angebote für „{result.query}“ bei der Postleitzahl {plz} gefunden. Versuche einen anderen Begriff oder Synonyme (also_search)."
+        return CallToolResult(content=[TextContent(type="text", text=text)], structured_content=result.model_dump())
+    content: list[TextContent | ImageContent] = [TextContent(type="text", text=_summary(result))]
+    if widened:
+        content[0].text += "\n(Nichts mit genau diesem Begriff; gezeigt sind ähnliche Treffer zu einzelnen Wörtern.)"
+    silent = sorted({offer.retailer for offer in result.offers if offer.retailer in NO_COMPUTED_BONUS and not offer.price_with_bonus})
+    if silent:
+        content[0].text += f"\nHinweis: Bei {', '.join(silent)} gibt es keinen berechenbaren Bonuspreis; das heißt nicht, dass es keinen Vorteil gibt."
+    if with_images and max_images > 0:
+        shown = [offer for offer in result.offers if offer.image_url][:min(max_images, MAX_IMAGES)]
+        blocks = await asyncio.gather(*(asyncio.to_thread(_image_block, offer) for offer in shown))
+        for offer, block in zip(shown, blocks, strict=True):
+            if block is not None:
+                content.append(TextContent(type="text", text=f"Bild: {offer.retailer} – {offer.product}"))
+                content.append(block)
+    return CallToolResult(content=content, structured_content=result.model_dump())
+
+
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False))
+def list_retailers() -> list[dict[str, Any]]:
+    """Welche Händler kennt KorbKlar, und welches Bonusprogramm gehört zu welchem?"""
+    programs: dict[str, list[str]] = {}
+    for program in PROGRAMS:
+        for retailer in program.retailers:
+            programs.setdefault(retailer, []).append(program.label)
+    return [{"name": spec.name, "bonus_programs": programs.get(spec.name, [])} for spec in RETAILER_SPECS]
+
+
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=True))
+async def list_bonus_programs(postal_code: str = "", ctx: Context | None = None) -> CallToolResult:
+    """Welche Bonusprogramme (Kundenkarten oder Apps) berücksichtigt KorbKlar, und für wie viele Angebote gibt es einen Preis?"""
+    plz = _postal_code(postal_code)
+    try:
+        snapshot = await _snapshot(plz, (), ctx)
+    except StillLoading:
+        return _waiting_result(plz, "")
+    page = await asyncio.to_thread(
+        runtime.get_engine().page, snapshot, page=1, page_size=1, view="best_only", sort="price", loyalty_programs=(),
+    )
+    programs = [
+        {"id": p["id"], "name": p["label"], "retailers": p["retailers"], "offers_with_price": p["priced_offer_count"], "note": p.get("note", "")}
+        for p in page.get("available_loyalty_programs", [])
+    ]
+    text = "\n".join(f"- {p['name']} ({', '.join(p['retailers'])}): {p['offers_with_price']} Angebote mit Preis" for p in programs)
+    return CallToolResult(content=[TextContent(type="text", text=text or "Keine Bonusprogramme.")], structured_content={"programs": programs})
+
+
+# ---- Einkaufsliste (optional, schreibend) ---------------------------------------------------
+#
+# Nur vorhanden, wenn KitchenOwl im Server eingerichtet ist (Seite /settings oder Umgebungsvariablen).
+# Das Werkzeug legt nur Artikel an; es liest, ändert oder löscht nichts.
+
+
+async def add_to_shopping_list(item: str, retailer: str = "", price: str = "", note: str = "") -> CallToolResult:
+    """Setzt einen Artikel auf die Einkaufsliste (KitchenOwl). Legt nur an, ändert und löscht nichts.
+
+    Args:
+        item: Artikelname, z. B. "Hochland Schmelzkäse".
+        retailer: Händler, bei dem er im Angebot ist (kommt in die Notiz), z. B. "Kaufland".
+        price: Preis, der in die Notiz kommt, z. B. "1,59 €".
+        note: Weitere Notiz.
+    """
+    name = " ".join(item.split())[:120]
+    if not name:
+        raise ValueError("Bitte sage, welcher Artikel auf die Liste soll.")
+    parts = [f"bei {' '.join(retailer.split())[:40]}" if retailer.strip() else "", " ".join(price.split())[:20], " ".join(note.split())[:120]]
+    description = " · ".join(part for part in parts if part)
+    settings = kitchenowl.load()
+    if settings is None:
+        raise ValueError("KitchenOwl ist auf diesem Server nicht eingerichtet.")
+    now = time.time()
+    _shopping_adds[:] = [t for t in _shopping_adds if now - t < 3600]
+    if len(_shopping_adds) >= SHOPPING_ADDS_PER_HOUR:
+        raise ValueError("Zu viele neue Artikel in dieser Stunde. Bitte später noch einmal.")
+    try:
+        added = await asyncio.to_thread(kitchenowl.add_item, settings, name, description)
+    except kitchenowl.KitchenOwlError as exc:
+        raise ValueError(str(exc)) from exc
+    if added:
+        _shopping_adds.append(now)
+    text = f"„{name}“ steht jetzt auf der Einkaufsliste." if added else f"„{name}“ stand schon auf der Einkaufsliste."
+    return CallToolResult(content=[TextContent(type="text", text=text)], structured_content={"item": name, "added": added, "note": description})
+
+
+async def check_shopping_list(postal_code: str = "", ctx: Context | None = None) -> CallToolResult:
+    """Welche Artikel auf meiner Einkaufsliste (KitchenOwl) sind gerade im Angebot? Nur lesen.
+
+    Args:
+        postal_code: Deutsche Postleitzahl (fünf Ziffern). Leer = Standard des Servers.
+    """
+    settings = kitchenowl.load()
+    if settings is None:
+        raise ValueError("KitchenOwl ist auf diesem Server nicht eingerichtet.")
+    plz = _postal_code(postal_code)
+    try:
+        items = (await asyncio.to_thread(kitchenowl.list_items, settings))[:CHECK_LIST_MAX_ITEMS]
+    except kitchenowl.KitchenOwlError as exc:
+        raise ValueError(str(exc)) from exc
+    if not items:
+        return CallToolResult(content=[TextContent(type="text", text="Die Einkaufsliste ist leer.")], structured_content={"items": []})
+    try:
+        snapshot = await _snapshot(plz, (), ctx)
+    except StillLoading:
+        return _waiting_result(plz, "Einkaufsliste")
+    rows: list[dict[str, Any]] = []
+    lines: list[str] = []
+    for entry in items:
+        offers = (await asyncio.to_thread(_offers_from, snapshot, entry["name"], None, ()))[:2]
+        rows.append({"item": entry["name"], "offers": [offer.model_dump() for offer in offers]})
+        if offers:
+            best = offers[0]
+            price = best.price_with_bonus or best.price_without_bonus
+            extra = f" mit {best.bonus_program}" if best.price_with_bonus else ""
+            lines.append(f"- {entry['name']}: {best.retailer} {best.product} {price}{extra}")
+        else:
+            lines.append(f"- {entry['name']}: nicht im Angebot")
+    on_offer = sum(1 for row in rows if row["offers"])
+    text = f"{on_offer} von {len(rows)} Artikeln der Liste sind im Angebot (PLZ {plz}):\n" + "\n".join(lines)
+    return CallToolResult(content=[TextContent(type="text", text=text)], structured_content={"postal_code": plz, "items": rows})
+
+
+def register_shopping_tool() -> bool:
+    """Meldet das Einkaufslisten-Werkzeug an, wenn KitchenOwl eingerichtet ist; sonst bleibt es unsichtbar."""
+    for name in ("add_to_shopping_list", "check_shopping_list"):
+        with contextlib.suppress(Exception):
+            mcp.remove_tool(name)
+    if kitchenowl.load() is None:
+        return False
+    mcp.add_tool(add_to_shopping_list, annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=True, openWorldHint=True))
+    mcp.add_tool(check_shopping_list, annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=True))
+    return True
+
+
+register_shopping_tool()
+
+
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False))
+async def price_history(product: str, postal_code: str = "", days: int = 90) -> CallToolResult:
+    """Wie haben sich die Angebotspreise für ein Produkt entwickelt? Nur was dieser Server selbst gesehen hat.
+
+    Args:
+        product: Suchbegriff, alle Wörter müssen im Namen vorkommen, z. B. "Hochland Schmelzkäse".
+        postal_code: Deutsche Postleitzahl. Leer = Standard des Servers.
+        days: Zeitraum in Tagen (1 bis 400).
+    """
+    if not product.strip():
+        raise ValueError("Bitte sage, für welches Produkt der Verlauf gewünscht ist.")
+    plz = _postal_code(postal_code)
+    rows = await asyncio.to_thread(history.price_history, product.strip(), plz, int(days))
+    if not rows:
+        text = (f"Für „{product.strip()}“ hat dieser Server bei PLZ {plz} noch keine Preise gesehen. "
+                "Der Verlauf wächst mit jedem Abruf; er beginnt erst ab der Einrichtung dieser Funktion.")
+        return CallToolResult(content=[TextContent(type="text", text=text)], structured_content={"postal_code": plz, "history": []})
+    def euro(cents: int) -> str:
+        return f"{cents / 100:.2f}".replace(".", ",") + " €"
+
+    def german(day: str) -> str:
+        return ".".join(reversed(day.split("-")))
+    lines = [
+        f"- {r['retailer']}: {r['product']} – zuletzt {euro(r['last_cents'])} ({german(r['last_seen'])}), "
+        f"niedrigster {euro(r['lowest_cents'])}, höchster {euro(r['highest_cents'])}, an {r['days_seen']} Tag(en) gesehen seit {german(r['first_seen'])}"
+        for r in rows
+    ]
+    return CallToolResult(content=[TextContent(type="text", text=f"Preisverlauf (PLZ {plz}):\n" + "\n".join(lines))],
+                          structured_content={"postal_code": plz, "history": rows})
+
+
+async def watch_product(product: str, max_price: str = "", postal_code: str = "") -> CallToolResult:
+    """Gib Bescheid, sobald ein Produkt im Angebot ist (optional nur unter einem Preis). Benachrichtigung per ntfy/Webhook.
+
+    Args:
+        product: Suchbegriff, z. B. "Kaffee".
+        max_price: Höchstpreis in Euro, z. B. "5,49". Leer = bei jedem Angebot.
+        postal_code: Deutsche Postleitzahl. Leer = Standard des Servers.
+    """
+    if not product.strip():
+        raise ValueError("Bitte sage, welches Produkt beobachtet werden soll.")
+    if notify.load() is None:
+        raise ValueError("Es ist keine Benachrichtigung eingerichtet (Seite /settings des Servers).")
+    plz = _postal_code(postal_code)
+    limit = None
+    if max_price.strip():
+        raw = max_price.replace("€", "").strip()
+        euros = _euro(raw if "," in raw else raw.replace(".", ","))
+        if euros == float("inf") or euros <= 0:
+            raise ValueError("Der Höchstpreis ist keine Zahl, zum Beispiel 5,49.")
+        limit = round(euros * 100)
+    watch = await asyncio.to_thread(history.add_watch, " ".join(product.split())[:80], limit, plz)
+    _last_used.setdefault(plz, time.time())
+    _start_warmup()
+    price = f" unter {max_price.strip()} €" if limit is not None else ""
+    return CallToolResult(content=[TextContent(type="text", text=f"Ich gebe Bescheid, sobald „{watch['query']}“{price} im Angebot ist (PLZ {plz}, Nr. {watch['id']}).")],
+                          structured_content=watch)
+
+
+async def list_watches() -> CallToolResult:
+    """Welche Produkte werden beobachtet?"""
+    watches = await asyncio.to_thread(history.list_watches)
+    if not watches:
+        return CallToolResult(content=[TextContent(type="text", text="Es wird nichts beobachtet.")], structured_content={"watches": []})
+    lines = [f"- Nr. {w['id']}: {w['query']}" + (f" unter {w['max_cents'] / 100:.2f} €".replace(".", ",") if w["max_cents"] else "") + f" (PLZ {w['postal_code']})" for w in watches]
+    return CallToolResult(content=[TextContent(type="text", text="\n".join(lines))], structured_content={"watches": watches})
+
+
+async def remove_watch(watch_id: int) -> CallToolResult:
+    """Beobachtung beenden.
+
+    Args:
+        watch_id: Nummer aus list_watches.
+    """
+    removed = await asyncio.to_thread(history.remove_watch, int(watch_id))
+    text = f"Beobachtung {watch_id} ist beendet." if removed else f"Eine Beobachtung {watch_id} gibt es nicht."
+    return CallToolResult(content=[TextContent(type="text", text=text)], structured_content={"removed": removed})
+
+
+def register_watch_tools() -> bool:
+    """Beobachten braucht einen Benachrichtigungsweg; ohne ihn sind die Werkzeuge unsichtbar."""
+    for name in ("watch_product", "list_watches", "remove_watch"):
+        with contextlib.suppress(Exception):
+            mcp.remove_tool(name)
+    if notify.load() is None:
+        return False
+    mcp.add_tool(watch_product, annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=True, openWorldHint=True))
+    mcp.add_tool(list_watches, annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False))
+    mcp.add_tool(remove_watch, annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=True, idempotentHint=True, openWorldHint=False))
+    return True
+
+
+register_watch_tools()
+
+
+def start_background() -> None:
+    """Beim Serverstart aufrufen, damit Beobachtungen auch ohne MCP-Anfrage geprüft werden."""
+    if _watch_postal_codes():
+        _start_warmup()
+
+
+def main() -> None:  # pragma: no cover - Einstieg für stdio
+    mcp.run("stdio")
+
+
+if __name__ == "__main__":  # pragma: no cover
+    main()
