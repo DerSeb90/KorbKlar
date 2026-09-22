@@ -28,7 +28,7 @@ FROM scratch AS final
 ARG PYTHON_BASE
 ARG APP_VERSION=0.1.20
 COPY --from=runtime-rootfs / /
-LABEL org.opencontainers.image.source="https://github.com/lesecuritae/KorbKlar" \
+LABEL org.opencontainers.image.source="https://github.com/DerSeb90/KorbKlar" \
       org.opencontainers.image.version="${APP_VERSION}" \
       org.opencontainers.image.base.name="${PYTHON_BASE}"
 # trivy:ignore:AVD-DS-0031 -- this is a path to a runtime-generated file, not secret material.
