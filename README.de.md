@@ -25,7 +25,7 @@ Eine LLM ist deshalb heute **keine Voraussetzung**. Wer möchte, kann KorbKlar w
 Vorausgesetzt werden **Docker Engine**, **Docker Compose v2**, Git und Internetzugriff für den Container.
 
 ```bash
-git clone https://github.com/lesecuritae/KorbKlar.git
+git clone https://github.com/DerSeb90/KorbKlar.git
 cd KorbKlar
 docker compose pull
 docker compose up -d --no-build
@@ -129,8 +129,11 @@ Der aktuelle Stand enthält Adapter beziehungsweise regionale Datenwege für:
 - Rossmann
 - Müller
 - famila Nordwest
+- trinkgut
 
-REWE, EDEKA, Marktkauf, Kaufland, GLOBUS sowie die passende ALDI-Region werden bevorzugt direkt aus den jeweiligen Händlerquellen geladen. ALDI Süd verwendet den strukturierten offiziellen Wochenprospekt als vollständige Primärquelle; ALDI Nord liefert Preis, Grundpreis, ausdrückliches Pfand und Produktbild aus seinem offiziellen Angebotsdatensatz. Lidl, PENNY, Netto Marken-Discount und famila Nordwest werden über regionale Marktguru-Daten eingebunden. Netto schwarz, Rossmann, Müller und HOL’AB! besitzen getrennte, quellenspezifische Datenwege. Fällt eine direkte Händlerquelle aus, kann ein vorhandener regionaler Datenweg gezielt für diesen Händler einspringen. Ein erfolgreicher Direktbestand wird dabei nicht mit einem zweiten vollständigen Bestand vermischt.
+REWE, EDEKA, Marktkauf, Kaufland, GLOBUS sowie die passende ALDI-Region werden bevorzugt direkt aus den jeweiligen Händlerquellen geladen. ALDI Süd verwendet den strukturierten offiziellen Wochenprospekt als vollständige Primärquelle; ALDI Nord liefert Preis, Grundpreis, ausdrückliches Pfand und Produktbild aus seinem offiziellen Angebotsdatensatz. Lidl, PENNY, Netto Marken-Discount und famila Nordwest werden über regionale Marktguru-Daten eingebunden. Netto schwarz, Rossmann, Müller, HOL’AB! und trinkgut besitzen getrennte, quellenspezifische Datenwege. Fällt eine direkte Händlerquelle aus, kann ein vorhandener regionaler Datenweg gezielt für diesen Händler einspringen. Ein erfolgreicher Direktbestand wird dabei nicht mit einem zweiten vollständigen Bestand vermischt.
+
+Bei trinkgut wird die Filiale der Postleitzahl oder sonst die nächstgelegene verwendet. Liegt sie weiter als `SUPERMARKT_TRINKGUT_MAX_DISTANCE_KM` (Standard 40 km) entfernt, wird sie nicht als lokal ausgegeben: Die offizielle Quelle meldet dann, dass es in der Nähe keine gibt, und die regionalen Marktguru-Daten greifen. Ist die Pfandangabe im Listing abgeschnitten, wird die Produktseite gelesen (höchstens `SUPERMARKT_TRINKGUT_DEPOSIT_FETCH_WORKERS` gleichzeitig) und der Wert gemerkt.
 
 Bei mehreren exakten Filialtreffern innerhalb einer Postleitzahl können REWE- und Netto-Marken-Discount-Filialen gezielt ausgewählt werden. REWE-Angebote werden filialbezogen geladen. Bei Netto Marken-Discount bleibt der derzeitige Angebotskatalog regional; die gewählte offizielle Filiale wird deshalb transparent angezeigt, ohne filialgenaue Preise zu versprechen.
 
@@ -194,6 +197,28 @@ Browser oder REST-Client
 ```
 
 Eine LLM kann davor oder dahinter eingesetzt werden, etwa für natürlichsprachliche Abfragen, Zusammenfassungen oder einen automatisierten Montagsbericht. Sie ist aber keine Runtime-Abhängigkeit. Dadurch bleibt der eigentliche Vergleich schnell und kann unabhängig von einem bestimmten Modell, Agenten oder Frontend betrieben werden.
+
+## MCP-Server für KI-Assistenten
+
+Der Server bringt unter `/mcp` (Streamable HTTP) einen MCP-Server mit. Ein KI-Assistent kann damit fragen „Wo ist Hochland Schmelzkäse im Angebot?“ und bekommt Händler, Preis ohne Bonusprogramm, Preis mit Bonusprogramm (wo die Daten einen Vorteil beziffern) und ein Bild (bis zu drei mit `max_images`). Nur Lesen.
+
+- Werkzeuge: `find_offers`, `list_retailers`, `list_bonus_programs`.
+- Adresse in der MCP-Konfiguration des Clients: `https://<dein-server>/mcp`. Ist `SUPERMARKT_API_KEY` gesetzt, muss der Client `Authorization: Bearer <Schlüssel>` senden; sonst ist der Zugang offen wie der Rest des Servers.
+- Lokal ohne HTTP: `python -m supermarkt.mcp_server` (stdio).
+- Wartezeit: Eine neue Postleitzahl lädt alle Händler (meist 10 bis 20 Sekunden). Das Laden läuft im Hintergrund weiter, lange Abfragen melden Fortschritt, und nach 45 Sekunden (`SUPERMARKT_MCP_DEADLINE_SECONDS`) bittet der Server, gleich noch einmal zu fragen. Die Standard-Postleitzahl und zuletzt gefragte werden frisch gehalten.
+- Einkaufsliste (optional): Ist KitchenOwl eingerichtet, gibt es zusätzlich `add_to_shopping_list`. Die Einrichtung ist die Seite `/settings` (Adresse, Token, Liste wählen); der Token liegt nur auf dem Server im Datenordner (Datei `kitchenowl.json`, Rechte 0600) und wird nie wieder angezeigt. Mit gesetztem `SUPERMARKT_API_KEY` verlangt die Seite den Admin-Schlüssel. Alternativ gehen `SUPERMARKT_KITCHENOWL_URL`, `SUPERMARKT_KITCHENOWL_TOKEN` und `SUPERMARKT_KITCHENOWL_LIST_ID`. Es legt einen Artikel mit Händler und Preis als Notiz auf die KitchenOwl-Liste, doppelte werden übersprungen. Das ist das einzige schreibende Werkzeug und nur mit Token da; nimm einen Token, der nur für diese Liste taugt, und lass den Server nur im eigenen Netz laufen.
+- Preisverlauf: Der Server schreibt bei jedem frischen Laden den niedrigsten Tagespreis je Händler und Artikel mit (SQLite `price-history.sqlite3` im Datenordner, ein Jahr). `price_history` zeigt, ob ein Angebot wirklich günstig ist. Der Verlauf beginnt erst mit dieser Version.
+- Beobachten: `watch_product`, `list_watches`, `remove_watch` (bis zu 20). Die Angebote wechseln nur wöchentlich, deshalb sieht der Server einmal am Tag nach (Neuladen nur, wenn der Zwischenspeicher abgelaufen ist) und meldet jeden neuen Treffer einmal, optional nur unter einem Höchstpreis. Die Meldung geht an eine Adresse, die auf `/settings` eingetragen wird (ntfy-Thema oder Webhook, per POST); ohne sie gibt es die Werkzeuge nicht.
+- `check_shopping_list` zeigt, was von der KitchenOwl-Liste gerade im Angebot ist. `add_to_shopping_list` ist auf 30 neue Artikel pro Stunde begrenzt (`SUPERMARKT_MCP_SHOPPING_ADDS_PER_HOUR`).
+- Open WebUI: Admin-Bereich → Einstellungen → Externe Werkzeuge → hinzufügen, Typ „MCP (Streamable HTTP)“, Adresse `https://<dein-server>/mcp`, bei gesetztem Schlüssel Authentifizierung „Bearer“. Von einem Docker-Container aus muss die Adresse erreichbar sein (nicht `localhost`).
+- Programme, die MCP nur über stdio sprechen: `python -m supermarkt.mcp_bridge https://dein-server/mcp` (Schlüssel in `KORBKLAR_MCP_KEY`). Fertige Zeilen für die Einrichtung stehen auf `/settings`.
+- Abschalten: `SUPERMARKT_MCP=0`.
+
+## Betrieb: Sicherung und Schutz
+
+- **Sicherung:** Der Datenordner (`/data`, im Docker das Volume `korbklar-data`) enthält den Preisverlauf, die Beobachtungen, die KitchenOwl-Einstellung mit Token und die Benachrichtigungsadresse. Nimm ihn in deine Sicherung auf.
+- **Schlüssel setzen:** Ohne `SUPERMARKT_API_KEY` ist `/settings` offen wie der Rest des Servers, und jeder mit Zugang könnte das KitchenOwl-Ziel oder die Benachrichtigungsadresse ändern. Setze den Schlüssel, sobald du den MCP-Server mit Schreib-Werkzeugen nutzt.
+- **Quellen im Blick:** Unter `/settings` zeigt eine Tabelle, wann der Server je Händler zuletzt Angebote gesehen hat (JSON: `/health/sources`).
 
 ## REST-API
 

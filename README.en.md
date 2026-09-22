@@ -25,7 +25,7 @@ An LLM is therefore optional and is not a runtime requirement. The original idea
 You need Docker Engine, Docker Compose v2, Git, and internet access from the container.
 
 ```bash
-git clone https://github.com/lesecuritae/KorbKlar.git
+git clone https://github.com/DerSeb90/KorbKlar.git
 cd KorbKlar
 docker compose pull
 docker compose up -d --no-build
@@ -98,9 +98,11 @@ The browser interface and REST API use the same comparison engine. Retailer adap
 
 ## Supported retailers and data paths
 
-KorbKlar currently supports REWE, EDEKA, Marktkauf, ALDI Nord, ALDI Süd, Kaufland, Lidl, PENNY, Netto Marken-Discount, Netto schwarz, GLOBUS, HOL’AB!, Rossmann, Müller, and famila Nordwest.
+KorbKlar currently supports REWE, EDEKA, Marktkauf, ALDI Nord, ALDI Süd, Kaufland, Lidl, PENNY, Netto Marken-Discount, Netto schwarz, GLOBUS, HOL’AB!, Rossmann, Müller, famila Nordwest and trinkgut.
 
 REWE, EDEKA, Marktkauf, Kaufland, GLOBUS, and the applicable ALDI region are loaded preferentially from direct retailer sources. ALDI Süd uses its structured official weekly publication as its complete primary source. ALDI Nord takes price, unit price, explicitly published deposit, and product image from its official offer data. If the ALDI region cannot be determined unambiguously and no explicit selection was made, ALDI is omitted and a warning is shown.
+
+For trinkgut, the store list is downloaded from the official trinkgut website (or taken from cached data) and the store with the postal code, or else the nearest one, is used. A store further away than `SUPERMARKT_TRINKGUT_MAX_DISTANCE_KM` (default 40 km) is not presented as local: the official source reports that there is none nearby and the regional Marktguru data is used instead. Where the listing cuts the deposit off, the product page is read for it (at most `SUPERMARKT_TRINKGUT_DEPOSIT_FETCH_WORKERS` at a time) and the value is remembered.
 
 Lidl, PENNY, Netto Marken-Discount, and famila Nordwest are loaded from regional Marktguru data. Netto schwarz, Rossmann, Müller, and HOL’AB! use separate source-specific data paths. KorbKlar combines a broad regional search with supplementary retailer-name searches where applicable; the name queries alone are never treated as a complete catalogue.
 
@@ -111,6 +113,7 @@ famila Nordwest only trades in north-western Germany and is therefore optional i
 famila Nordwest and famila Nordost are separate, unrelated retail groups. Only famila Nordwest is matched; famila Nordost is explicitly excluded so its offers can never appear under the Bünting brand.
 
 If a direct adapter fails or returns no offers for the target week, Marktguru may act as a fallback for that retailer only. A successful direct catalogue is never mixed with a second complete Marktguru catalogue. Actual availability depends on postal code, region, and reachable sources; retailers without results are not shown as empty filters.
+
 
 ```bash
 docker exec korbklar python -m supermarkt.diagnostics 12345
@@ -175,6 +178,28 @@ Browser / script / REST client / LLM
 ```
 
 A local LLM can still use KorbKlar, for example for an automatic Monday report through Conduit, natural-language queries, or summaries. The price comparison itself requires no LLM and remains independent of any model, agent, or frontend.
+
+## MCP server for AI assistants
+
+The server ships an MCP server at `/mcp` (Streamable HTTP). An assistant can ask "where is Hochland cream cheese on offer?" and gets the retailer, the price without a loyalty programme, the price with one (where the data quantifies a benefit) and one image (up to three with `max_images`). Read-only.
+
+- Tools: `find_offers`, `list_retailers`, `list_bonus_programs`.
+- Client configuration: `https://<your-server>/mcp`. If `SUPERMARKT_API_KEY` is set, the client must send `Authorization: Bearer <key>`; otherwise access is open like the rest of the server.
+- Locally without HTTP: `python -m supermarkt.mcp_server` (stdio).
+- Waiting: a new postal code loads every retailer (usually 10 to 20 seconds). Loading continues in the background, long calls report progress, and after 45 seconds (`SUPERMARKT_MCP_DEADLINE_SECONDS`) the server asks the client to repeat the question shortly. The default postal code and recently used ones are kept fresh.
+- Shopping list (optional): once KitchenOwl is set up, `add_to_shopping_list` is offered too. Set it up on the `/settings` page (address, token, pick a list); the token stays on the server in the data folder (`kitchenowl.json`, mode 0600) and is never shown again. With `SUPERMARKT_API_KEY` set, the page asks for the admin key. `SUPERMARKT_KITCHENOWL_URL`, `..._TOKEN` and `..._LIST_ID` work as an alternative. It puts an item with retailer and price as a note on the KitchenOwl list and skips duplicates. It is the only writing tool and exists only with a token; use a token that is good for this list only and keep the server on your own network.
+- Price history: on every fresh load the server records the lowest daily price per retailer and product (SQLite `price-history.sqlite3` in the data folder, one year). `price_history` shows whether an offer is really cheap. History starts with this version.
+- Watching: `watch_product`, `list_watches`, `remove_watch` (up to 20). Offers only change weekly, so the server looks once a day (reloading only when the cache has expired) and reports each new match once, optionally only below a maximum price. Messages go to an address entered on `/settings` (an ntfy topic or a webhook, via POST); without it these tools do not exist.
+- `check_shopping_list` shows which items on the KitchenOwl list are on offer now. `add_to_shopping_list` is limited to 30 new items per hour (`SUPERMARKT_MCP_SHOPPING_ADDS_PER_HOUR`).
+- Open WebUI: Admin panel → Settings → External Tools → add, type "MCP (Streamable HTTP)", URL `https://<your-server>/mcp`, authentication "Bearer" if a key is set. From inside a Docker container the address must be reachable (not `localhost`).
+- Clients that only speak stdio: `python -m supermarkt.mcp_bridge https://your-server/mcp` (key in `KORBKLAR_MCP_KEY`). Ready-made setup lines are on `/settings`.
+- Disable with `SUPERMARKT_MCP=0`.
+
+## Operations: backup and protection
+
+- **Backup:** The data folder (`/data`, the `korbklar-data` volume in Docker) holds the price history, watches, the KitchenOwl setting with its token and the notification address. Include it in your backups.
+- **Set a key:** Without `SUPERMARKT_API_KEY`, `/settings` is open like the rest of the server, and anyone with access could change the KitchenOwl target or the notification address. Set the key as soon as you use the MCP server with its writing tools.
+- **Watching sources:** On `/settings` a table shows when the server last saw offers per retailer (JSON: `/health/sources`).
 
 ## REST API
 
@@ -260,6 +285,12 @@ The default setup needs no `.env`. [`.env.example`](.env.example) documents ever
 - `SUPERMARKT_IMAGE_CACHE_TTL_SECONDS`
 - `SUPERMARKT_IMAGE_CACHE_MAX_BYTES`
 - `SUPERMARKT_IMAGE_MAX_FILE_BYTES`
+- `SUPERMARKT_TRINKGUT_MAX_DISTANCE_KM`
+- `SUPERMARKT_TRINKGUT_DEPOSIT_FETCH_WORKERS`
+- `SUPERMARKT_TRINKGUT_DEPOSIT_CACHE_TTL_SECONDS`
+- `SUPERMARKT_TRINKGUT_STORE_CACHE_TTL_SECONDS`
+- `SUPERMARKT_TRINKGUT_CACHE_DIR`
+
 
 The historical internal prefixes remain part of the current technical interface. `.env.example` is authoritative for meanings, defaults, and Docker paths.
 
