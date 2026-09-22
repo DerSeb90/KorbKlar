@@ -1,0 +1,106 @@
+<!doctype html><html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light dark"><meta name="theme-color" content="#116149"><script src="/static/theme.js"></script><title>KorbKlar – Einstellungen</title><link rel="stylesheet" href="/static/results.css"><style>
+.settingsPage{max-width:34rem;margin:0 auto;padding:1rem}
+.settingsPage label{display:block;margin:.9rem 0 .25rem;font-weight:600}
+.settingsPage input,.settingsPage select{width:100%;box-sizing:border-box;padding:.6rem;font:inherit;border:1px solid #8886;border-radius:.5rem;background:transparent;color:inherit}
+.settingsPage .row{display:flex;gap:.6rem;flex-wrap:wrap;margin-top:1rem}
+.settingsPage button{padding:.6rem 1rem;font:inherit;border:0;border-radius:2rem;background:#116149;color:#fff;cursor:pointer}
+.settingsPage button.plain{background:transparent;color:inherit;border:1px solid #8886}
+.settingsPage .hint{opacity:.75;font-size:.9rem;margin:.3rem 0}
+#msg{margin-top:1rem;font-weight:600}
+</style></head><body><main class="settingsPage"><header class="titlebar"><h1>Korb<span style="color:var(--accent)">Klar</span> · Einstellungen</h1><div class="titleActions"><a class="newSearch" href="/">Angebote suchen</a></div></header>
+<h2>MCP für KI-Assistenten</h2>
+<p class="hint">Adresse des MCP-Servers: <code id="mcpUrl"></code></p>
+<p class="hint"><b>Open WebUI:</b> Admin-Bereich → Einstellungen → Externe Werkzeuge → hinzufügen, Typ „MCP (Streamable HTTP)“, die Adresse oben eintragen. Verlangt der Server einen Schlüssel, Authentifizierung „Bearer“ wählen. Läuft Open WebUI in Docker, muss die Adresse von dort erreichbar sein (nicht <code>localhost</code>). Ältere Versionen ohne MCP-Unterstützung brauchen die Brücke <code>mcpo</code>.</p>
+<p class="hint">Andere Programme, zum Beispiel Claude Code (<code>claude mcp add --transport http korbklar &lt;Adresse&gt;</code>) oder JSON: <code id="cmdJson" style="white-space:pre-wrap;display:block"></code></p>
+<p class="hint">Mit Schlüssel: Header <code>Authorization: Bearer …</code> ergänzen. Programme nur mit stdio: <code>python -m supermarkt.mcp_bridge &lt;Adresse&gt;</code> (Schlüssel in <code>KORBKLAR_MCP_KEY</code>).</p>
+<hr>
+<h2>KitchenOwl</h2>
+<p class="hint">Damit kann ein KI-Assistent über den MCP-Server Artikel auf deine KitchenOwl-Einkaufsliste setzen. Der Token wird nur auf dem Server gespeichert und nie wieder angezeigt.</p>
+<p id="state" class="hint"></p>
+<div id="adminBox" hidden><label for="admin">Admin-Schlüssel des Servers</label><input id="admin" type="password" autocomplete="off"><p class="hint">Der Server ist mit einem Schlüssel geschützt. Er wird nur in diesem Tab gemerkt.</p></div>
+<label for="url">KitchenOwl-Adresse (https)</label><input id="url" type="url" placeholder="https://kitchenowl.example.net" autocomplete="off">
+<label for="token">Token</label><input id="token" type="password" autocomplete="off" placeholder="leer lassen, um den gespeicherten zu behalten">
+<div class="row"><button id="load" type="button">Listen laden</button></div>
+<label for="list">Einkaufsliste</label><select id="list"><option value="">– erst Listen laden –</option></select>
+<div class="row"><button id="save" type="button">Speichern</button><button id="remove" class="plain" type="button">Entfernen</button></div>
+<p id="msg" role="status"></p>
+<h2>Quellen</h2>
+<p class="hint">Wann der Server je Händler zuletzt Angebote gesehen hat. Steht dort seit Tagen dasselbe Datum, liefert die Quelle nichts Neues.</p>
+<table id="sources" style="width:100%;border-collapse:collapse"></table>
+<h2>Benachrichtigung</h2>
+<p class="hint">Damit der Assistent Produkte beobachten kann („sag Bescheid, wenn Kaffee unter 5 € ist“), braucht der Server eine Adresse, an die er Meldungen schickt, zum Beispiel ein ntfy-Thema (https://ntfy.sh/dein-geheimes-thema). Die Adresse wird nur auf dem Server gespeichert und nie wieder angezeigt. Beim Speichern kommt eine Testmeldung.</p>
+<p id="notifyState" class="hint"></p>
+<label for="notifyUrl">Adresse</label><input id="notifyUrl" type="url" placeholder="https://ntfy.sh/…" autocomplete="off">
+<div class="row"><button id="notifySave" type="button">Speichern und testen</button><button id="notifyRemove" class="plain" type="button">Entfernen</button></div>
+<script>
+const $ = id => document.getElementById(id);
+const key = () => { try { return sessionStorage.getItem("korbklarAdmin") || ""; } catch { return ""; } };
+async function api(method, body) {
+  const headers = {"Content-Type": "application/json"};
+  const k = $("admin").value.trim() || key();
+  if (k) { headers.Authorization = "Bearer " + k; try { sessionStorage.setItem("korbklarAdmin", k); } catch {} }
+  const path = method === "POST" ? "/api/v1/kitchenowl/lists" : "/api/v1/kitchenowl";
+  const response = await fetch(path, {method: method === "POST" ? "POST" : method, headers, body: body ? JSON.stringify(body) : undefined});
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(typeof data.detail === "string" ? data.detail : "Fehler " + response.status);
+  return data;
+}
+function show(text, bad) { $("msg").textContent = text; $("msg").style.color = bad ? "#b3261e" : ""; }
+function render(s) {
+  $("adminBox").hidden = !s.auth_required;
+  $("state").textContent = s.configured ? "Verbunden mit " + s.url + " · Liste: " + (s.list_label || s.list_id) : "Noch nicht eingerichtet.";
+  if (s.url && !$("url").value) $("url").value = s.url;
+  if (s.configured) { $("list").innerHTML = ""; $("list").add(new Option(s.list_label || s.list_id, s.list_id)); }
+}
+async function refresh() {
+  try { render(await api("GET")); } catch (e) {
+    if (/Bearer|Admin|401|Schlüssel/i.test(e.message)) { $("adminBox").hidden = false; show("Bitte den Admin-Schlüssel eintragen und neu laden.", true); } else show(e.message, true);
+  }
+}
+$("load").onclick = async () => {
+  try {
+    const {lists} = await api("POST", {url: $("url").value, token: $("token").value});
+    $("list").innerHTML = "";
+    lists.forEach(l => $("list").add(new Option(l.label, l.id)));
+    show(lists.length + " Liste(n) gefunden. Wähle eine und speichere.");
+  } catch (e) { show(e.message, true); }
+};
+$("save").onclick = async () => {
+  try {
+    render(await api("PUT", {url: $("url").value, token: $("token").value, list_id: $("list").value}));
+    $("token").value = ""; show("Gespeichert.");
+  } catch (e) { show(e.message, true); }
+};
+$("remove").onclick = async () => {
+  if (!confirm("KitchenOwl-Verbindung und Token vom Server löschen?")) return;
+  try { render(await api("DELETE")); $("list").innerHTML = ""; show("Entfernt."); } catch (e) { show(e.message, true); }
+};
+async function notifyApi(method, body) {
+  const headers = {"Content-Type": "application/json"};
+  const k = $("admin").value.trim() || key();
+  if (k) headers.Authorization = "Bearer " + k;
+  const response = await fetch("/api/v1/notify", {method, headers, body: body ? JSON.stringify(body) : undefined});
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(typeof data.detail === "string" ? data.detail : "Fehler " + response.status);
+  return data;
+}
+function renderNotify(s) { $("notifyState").textContent = s.configured ? "Eingerichtet." : "Noch nicht eingerichtet."; }
+$("notifySave").onclick = async () => { try { renderNotify(await notifyApi("PUT", {url: $("notifyUrl").value})); $("notifyUrl").value = ""; show("Gespeichert, Testmeldung gesendet."); } catch (e) { show(e.message, true); } };
+$("notifyRemove").onclick = async () => { try { renderNotify(await notifyApi("DELETE")); show("Entfernt."); } catch (e) { show(e.message, true); } };
+notifyApi("GET").then(renderNotify).catch(() => {});
+fetch("/health/sources").then(r => r.json()).then(d => {
+  const t = $("sources");
+  const rows = d.retailers || [];
+  t.innerHTML = rows.length ? "" : "<tr><td>Noch keine Daten, sie entstehen mit dem nächsten Laden.</td></tr>";
+  rows.forEach(r => {
+    const tr = t.insertRow();
+    tr.insertCell().textContent = r.retailer;
+    tr.insertCell().textContent = r.last_day.split("-").reverse().join(".") + (r.days_ago > 8 ? " (veraltet)" : "");
+    tr.insertCell().textContent = r.offers + " Angebote";
+  });
+}).catch(() => {});
+const mcp = location.origin + "/mcp";
+$("mcpUrl").textContent = mcp;
+$("cmdJson").textContent = JSON.stringify({mcpServers: {korbklar: {type: "http", url: mcp}}}, null, 2);
+refresh();
+</script></main></body></html>

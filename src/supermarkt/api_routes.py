@@ -5,15 +5,47 @@ from typing import Any, Literal
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
 from .access import build_result_path, build_result_url, proxy_page_images, require_admin_auth, require_api_auth, require_app_result_auth, verify_result_token
-from .api_models import AccessTokenRequest, SearchJobRequest, SupermarketRequest
+from .api_models import AccessTokenRequest, SearchJobRequest, ShoppingListItemRequest, ShoppingListWriteRequest, SupermarketRequest
 from .jobs import SearchCapacityError
 from .loyalty import normalize_program_ids
 from .models import ToolError, resolve_retailer_names
 from .security import create_client_token
-from . import runtime
+from . import kitchenowl, runtime
 from .preferences import home_defaults
 
 router = APIRouter()
+
+
+def _kitchenowl_settings(entity_id: str = "") -> kitchenowl.Settings:
+    settings = kitchenowl.load()
+    if settings is None:
+        raise HTTPException(status_code=404, detail="KitchenOwl ist auf diesem Server nicht eingerichtet.")
+    if entity_id and entity_id != settings.list_id:
+        raise HTTPException(status_code=422, detail="Diese KitchenOwl-Liste ist auf dem Server nicht eingerichtet.")
+    return settings
+
+
+def _kitchenowl_item(item: ShoppingListItemRequest) -> tuple[str, str]:
+    name = " ".join((item.name or item.product).split())[:120]
+    if item.description.strip():
+        return name, " ".join(item.description.split())[:500]
+    parts = (
+        f"bei {' '.join(item.retailer.split())[:80]}" if item.retailer.strip() else "",
+        " ".join(item.price_text.split())[:80],
+        " ".join(item.pack.split())[:120],
+        " ".join(item.validity.split())[:120],
+    )
+    return name, " · ".join(part for part in parts if part)
+
+
+def add_kitchenowl_items(request_data: ShoppingListWriteRequest) -> dict[str, list[str]]:
+    settings = _kitchenowl_settings(request_data.entity_id)
+    entries = [_kitchenowl_item(item) for item in request_data.items]
+    try:
+        kitchenowl.add_items(settings, entries)  # die Liste wird einmal abgerufen, nicht je Artikel
+    except kitchenowl.KitchenOwlError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return {"added": [name for name, _ in entries]}
 
 
 @router.get("/api/v1/client", include_in_schema=False)
@@ -69,7 +101,7 @@ def supermarket_compare(request_data: SupermarketRequest, request: Request, _: N
         if request_data.offer_week == "next":
             snapshot_kwargs["offer_week"] = "next"
         snapshot, from_cache = engine.snapshot(request_data.postal_code, request_data.aldi_region, request_data.refresh, **snapshot_kwargs)
-        page = engine.page(snapshot, filter_text=request_data.filter_text, keywords=tuple(request_data.keywords), retailer=request_data.retailer, page=request_data.page, page_size=request_data.page_size, view=request_data.view, loyalty_programs=tuple(request_data.loyalty_programs), sort=request_data.sort, include_image_urls=False)
+        page = engine.page(snapshot, filter_text=request_data.filter_text, keywords=tuple(request_data.keywords), retailer=request_data.retailer, page=request_data.page, page_size=request_data.page_size, view=request_data.view, loyalty_programs=tuple(request_data.loyalty_programs), sort=request_data.sort, include_image_urls=request_data.include_image_urls)
         page["status"] = "ok"
         page["from_cache"] = from_cache
         page["result_url"] = build_result_url(request, snapshot["search_id"], tuple(request_data.loyalty_programs))
@@ -83,6 +115,15 @@ def rewe_markets(postal_code: str = Query(min_length=5, max_length=5, pattern=r"
     try:
         markets = runtime.get_engine().loader.official_rewe.markets(postal_code)
         return {"postal_code": postal_code, "markets": markets}
+    except ToolError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+
+@router.get("/api/v1/trinkgut/markets", summary="trinkgut-Märkte einer PLZ auflösen", include_in_schema=False)
+def trinkgut_markets(postal_code: str = Query(min_length=5, max_length=5, pattern=r"^\d{5}$"), _: None = Depends(require_api_auth)) -> dict[str, Any]:
+    try:
+        markets = runtime.get_engine().loader.official_trinkgut.markets(postal_code)
+        return {"postal_code": postal_code, "markets": markets, "count": len(markets)}
     except ToolError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
@@ -136,7 +177,7 @@ def result_data(
     page_size: int = Query(default=100, ge=1, le=100),
     view: Literal["best_only", "all"] = Query(default="best_only"),
     loyalty: str = Query(default="", max_length=500),
-    sort: Literal["price", "unit_price", "retailer", "product"] = Query(default="price"),
+    sort: Literal["price", "unit_price", "retailer", "product", "category"] = Query(default="price"),
     _: None = Depends(require_app_result_auth),
 ) -> dict[str, Any]:
     verify_result_token(search_id, token)
@@ -148,3 +189,32 @@ def result_data(
             loyalty_programs=normalize_program_ids(loyalty.split(",")), sort=sort, include_image_urls=True))
     except ToolError as exc:
         raise HTTPException(status_code=410, detail=str(exc)) from exc
+
+
+@router.get("/results/{search_id}/shopping-list/targets", include_in_schema=False)
+def shopping_list_targets(search_id: str, token: str = Query(default="")) -> dict[str, Any]:
+    verify_result_token(search_id, token)
+    settings = kitchenowl.load()
+    if settings is None:
+        return {"configured": False, "targets": [], "default_entity": ""}
+    return {
+        "configured": True,
+        "targets": [{"entity_id": settings.list_id, "label": settings.list_label or "KitchenOwl"}],
+        "default_entity": settings.list_id,
+    }
+
+
+@router.get("/results/{search_id}/shopping-list/entries", include_in_schema=False)
+def shopping_list_entries(search_id: str, token: str = Query(default=""), entity_id: str = Query(default="", max_length=12)) -> dict[str, Any]:
+    verify_result_token(search_id, token)
+    settings = _kitchenowl_settings(entity_id)
+    try:
+        return {"items": [item["name"] for item in kitchenowl.list_items(settings)]}
+    except kitchenowl.KitchenOwlError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+
+@router.post("/results/{search_id}/shopping-list/items", include_in_schema=False)
+def shopping_list_items(search_id: str, request_data: ShoppingListWriteRequest, token: str = Query(default="")) -> dict[str, list[str]]:
+    verify_result_token(search_id, token)
+    return add_kitchenowl_items(request_data)

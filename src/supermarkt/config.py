@@ -47,9 +47,13 @@ DATA_DIR = _env_path("SUPERMARKT_DATA_DIR", _default_data_dir())
 CACHE_DB = _env_path("SUPERMARKT_CACHE_DB", DATA_DIR / "supermarkt-cache.sqlite3")
 SIGNING_SECRET_FILE = _env_path("SUPERMARKT_SIGNING_SECRET_FILE", DATA_DIR / ".signing-secret")
 ACCESS_TOKENS_FILE = _env_path("SUPERMARKT_ACCESS_TOKENS_FILE", DATA_DIR / "access-tokens.json")
+KITCHENOWL_FILE = _env_path("SUPERMARKT_KITCHENOWL_FILE", DATA_DIR / "kitchenowl.json")
+HISTORY_DB = _env_path("SUPERMARKT_HISTORY_DB", DATA_DIR / "price-history.sqlite3")
+NOTIFY_FILE = _env_path("SUPERMARKT_NOTIFY_FILE", DATA_DIR / "notify.json")
 IMAGE_CACHE_DIR = _env_path("SUPERMARKT_IMAGE_CACHE_DIR", DATA_DIR / "supermarkt-images")
 KAUFLAND_CACHE_DIR = _env_path("SUPERMARKT_KAUFLAND_CACHE_DIR", DATA_DIR / "kaufland")
 REWE_CACHE_DIR = _env_path("SUPERMARKT_REWE_CACHE_DIR", DATA_DIR / "rewe")
+TRINKGUT_CACHE_DIR = _env_path("SUPERMARKT_TRINKGUT_CACHE_DIR", DATA_DIR / "trinkgut")
 
 KAUFLAND_STORE_CACHE_TTL_SECONDS = _env_int(
     "SUPERMARKT_KAUFLAND_STORE_CACHE_TTL_SECONDS", 86400, 300, 7 * 86400
@@ -57,6 +61,19 @@ KAUFLAND_STORE_CACHE_TTL_SECONDS = _env_int(
 REWE_STORE_CACHE_TTL_SECONDS = _env_int(
     "SUPERMARKT_REWE_STORE_CACHE_TTL_SECONDS", 86400, 300, 7 * 86400
 )
+TRINKGUT_STORE_CACHE_TTL_SECONDS = _env_int(
+    "SUPERMARKT_TRINKGUT_STORE_CACHE_TTL_SECONDS", 86400, 300, 7 * 86400
+)
+# A market further away than this is not "the trinkgut nearby": better report
+# that there is none than to present another region's offers as local ones.
+TRINKGUT_MAX_DISTANCE_KM = _env_int("SUPERMARKT_TRINKGUT_MAX_DISTANCE_KM", 40, 5, 300)
+# The detail pages are only read for offers whose deposit is cut off in the
+# listing; a few at a time and remembered, so a search does not hammer the site.
+TRINKGUT_DEPOSIT_FETCH_WORKERS = _env_int("SUPERMARKT_TRINKGUT_DEPOSIT_FETCH_WORKERS", 4, 1, 12)
+TRINKGUT_DEPOSIT_CACHE_TTL_SECONDS = _env_int(
+    "SUPERMARKT_TRINKGUT_DEPOSIT_CACHE_TTL_SECONDS", 86400, 300, 7 * 86400
+)
+
 IMAGE_CACHE_TTL_SECONDS = _env_int(
     "SUPERMARKT_IMAGE_CACHE_TTL_SECONDS", 604800, 3600, 30 * 86400
 )

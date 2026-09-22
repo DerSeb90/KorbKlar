@@ -123,11 +123,12 @@ def filter_offers(offers: Iterable[Offer], filter_text: str) -> list[Offer]:
     query = clean_text(filter_text).casefold()
     if not query:
         return list(offers)
+    # Die Warengruppe zählt nicht zur Suche: Wer „Dessert“ sucht, will keine Fleischangebote, nur weil die
+    # Gruppe „Tiefkühl / Eis & Dessert“ heißt. Für Gruppen gibt es die Reiter darüber.
     return [
         offer
         for offer in offers
-        if query
-        in f"{offer.name} {offer.brand} {offer.description} {offer.category} {offer.retailer}".casefold()
+        if query in f"{offer.name} {offer.brand} {offer.description} {offer.retailer}".casefold()
     ]
 
 
@@ -777,7 +778,7 @@ def parse_price_text(value: Any) -> Optional[float]:
 def parse_base_price_text(value: Any) -> tuple[Optional[float], str]:
     text = clean_text(value)
     match = re.search(
-        r"(?:1\s*)?(kg|kilogramm|l|liter|wl|waschladungen?|stück|stueck|stk\.?)\s*=\s*(\d+(?:[.,]\d{1,2})?)"
+        r"(?:1\s*)?(kg|kilogramm|l|liter|wl|waschladungen?|stück|stueck|stk\.?)\s*=\s*(?:€\s*)?(\d+(?:[.,]\d{1,2})?)"
         r"|(?<!\d)(\d+(?:[.,]\d{1,2})?)\s*(?:€\s*)?[/]\s*(?:1\s*)?(kg|kilogramm|l|liter|wl|waschladungen?|stück|stueck|stk\.?)",
         text,
         flags=re.IGNORECASE,
