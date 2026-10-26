@@ -40,9 +40,10 @@ from .offer_week import next_change_timestamp
 from .models import AGGREGATOR_RETAILERS, RETAILER_SPECS, Offer, RetailerContext, ToolError, offer_from_dict, offer_to_dict
 from .presentation import offer_for_response, offer_sort_key, resolve_retailer_name
 from .region import AldiRegionResolver
+from .sources.aktiv_irma import NoLocalMarketOffers
 
 LOGGER = logging.getLogger(__name__)
-from .sources import KaufdaGlobusImageSource, KaufdaRetailerSource, MarktguruClient, NettoMarkenMarketResolver, OfficialAldiSource, OfficialDmSource, OfficialEdekaSource, OfficialGlobusSource, OfficialKauflandSource, OfficialMarktkaufSource, OfficialReweSource, OfficialHolabSource, OfficialNettoScottieSource, OfficialMuellerSource, OfficialRossmannSource, OfficialTrinkgutSource
+from .sources import KaufdaGlobusImageSource, KaufdaRetailerSource, MarktguruClient, NettoMarkenMarketResolver, OfficialAktivIrmaSource, OfficialAldiSource, OfficialDmSource, OfficialEdekaSource, OfficialGlobusSource, OfficialKauflandSource, OfficialMarktkaufSource, OfficialReweSource, OfficialHolabSource, OfficialNettoScottieSource, OfficialMuellerSource, OfficialRossmannSource, OfficialTrinkgutSource
 from .sources.netto_scottie import NettoScottieMarketResolver
 from .sources.aldi_chain import AldiOfferChain
 
@@ -89,6 +90,7 @@ class SourceLoader:
             deposit_workers=TRINKGUT_DEPOSIT_FETCH_WORKERS,
             deposit_cache_ttl_seconds=TRINKGUT_DEPOSIT_CACHE_TTL_SECONDS,
         )
+        self.official_aktiv_irma = OfficialAktivIrmaSource(http)
         self.mapper = OfferMapper()
 
     @staticmethod
@@ -173,15 +175,29 @@ class SourceLoader:
         requested_region = normalize_aldi_region(aldi_region)
         selected_aldi = [name for name in ("ALDI Nord", "ALDI Süd") if name in selected_retailers]
         resolved = requested_region
-        if selected_retailers:
+        verified_regions: set[str] = set()
+        if selected_aldi and requested_region == "auto":
+            # Choosing a retailer is a result filter, not proof that it has
+            # stores in this region. Preserve verified Nord/Süd border cases.
+            resolved = self.aldi_region.detect(postal_code)
+            detected = getattr(self.aldi_region, "last_regions", ())
+            verified_regions = set(detected or ((resolved,) if resolved in {"nord", "sued"} else ()))
+            resolved_regions = [region for name, region in (("ALDI Nord", "nord"), ("ALDI Süd", "sued"))
+                                if name in selected_aldi and region in verified_regions]
+        elif selected_retailers:
             resolved_regions = ["nord" if name == "ALDI Nord" else "sued" for name in selected_aldi]
         elif resolved == "auto":
             resolved = self.aldi_region.detect(postal_code)
             detected_regions = getattr(self.aldi_region, "last_regions", ())
-            resolved_regions = list(detected_regions or ((resolved,) if resolved in {"nord", "sued"} else ()))
+            verified_regions = set(detected_regions or ((resolved,) if resolved in {"nord", "sued"} else ()))
+            resolved_regions = sorted(verified_regions)
         elif not selected_retailers:
             resolved_regions = ["nord", "sued"] if requested_region == "both" else ([resolved] if resolved in {"nord", "sued"} else [])
         aldi_names = ["ALDI Nord" if item == "nord" else "ALDI Süd" for item in resolved_regions]
+        unavailable_retailers = set()
+        if verified_regions:
+            verified_names = {"ALDI Nord" if region == "nord" else "ALDI Süd" for region in verified_regions}
+            unavailable_retailers.update({"ALDI Nord", "ALDI Süd"} - verified_names)
         if not aldi_names and not selected_retailers:
             detail = clean_text(self.aldi_region.last_error)
             warning = "ALDI-Region konnte geografisch nicht eindeutig bestimmt werden; ALDI wurde für diesen Abruf ausgelassen."
@@ -255,6 +271,8 @@ class SourceLoader:
             official_jobs["dm"] = lambda: self.official_dm.load(postal_code)
         if hasattr(self, "official_holab") and "HOL’AB!" in active_contexts:
             official_jobs["HOL’AB!"] = lambda: self.official_holab.load(postal_code)
+        if hasattr(self, "official_aktiv_irma") and "aktiv & irma" in active_contexts:
+            official_jobs["aktiv & irma"] = lambda: self.official_aktiv_irma.load(postal_code)
         if hasattr(self, "official_trinkgut") and "trinkgut" in active_contexts:
             def load_trinkgut() -> list[Offer]:
                 if requested_week == "next":
@@ -278,7 +296,13 @@ class SourceLoader:
                 completed_sources += 1
                 notify(status="processing", progress=10 + completed_sources * 9, source="Offizielle Webseite", retailer=name, category="Wochenangebote", step="Quelle wird ausgewertet", processed_sources=completed_sources, processed_products=processed_products)
                 try:
-                    offers = deduplicate_offers(list(future.result()))
+                    raw_offers = future.result()
+                    if isinstance(raw_offers, NoLocalMarketOffers):
+                        unavailable_retailers.add(name)
+                        active_contexts.pop(name, None)
+                        source_states[name] = "kein Markt"
+                        continue
+                    offers = deduplicate_offers(list(raw_offers))
                 except Exception as exc:
                     failed_primary.add(name)
                     if name in {"Marktkauf", "HOL’AB!", "trinkgut"}:
@@ -544,7 +568,7 @@ class SourceLoader:
                 retailer_url=offer.retailer_url or contexts.get(offer.retailer, RetailerContext("", (), (), "", "", "")).market_url,
             ))
         offers = normalized_offers
-        if not offers:
+        if not offers and not (selected_retailers and selected_retailers <= unavailable_retailers):
             raise ToolError("Keine Supermarktangebote konnten geladen werden")
 
         notify(status="processing", progress=96, source="KorbKlar", retailer="Alle Händler", category="Alle Kategorien", step="Angebote werden zusammengeführt", processed_sources=completed_sources, processed_products=len(offers))
@@ -558,15 +582,16 @@ class SourceLoader:
             "offers": [offer_to_dict(offer) for offer in offers],
             "retailers": {name: asdict(context) for name, context in active_contexts.items()},
             "source_states": source_states,
+            "unavailable_retailers": sorted(unavailable_retailers),
             "challenge_urls": challenge_urls,
             "request_errors": list(dict.fromkeys(clean_text(x) for x in request_errors if clean_text(x))),
             "store_warnings": list(dict.fromkeys(clean_text(x) for x in store_warnings if clean_text(x))),
         }
 
 class SupermarketEngine:
-    # v11 separates offer weeks and invalidates snapshots with old ALDI brand
-    # and multipack-deposit semantics.
-    SNAPSHOT_SCHEMA = 11
+    # v13 validates regional retailers and carries confirmed market absence.
+    # Older snapshots can contain offers for chains with no local store.
+    SNAPSHOT_SCHEMA = 13
     def __init__(self) -> None:
         self.store = PersistentSnapshotStore(CACHE_DB, CACHE_TTL_MINUTES, RESULT_RETENTION_HOURS, CACHE_MAX_SNAPSHOTS)
         self.loader = SourceLoader()
@@ -749,6 +774,7 @@ class SupermarketEngine:
                 "Personalisierte Coupons oder Punkte ohne konkreten Angebotswert werden nicht geschätzt."
             ),
             "source_states": snapshot.get("source_states", {}),
+            "unavailable_retailers": snapshot.get("unavailable_retailers", []),
             "challenge_urls": snapshot.get("challenge_urls", {}),
             "warnings": list(dict.fromkeys([
                 *snapshot.get("request_errors", []),

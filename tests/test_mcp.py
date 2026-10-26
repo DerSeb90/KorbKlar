@@ -65,6 +65,38 @@ def test_find_offers_lists_cheapest_first_with_bonus_price_and_image():
     assert [block.type for block in result.content].count("image") == 1
 
 
+def test_rewe_bonus_cashback_shows_credit_and_effective_price(monkeypatch):
+    """REWE Bonus is cashback: it was dropped before, now it shows as a credit.
+
+    Issue regression (Rockstar Energy): 0,99 € ohne Bonus, 0,20 € REWE Bonus,
+    effektiv 0,79 €. Cashback must not become a fake checkout price or reorder.
+    """
+
+    class RockstarEngine:
+        def page(self, snapshot, loyalty_programs=(), **_kwargs):
+            offer = {
+                "offer_id": "r", "retailer": "REWE", "product": "Rockstar Energy", "pack": "0,5 l",
+                "unit_price": "1,98 €/l", "regular_price_text": "0,99 €", "effective_price": 0.99,
+                "effective_price_text": "0,99 €", "validity": "gültig bis 20.09.",
+                "cashback_credit": 0.0, "cashback_credit_text": "", "loyalty_benefit": "", "image_url": None,
+            }
+            if loyalty_programs:
+                offer = {**offer, "cashback_credit": 0.20, "cashback_credit_text": "0,20 €",
+                         "loyalty_benefit": "REWE Bonus: 0,20 € Guthaben"}
+            return {"offers": [offer], "available_loyalty_programs": [
+                {"id": "rewe_bonus", "label": "REWE Bonus", "retailers": ["REWE"], "priced_offer_count": 1}]}
+
+    monkeypatch.setattr(runtime, "get_engine", lambda: RockstarEngine())
+    result = call("find_offers", {"product": "Rockstar", "postal_code": "01067"})
+    offer = result.structured_content["offers"][0]
+    assert offer["price_without_bonus"] == "0,99 €"
+    assert offer["price_with_bonus"] is None  # cashback is credited after checkout, not a lower price
+    assert offer["bonus_credit"] == "0,20 €"
+    assert offer["price_after_credit"] == "0,79 €"
+    assert "REWE Bonus" in (offer["bonus_program"] or "")
+    assert "effektiv 0,79 € mit 0,20 € REWE Bonus Guthaben" in result.content[0].text
+
+
 def test_only_one_image_by_default_and_up_to_three_on_request():
     assert [b.type for b in call("find_offers", {"product": "x", "postal_code": "01067"}).content].count("image") == 1
     result = call("find_offers", {"product": "x", "postal_code": "01067", "max_images": 0})
@@ -74,7 +106,7 @@ def test_only_one_image_by_default_and_up_to_three_on_request():
 def test_search_widens_to_single_words_when_nothing_matches(monkeypatch):
     class Picky(FakeEngine):
         def page(self, snapshot, loyalty_programs=(), keywords=(), **kwargs):
-            if not keywords:
+            if kwargs.get("filter_text") != "Schmelzkäse":
                 return {"offers": [], "available_loyalty_programs": []}
             return super().page(snapshot, loyalty_programs=loyalty_programs, **kwargs)
     monkeypatch.setattr(runtime, "get_engine", lambda: Picky())
@@ -486,11 +518,11 @@ def test_everyday_synonyms_widen_the_search(monkeypatch):
 
     class Spy(FakeEngine):
         def page(self, snapshot, loyalty_programs=(), keywords=(), **kwargs):
-            seen.append(tuple(keywords))
+            seen.append(kwargs.get("filter_text"))
             return super().page(snapshot, loyalty_programs=loyalty_programs, **kwargs)
     monkeypatch.setattr(runtime, "get_engine", lambda: Spy())
     call("find_offers", {"product": "Osterhase", "postal_code": "01067", "with_images": False})
-    assert any("schokohase" in keywords for keywords in seen)
+    assert "schokohase" in seen
 
 
 def test_hint_when_a_retailer_has_no_computable_bonus(monkeypatch):
@@ -528,3 +560,48 @@ def test_many_items_fetch_the_kitchenowl_list_only_once(settings_file):
         assert [request[3]["name"] for request in calls if request[0] == "POST"] == ["Butter", "Käse"], "Duplikate und vorhandene Artikel werden übersprungen"
     finally:
         fake.close()
+
+
+def _actual_page_engine(monkeypatch):
+    from supermarkt.compare import OfferComparator
+    from supermarkt.service import SupermarketEngine
+    engine = SupermarketEngine.__new__(SupermarketEngine)
+    engine.comparator = OfferComparator()
+    monkeypatch.setattr(runtime, "get_engine", lambda: engine)
+    snapshot = {"search_id": "mcp-real-filter-regression", "postal_code": "01067", "offers": [
+        {"offer_id": "cola", "retailer": "Lidl", "name": "Cola", "brand": "Coca-Cola",
+         "description": "6 × 330 ml", "price": 3.99, "match_key": "cola",
+         "valid_from": "2026-10-22", "valid_until": "2026-10-24"},
+        {"offer_id": "water", "retailer": "Lidl", "name": "Mineralwasser", "brand": "", "description": "",
+         "price": 0.29, "match_key": "water"},
+    ]}
+    for row in snapshot["offers"]:
+        row.update(category="Getränke", base_price=None, base_unit="", pack_signature="",
+                   validity_label="22.10.–24.10.2026", source_url="https://offers.example/fixture")
+    monkeypatch.setattr(mcp_server, "_load_snapshot", lambda *args, **kwargs: snapshot)
+    return snapshot
+
+
+def test_mcp_real_engine_alternative_search_is_or_not_a_second_required_filter(monkeypatch):
+    _actual_page_engine(monkeypatch)
+    result = call("find_offers", {"product": "unlisted spelling", "also_search": ["Coca-Cola"],
+                                 "postal_code": "01067", "retailers": ["Lidl"], "with_images": False})
+    assert result.structured_content["found"] == 1
+    assert result.structured_content["offers"][0]["product"] == "Cola"
+
+
+def test_mcp_real_engine_cola_cans_find_brand_via_automatic_variants(monkeypatch):
+    _actual_page_engine(monkeypatch)
+    result = call("find_offers", {"product": "Coca-Cola Dose", "postal_code": "01067",
+                                 "retailers": ["Lidl"], "with_images": False})
+    assert result.structured_content["found"] == 1
+    assert result.structured_content["offers"][0]["price_without_bonus"] == "3,99 €"
+    assert "ähnliche Treffer" in result.content[0].text
+
+
+def test_mcp_real_engine_preserves_primary_brand_matches_and_deduplicates(monkeypatch):
+    _actual_page_engine(monkeypatch)
+    result = call("find_offers", {"product": "Coca-Cola", "also_search": ["Cola", "Coca-Cola"],
+                                 "postal_code": "01067", "retailers": ["Lidl"], "with_images": False})
+    assert result.structured_content["found"] == 1
+    assert result.structured_content["offers"][0]["product"] == "Cola"
