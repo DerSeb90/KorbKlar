@@ -26,7 +26,7 @@ RUN addgroup -S -g 10001 korbklar \
 
 FROM scratch AS final
 ARG PYTHON_BASE
-ARG APP_VERSION=0.1.20
+ARG APP_VERSION=0.1.21
 COPY --from=runtime-rootfs / /
 LABEL org.opencontainers.image.source="https://github.com/DerSeb90/KorbKlar" \
       org.opencontainers.image.version="${APP_VERSION}" \

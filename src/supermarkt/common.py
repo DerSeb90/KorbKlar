@@ -120,7 +120,10 @@ def normalize_view(value: Any) -> str:
     return "all" if clean_text(value).casefold() in {"all", "alle", "comparison", "vergleich"} else "best_only"
 
 def filter_offers(offers: Iterable[Offer], filter_text: str) -> list[Offer]:
-    query = clean_text(filter_text).casefold()
+    def spelling(value: str) -> str:
+        return re.sub(r"\bem[\s\-‐‑–]*eukal\b", "emeukal", value.casefold())
+
+    query = spelling(clean_text(filter_text))
     if not query:
         return list(offers)
     # Die Warengruppe zählt nicht zur Suche: Wer „Dessert“ sucht, will keine Fleischangebote, nur weil die
@@ -128,7 +131,7 @@ def filter_offers(offers: Iterable[Offer], filter_text: str) -> list[Offer]:
     return [
         offer
         for offer in offers
-        if query in f"{offer.name} {offer.brand} {offer.description} {offer.retailer}".casefold()
+        if query in spelling(f"{offer.name} {offer.brand} {offer.description} {offer.retailer}")
     ]
 
 
@@ -234,6 +237,11 @@ def offer_validity(
     raw_offer: dict[str, Any],
     reference_date: Optional[date] = None,
 ) -> tuple[bool, str]:
+    """Select the remaining offer week, including published Thursday previews.
+
+    Keep the source validity label: a preview price is not valid today.
+    Expired periods and periods starting after Sunday remain excluded.
+    """
     periods = raw_offer.get("validityDates")
     if not isinstance(periods, list) or not periods:
         return False, "Gültigkeit fehlt"
@@ -241,6 +249,7 @@ def offer_validity(
     current = False
     labels: list[str] = []
     today = offer_reference_date(reference_date)
+    week_end = today + timedelta(days=6 - today.weekday())
     for period in periods:
         if not isinstance(period, dict):
             continue
@@ -248,10 +257,10 @@ def offer_validity(
         end = parse_iso_date(period.get("to"))
         if start and end:
             labels.append(f"{start:%d.%m.}–{end:%d.%m.%Y}")
-            current = current or start <= today <= end
+            current = current or (start <= end and start <= week_end and today <= end)
         elif start:
             labels.append(f"ab {start:%d.%m.%Y}")
-            current = current or start <= today
+            current = current or start <= week_end
         elif end:
             labels.append(f"bis {end:%d.%m.%Y}")
             current = current or today <= end

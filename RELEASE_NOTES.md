@@ -1,3 +1,33 @@
+# 0.1.21
+
+Der Server übernimmt den Stand des Upstream-Projekts (Korbuino 0.1.57 bis
+0.1.67). Die Android-App bleibt die Flutter-App dieses Forks; sie bekommt nur
+die neue Versionsnummer und einen robusteren Test der Einkaufsliste.
+
+Server:
+
+- Neue regionale Märkte: aktiv & irma (eigener Wochenprospekt-Import von
+  aktiv-irma.de, nur bei bestätigtem Supermarkt in der PLZ) und wieder Combi
+  (über Marktguru). Die Quellgruppe „Frische“ landet bei den Kühlprodukten.
+- Kaufland: Wochenstartangebote werden wieder importiert, die Grenze liegt bei
+  800 Angeboten je Filiale. Mehrkaufaktionen („3 für 3 €“) tragen Mindestmenge,
+  Paketpreis und bedingten Stückpreis; unbekannte Einzelpreise bleiben offen.
+- Einkaufsliste im Browser rechnet Mehrkaufaktionen richtig und zeigt bei
+  fehlenden Preisen nur den bekannten Warenanteil.
+- Bonusprogramme: Die API liefert alle konkreten Vorteile strukturiert mit
+  Programm-ID, Art und Wert, auch ohne gewähltes Programm. Kein globales
+  Angebotslimit mehr im zusammengefassten Abruf.
+- MCP: REWE-Bonus-Guthaben erscheint als eigenes Feld mit effektivem Preis;
+  alternative Suchphrasen ergänzen Treffer, statt sie einzuschränken.
+- REWE-Folgewoche: Ohne echte Vorschau werden die aktuellen Angebote nicht
+  mehr auf die nächste Woche umdatiert.
+- Angebote, die später in der laufenden Woche beginnen (etwa Lidl ab
+  Donnerstag), erscheinen in der aktuellen Woche mit ihren echten
+  Gültigkeitsdaten.
+- Die automatische ALDI-Region gilt auch bei ausgewählten Händlern.
+- ALDI Süd: Prospektseiten „Aus unserem Sortiment“ zählen nicht mehr als
+  Angebote.
+
 # 0.1.20
 
 Server und Android-App übernehmen den Stand des Upstream-Projekts (Korbunio
