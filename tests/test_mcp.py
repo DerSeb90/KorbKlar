@@ -1,4 +1,5 @@
 import asyncio
+import datetime
 import threading
 import types
 
@@ -41,7 +42,11 @@ def fake_runtime(monkeypatch, tmp_path):
     monkeypatch.setattr(runtime, "get_image_service", lambda: FakeImages())
     monkeypatch.setattr(mcp_server, "_load_snapshot", lambda plz, retailers, refresh=False: {"plz": plz})
     monkeypatch.setenv("SUPERMARKT_MCP_WARMUP", "0")
+    # Fixture offers carry fixed dates; freeze "today" so expiry hiding cannot turn them into time bombs.
+    monkeypatch.setattr(mcp_server, "today_berlin", lambda: datetime.date(2026, 10, 23))
+    monkeypatch.setattr("supermarkt.service.today_berlin", lambda: datetime.date(2026, 10, 23))
     mcp_server._inflight.clear()
+    mcp_server._load_failures.clear()
     mcp_server._last_used.clear()
     mcp_server._new_postal_codes.clear()
 
@@ -134,6 +139,147 @@ def test_find_offers_rejects_bad_input():
     assert call("find_offers", {"product": "x", "postal_code": "01067", "retailers": ["Nirgendwo"]}).is_error
 
 
+@pytest.mark.parametrize("arguments,detail", [
+    ({"product": "x", "postal_code": "abc"}, "Postleitzahl"),
+    ({"product": " ", "postal_code": "01067"}, "Produkt"),
+    ({"product": "x", "postal_code": "01067", "retailers": ["Nirgendwo"]}, "Unbekannte Händler"),
+])
+def test_find_offers_preserves_actionable_validation_errors(arguments, detail):
+    result = call("find_offers", arguments)
+    assert result.is_error
+    assert detail in result.content[0].text
+    assert result.content[0].text != "Error executing tool find_offers"
+
+
+def test_ascii_holab_name_is_canonical_and_deduplicated():
+    assert mcp_server._retailers(["HOL'AB!", "HOL’AB!", "hol'ab", "holab"]) == ("HOL’AB!",)
+
+
+def test_empty_product_can_browse_a_selected_retailer(monkeypatch):
+    snapshot = _actual_page_engine(monkeypatch)
+    snapshot["offers"].append({**snapshot["offers"][1], "offer_id": "other", "retailer": "REWE"})
+    result = call("find_offers", {"product": "", "postal_code": "01067", "retailers": ["Lidl"], "with_images": False})
+    assert not result.is_error
+    assert result.structured_content["found"] == 2
+    assert all(offer["retailer"] == "Lidl" for offer in result.structured_content["offers"])
+
+
+def test_source_failure_is_unavailable_not_zero_matches_or_a_tool_crash(monkeypatch):
+    from supermarkt.models import ToolError
+
+    def unavailable(*_args):
+        raise ToolError("Marktkauf offiziell: HTTP 503")
+    monkeypatch.setattr(mcp_server, "_load_snapshot", unavailable)
+    result = call("find_offers", {"product": "Energy", "postal_code": "01067", "retailers": ["Marktkauf"]})
+    assert not result.is_error
+    assert result.structured_content["status"] == "unavailable"
+    assert "found" not in result.structured_content
+    assert "HTTP 503" in result.content[0].text
+    assert "keine Angebote" not in result.content[0].text
+
+
+def test_bonus_lookup_preserves_the_same_explicit_source_outcome(monkeypatch):
+    from supermarkt.models import ToolError
+
+    def unavailable(*_args):
+        raise ToolError("REWE HTTP 503")
+    monkeypatch.setattr(mcp_server, "_load_snapshot", unavailable)
+    result = call("list_bonus_programs", {"postal_code": "01067"})
+    assert not result.is_error
+    assert result.structured_content["status"] == "unavailable"
+    assert "REWE HTTP 503" in result.content[0].text
+
+
+def test_concurrent_requests_share_duplicates_and_keep_failure_results_separate(monkeypatch):
+    from supermarkt.models import ToolError
+    barrier = threading.Barrier(3, timeout=5)
+    loads = []
+    lock = threading.Lock()
+
+    def load(plz, retailers, refresh=False):
+        with lock:
+            loads.append(retailers)
+        barrier.wait()
+        if retailers == ("Marktkauf",):
+            raise ToolError("Marktkauf offiziell: HTTP 503")
+        return {"postal_code": plz}
+    monkeypatch.setattr(mcp_server, "_load_snapshot", load)
+
+    async def run():
+        async with Client(mcp_server.mcp) as client:
+            return await asyncio.gather(*(client.call_tool("find_offers", {
+                "product": "Energy", "postal_code": "01067", "retailers": [name], "with_images": False,
+            }) for name in ["REWE", "Kaufland", "Marktkauf", "REWE"]))
+    results = asyncio.run(run())
+    assert all(not result.is_error for result in results)
+    assert [result.structured_content.get("status") for result in results] == ["ok", "ok", "unavailable", "ok"]
+    assert loads.count(("REWE",)) == 1
+    assert len(loads) == 3
+    assert results[0].structured_content == results[3].structured_content
+
+
+def test_unexpected_programming_error_remains_a_tool_error(monkeypatch):
+    def broken(*_args):
+        raise RuntimeError("internal fixture detail")
+    monkeypatch.setattr(mcp_server, "_load_snapshot", broken)
+    result = call("find_offers", {"product": "x", "postal_code": "01067"})
+    assert result.is_error
+    assert "internal fixture detail" not in result.content[0].text
+
+
+@pytest.mark.parametrize("has_matches", [False, True])
+def test_partial_source_results_remain_explicit_even_without_matches(monkeypatch, has_matches):
+    class PartialEngine(FakeEngine):
+        def page(self, *args, **kwargs):
+            return super().page(*args, **kwargs) if has_matches else {"offers": []}
+    monkeypatch.setattr(runtime, "get_engine", lambda: PartialEngine())
+    monkeypatch.setattr(mcp_server, "_load_snapshot", lambda *_args: {"request_errors": ["Lidl HTTP 503"]})
+    result = call("find_offers", {"product": "Energy", "postal_code": "01067", "with_images": False})
+    assert not result.is_error
+    assert result.structured_content["status"] == "partial"
+    assert result.structured_content["diagnostics"] == ["Lidl HTTP 503"]
+    assert "unvollständig" in result.content[0].text
+
+
+def test_18_retailer_batch_keeps_expected_source_outcomes_out_of_protocol_errors(monkeypatch):
+    from supermarkt.models import RETAILER_SPECS, ToolError
+    names = [spec.name for spec in RETAILER_SPECS if spec.name != "Lidl"]
+    assert len(names) == 18
+    unavailable = {"Marktkauf", "trinkgut"}
+    empty = {"famila Nordwest", "Combi"}
+
+    def load(plz, retailers, refresh=False):
+        name = retailers[0]
+        if name in unavailable:
+            raise ToolError(f"{name} HTTP 503")
+        return {"retailer": name}
+
+    class BatchEngine:
+        def page(self, snapshot, **_kwargs):
+            name = snapshot["retailer"]
+            return {"offers": [] if name in empty else [{**OFFERS[0], "retailer": name, "product": "Energy"}]}
+    monkeypatch.setattr(mcp_server, "_load_snapshot", load)
+    monkeypatch.setattr(runtime, "get_engine", lambda: BatchEngine())
+
+    async def run():
+        async with Client(mcp_server.mcp) as client:
+            return await asyncio.gather(*(client.call_tool("find_offers", {
+                "product": "Energy", "postal_code": "01067", "with_images": False,
+                "retailers": [name.replace("’", "'")],
+            }) for name in names))
+    results = asyncio.run(run())
+    assert all(not result.is_error for result in results)
+    for name, result in zip(names, results, strict=True):
+        data = result.structured_content
+        if name in unavailable:
+            assert data["status"] == "unavailable" and "found" not in data
+        elif name in empty:
+            assert data["status"] == "empty" and data["found"] == 0
+        else:
+            assert data["status"] == "ok"
+            assert data["offers"][0]["retailer"] == name
+
+
 def test_slow_load_answers_politely_and_keeps_loading(monkeypatch):
     release = threading.Event()
     monkeypatch.setattr(mcp_server, "_load_snapshot", lambda plz, retailers, refresh=False: release.wait(10) and {"plz": plz})
@@ -157,6 +303,70 @@ def _short_wait(real):
     async def wait(tasks, timeout=None, **kwargs):
         return await real(tasks, timeout=min(timeout or 0.2, 0.2), **kwargs)
     return wait
+
+
+def test_late_source_failure_is_returned_without_starting_another_load(monkeypatch):
+    import gc
+    from supermarkt.models import ToolError
+
+    release = threading.Event()
+    calls = []
+
+    def load(*_args):
+        calls.append(True)
+        assert release.wait(5)
+        raise ToolError("Catalogue source timed out")
+
+    monkeypatch.setattr(mcp_server, "_load_snapshot", load)
+    monkeypatch.setattr(mcp_server, "LOAD_DEADLINE_SECONDS", 0.1)
+    monkeypatch.setattr("asyncio.wait", _short_wait(asyncio.wait))
+
+    async def run():
+        loop_errors = []
+        asyncio.get_running_loop().set_exception_handler(lambda _loop, context: loop_errors.append(context))
+        async with Client(mcp_server.mcp) as client:
+            first = await client.call_tool("find_offers", {"product": "x", "postal_code": "01067", "retailers": ["Combi"]})
+            assert first.structured_content["status"] == "loading"
+            release.set()
+            for _ in range(100):
+                if not mcp_server._inflight:
+                    break
+                await asyncio.sleep(0.01)
+            gc.collect()
+            second = await client.call_tool("find_offers", {"product": "x", "postal_code": "01067", "retailers": ["Combi"]})
+            assert not second.is_error
+            assert second.structured_content["status"] == "unavailable"
+            assert "found" not in second.structured_content
+            assert "Catalogue source timed out" in str(second.structured_content)
+            assert len(calls) == 1
+            assert not loop_errors
+
+    asyncio.run(run())
+
+
+def test_failed_source_can_recover_after_cooldown(monkeypatch):
+    from supermarkt.models import ToolError
+
+    calls = []
+
+    def load(*_args):
+        calls.append(True)
+        if len(calls) == 1:
+            raise ToolError("Temporary catalogue outage")
+        return {"plz": "01067"}
+
+    monkeypatch.setattr(mcp_server, "_load_snapshot", load)
+    monkeypatch.setattr(mcp_server, "FAILED_LOAD_RETRY_SECONDS", 0)
+
+    async def run():
+        async with Client(mcp_server.mcp) as client:
+            first = await client.call_tool("find_offers", {"product": "x", "postal_code": "01067"})
+            second = await client.call_tool("find_offers", {"product": "x", "postal_code": "01067"})
+        assert first.structured_content["status"] == "unavailable"
+        assert not second.is_error and second.structured_content["status"] == "ok"
+        assert len(calls) == 2
+
+    asyncio.run(run())
 
 
 def test_list_retailers_and_programs():
@@ -605,3 +815,30 @@ def test_mcp_real_engine_preserves_primary_brand_matches_and_deduplicates(monkey
                                  "postal_code": "01067", "retailers": ["Lidl"], "with_images": False})
     assert result.structured_content["found"] == 1
     assert result.structured_content["offers"][0]["product"] == "Cola"
+
+
+def test_new_watch_is_checked_immediately_not_only_at_the_daily_tick(monkeypatch, receiver):
+    checked = []
+
+    async def fake_check(plz, offer_week):
+        checked.append((plz, offer_week))
+
+    monkeypatch.setenv("SUPERMARKT_MCP_WARMUP", "1")
+    monkeypatch.setattr(mcp_server, "_check_new_watch", fake_check)
+    monkeypatch.setattr(mcp_server, "_start_warmup", lambda: None)
+
+    async def run():
+        async with Client(mcp_server.mcp) as client:
+            await client.call_tool("watch_product", {"product": "Schmelzkäse", "postal_code": "01067"})
+            await asyncio.sleep(0.05)
+
+    asyncio.run(run())
+    assert checked == [("01067", "current")]
+
+
+def test_immediate_check_loads_the_week_and_notifies(monkeypatch, receiver):
+    seen = []
+    monkeypatch.setattr(mcp_server, "_load_snapshot", lambda plz, retailers, refresh=False, offer_week="current": seen.append(offer_week) or {"plz": plz})
+    monkeypatch.setattr(mcp_server, "_check_watches", lambda plz, snapshot: seen.append(("checked", plz)))
+    asyncio.run(mcp_server._check_new_watch("01067", "all"))
+    assert seen == ["current", ("checked", "01067"), "next", ("checked", "01067")]

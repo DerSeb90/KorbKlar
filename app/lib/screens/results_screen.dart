@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../api/client.dart';
@@ -62,7 +62,7 @@ class ResultsScreen extends StatefulWidget {
     this.autoRefresh = false,
   });
 
-  final KorbKlarClient client;
+  final KorbunioClient client;
   final ResultHandle handle;
   final Settings settings;
   final OfflineStore offlineStore;
@@ -194,7 +194,7 @@ class _ResultsScreenState extends State<ResultsScreen> {
             : (info.targets.isNotEmpty ? info.targets.first.entityId : '');
       });
       await _reconcileFiled();
-    } on KorbKlarException {
+    } on KorbunioException {
       // A server without the integration is normal; the app just hides it.
     }
   }
@@ -251,7 +251,7 @@ class _ResultsScreenState extends State<ResultsScreen> {
         _nextPage = page.page + 1;
         _done = !page.hasNext;
       });
-    } on KorbKlarException catch (exception) {
+    } on KorbunioException catch (exception) {
       if (!mounted || seq != _requestSeq) return;
       final cacheKey = widget.offlineStore.key(
         postalCode: widget.settings.postalCode,
@@ -325,7 +325,7 @@ class _ResultsScreenState extends State<ResultsScreen> {
         nettoMarketId: widget.nettoMarketId,
         nettoScottieMarketId: widget.nettoScottieMarketId,
       );
-    } on KorbKlarException catch (exception) {
+    } on KorbunioException catch (exception) {
       if (mounted) setState(() => _refreshError = exception.message);
       return;
     }
@@ -367,7 +367,7 @@ class _ResultsScreenState extends State<ResultsScreen> {
           },
           onError: (Object error) {
             if (!mounted) return;
-            _endRefresh(error is KorbKlarException ? error.message : '$error');
+            _endRefresh(error is KorbunioException ? error.message : '$error');
           },
         );
     setState(() {});
@@ -397,7 +397,7 @@ class _ResultsScreenState extends State<ResultsScreen> {
       setState(() {
         _filed.removeWhere((_, article) => !pending.contains(article));
       });
-    } on KorbKlarException {
+    } on KorbunioException {
       // Leaving the marks as they are beats guessing they are gone.
     } on KitchenOwlException {
       // Same here.
@@ -488,7 +488,7 @@ class _ResultsScreenState extends State<ResultsScreen> {
       setState(() => _filed[offer.key] = article);
       _toast('„$article“ liegt in „${target.label}“.');
     } on Object catch (exception) {
-      final message = exception is KorbKlarException
+      final message = exception is KorbunioException
           ? exception.message
           : exception is KitchenOwlException
           ? exception.message
@@ -1007,7 +1007,9 @@ class _ResultsScreenState extends State<ResultsScreen> {
       child: InkWell(
         borderRadius: BorderRadius.circular(10),
         onTap: () => setState(() {
-          collapsed ? _collapsedGroups.remove(name) : _collapsedGroups.add(name);
+          collapsed
+              ? _collapsedGroups.remove(name)
+              : _collapsedGroups.add(name);
         }),
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
@@ -1061,7 +1063,14 @@ class _ResultsScreenState extends State<ResultsScreen> {
     final rows = _rows();
     return ListView.separated(
       controller: _scroll,
-      padding: const EdgeInsets.fromLTRB(12, 10, 12, 24),
+      // The list runs behind the system navigation bar (edge-to-edge), so the
+      // last entry has to be able to scroll above it.
+      padding: EdgeInsets.fromLTRB(
+        12,
+        10,
+        12,
+        24 + MediaQuery.viewPaddingOf(context).bottom,
+      ),
       itemCount: rows.length + 1,
       separatorBuilder: (_, _) => const SizedBox(height: 8),
       itemBuilder: (context, index) {

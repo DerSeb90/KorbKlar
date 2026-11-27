@@ -4,19 +4,19 @@ import html
 import re
 import unicodedata
 from datetime import date, datetime, timedelta
-from typing import Any, Iterable, Optional
+from typing import Any, Iterable
 from urllib.parse import urljoin, urlsplit
 
 from .config import BERLIN
 from .images import is_rejected_image_url, normalize_image_url
 from .models import Offer, RetailerContext
 
-def validate_postal_code(value: Any) -> Optional[str]:
+def validate_postal_code(value: Any) -> str | None:
     postal_code = clean_text(value)
     return postal_code if re.fullmatch(r"\d{5}", postal_code) else None
 
 
-def parse_deposit_text(value: Any, *, container_count: Optional[int] = None) -> Optional[float]:
+def parse_deposit_text(value: Any, *, container_count: int | None = None) -> float | None:
     """Return the explicitly published total deposit for one sales unit.
 
     ``container_count`` is supplied only when the source explicitly identifies
@@ -80,7 +80,7 @@ def parse_deposit_text(value: Any, *, container_count: Optional[int] = None) -> 
     return None
 
 
-def parse_deposit_components(value: Any, *, container_count: Optional[int] = None) -> tuple[Optional[float], Optional[float], Optional[float]]:
+def parse_deposit_components(value: Any, *, container_count: int | None = None) -> tuple[float | None, float | None, float | None]:
     """Return total, per-container and packaging deposit when explicitly known."""
     text = clean_text(value)
     total = parse_deposit_text(text, container_count=container_count)
@@ -121,18 +121,28 @@ def normalize_view(value: Any) -> str:
 
 def filter_offers(offers: Iterable[Offer], filter_text: str) -> list[Offer]:
     def spelling(value: str) -> str:
-        return re.sub(r"\bem[\s\-‐‑–]*eukal\b", "emeukal", value.casefold())
+        value = unicodedata.normalize("NFKD", value.casefold())
+        value = "".join(char for char in value if not unicodedata.combining(char))
+        return re.sub(r"\bem[\s\-‐‑–]*eukal\b", "emeukal", value)
 
     query = spelling(clean_text(filter_text))
     if not query:
         return list(offers)
     # Die Warengruppe zählt nicht zur Suche: Wer „Dessert“ sucht, will keine Fleischangebote, nur weil die
     # Gruppe „Tiefkühl / Eis & Dessert“ heißt. Für Gruppen gibt es die Reiter darüber.
-    return [
-        offer
-        for offer in offers
-        if query in spelling(f"{offer.name} {offer.brand} {offer.description} {offer.retailer}")
-    ]
+    # „Energydrink“, „Energy Drink“ und „Energy-Drink“ sind dieselbe Suche: zusätzlich ohne Leerzeichen/Bindestriche vergleichen.
+    compact_query = re.sub(r"[\s\-‐‑–]+", "", query)
+    compact = len(compact_query) >= 4
+    words = [word for word in re.findall(r"[a-z0-9]+", query) if len(word) >= 2]
+    # General Wildgulasch may find a published subtype, never the reverse.
+    def contains(word: str, text: str) -> bool:
+        return word in text or (word == "wildgulasch" and bool(re.search(r"\b(?:wildschwein|hirsch|reh)[ -]?gulasch\b", text)))
+    matches = []
+    for offer in offers:
+        haystack = spelling(f"{offer.name} {offer.brand} {offer.description} {offer.retailer}")
+        if query in haystack or (compact and compact_query in re.sub(r"[\s\-‐‑–]+", "", haystack)) or (words and all(contains(word, haystack) for word in words)):
+            matches.append(offer)
+    return matches
 
 
 def normalize_keywords(values: Iterable[Any], limit: int = 50) -> tuple[str, ...]:
@@ -158,7 +168,7 @@ def today_berlin() -> date:
     return datetime.now(BERLIN).date()
 
 
-def offer_reference_date(day: Optional[date] = None) -> date:
+def offer_reference_date(day: date | None = None) -> date:
     """Return the weekly-offer reference date used by retailer adapters.
 
     On Sundays the old week has ended while the coming week's offers are
@@ -169,7 +179,7 @@ def offer_reference_date(day: Optional[date] = None) -> date:
     return current + timedelta(days=1) if current.weekday() == 6 else current
 
 
-def offer_week_reference(value: Any, day: Optional[date] = None) -> date:
+def offer_week_reference(value: Any, day: date | None = None) -> date:
     reference = offer_reference_date(day)
     return reference + timedelta(days=7) if clean_text(value).casefold() == "next" else reference
 
@@ -207,7 +217,7 @@ def strip_html(value: Any) -> str:
 def clean_description(value: Any) -> str:
     return clean_text(re.sub(r"~twx[a-z0-9_]*~", " ", str(value or ""), flags=re.IGNORECASE))
 
-def parse_number(value: Any) -> Optional[float]:
+def parse_number(value: Any) -> float | None:
     if value is None or value == "":
         return None
     try:
@@ -221,7 +231,7 @@ def format_euro(value: Any) -> str:
     number = parse_number(value)
     return "–" if number is None else f"{number:.2f} €".replace(".", ",")
 
-def parse_iso_date(value: Any) -> Optional[date]:
+def parse_iso_date(value: Any) -> date | None:
     text = clean_text(value)
     if not text:
         return None
@@ -235,7 +245,7 @@ def parse_iso_date(value: Any) -> Optional[date]:
 
 def offer_validity(
     raw_offer: dict[str, Any],
-    reference_date: Optional[date] = None,
+    reference_date: date | None = None,
 ) -> tuple[bool, str]:
     """Select the remaining offer week, including published Thursday previews.
 
@@ -288,21 +298,36 @@ def identity_words(brand: str, name: str) -> list[str]:
     return name_words if brand_words and name_words[: len(brand_words)] == brand_words else brand_words + name_words
 
 def normalize_pack(value: str) -> str:
+    # German thousands separators in published quantities ("1.000 g") are
+    # not decimal points. Preserve genuine decimal quantities such as 1.5 l.
+    value = re.sub(r"(?<![\d.,])([1-9]\d{0,2}(?:\.\d{3})+)(?![\d.,])",
+        lambda match: match[1].replace(".", ""), value)
     # Grundpreis-Angaben sind keine zweite Packungsgröße. Beispiele:
     # "0,33-l-Dose (1 l = 1.19)" oder "150-g-Becher (1 kg = 3,27 €)".
     # Die komplette Klammer fliegt vor der Packungserkennung raus.
     value = re.sub(
-        r"\(\s*(?:grundpreis\s*)?(?:1\s*(?:kg|kilogramm|l|liter)|"
-        r"100\s*(?:g|gramm|ml|milliliter)|1\s*(?:stk\.?|stück|portion|anwendung))"
+        r"\(\s*(?:grundpreis\s*)?\d+(?:[.,]\d+)?\s*"
+        r"(?:kg|kilogramm|l|liter|ltr\.?|g|gramm|ml|milliliter|"
+        r"stk\.?|st\.?|stück|portion(?:en)?|anwendung(?:en)?|wl|waschladungen?|rollen?|blatt)"
         r"\s*=\s*[^)]*\)",
-        " ",
-        value,
-        flags=re.IGNORECASE,
+        " ", value, flags=re.IGNORECASE,
     )
+    # A listing may cut the same reference off before its closing bracket
+    # ("0,5 l Flasche (1 l =..."). The reference unit is still no package.
+    value = re.sub(
+        r"\(\s*(?:grundpreis\s*)?\d+(?:[.,]\d+)?\s*"
+        r"(?:kg|kilogramm|l|liter|ltr\.?|g|gramm|ml|milliliter|"
+        r"stk\.?|st\.?|stück|portion(?:en)?|anwendung(?:en)?|wl|waschladungen?|rollen?|blatt)"
+        r"\s*(?:=[^)]*|\.{3}|…)\s*$",
+        " ", value, flags=re.IGNORECASE,
+    )
+
+    # Reverse unit-price notation is not another package: "23,96 € / 1 l".
+    value = re.sub(r"(?:\d+[.,]\d{2}\s*€|€\s*\d+[.,]\d{2})\s*/\s*(?:1|100)\s*(?:kg|g|ml|ltr\.?|l)\b", " ", value, flags=re.IGNORECASE)
 
     unit_pattern = (
         r"waschladungen?|wäschen?|portionen?|anwendungen?|kilogramm|milliliter|"
-        r"kapseln?|gramm|liter|caps?|pods?|tabs?|kg|ml|cl|g|l|wl|stück|stk\.?|rollen?|blatt"
+        r"kapseln?|gramm|liter|ltr\.?|caps?|pods?|tabs?|kg|ml|cl|g|l|wl|stück|stk\.?|st\.?|rollen?|blatt"
     )
 
     # A source range such as "85-100 g" is one ambiguous package choice, not
@@ -372,7 +397,7 @@ def normalize_pack_unit(amount: float, unit_text: str) -> tuple[float, str]:
     unit = unit_text.casefold().rstrip(".")
     if unit in {"kg", "kilogramm"}:
         return amount * 1000, "g"
-    if unit in {"l", "liter"}:
+    if unit in {"l", "liter", "ltr"}:
         return amount * 1000, "ml"
     if unit == "milliliter":
         return amount, "ml"
@@ -380,7 +405,7 @@ def normalize_pack_unit(amount: float, unit_text: str) -> tuple[float, str]:
         return amount * 10, "ml"
     if unit == "gramm":
         return amount, "g"
-    if unit.startswith("stück") or unit == "stk":
+    if unit.startswith("stück") or unit in {"stk", "st"}:
         return amount, "stk"
     if unit.startswith("rolle"):
         return amount, "rollen"
@@ -415,16 +440,22 @@ def advertiser_labels(raw_offer: dict[str, Any]) -> list[str]:
 def identify_retailer(
     raw_offer: dict[str, Any],
     retailers: dict[str, RetailerContext],
-) -> Optional[str]:
+) -> str | None:
     labels = " | ".join(advertiser_labels(raw_offer))
     if not labels:
         return None
+    matches = []
     for name, context in retailers.items():
         if any(alias in labels for alias in context.excluded_aliases):
             continue
-        if any(alias in labels for alias in context.aliases):
-            return name
-    return None
+        longest = max((len(alias) for alias in context.aliases if alias in labels), default=0)
+        if longest:
+            matches.append((longest, name))
+    if not matches:
+        return None
+    best = max(length for length, _name in matches)
+    names = {name for length, name in matches if length == best}
+    return names.pop() if len(names) == 1 else None
 
 def normalize_base_unit(value: str) -> str:
     unit = clean_text(value).casefold().replace(".", "")
@@ -442,7 +473,7 @@ def normalize_base_unit(value: str) -> str:
         return "blatt"
     return ""
 
-def pack_metric(pack: str) -> Optional[tuple[float, str]]:
+def pack_metric(pack: str) -> tuple[float, str] | None:
     if not pack or "+" in pack:
         return None
     match = re.fullmatch(r"(?:(\d+)x)?(\d+(?:\.\d+)?)(g|ml|portion|stk|rollen|blatt)", pack)
@@ -461,8 +492,8 @@ def pack_metric(pack: str) -> Optional[tuple[float, str]]:
 
 def calculate_unit_price(
     offer: Offer,
-    total_price: Optional[float],
-) -> Optional[tuple[float, str, bool]]:
+    total_price: float | None,
+) -> tuple[float, str, bool] | None:
     metric = pack_metric(offer.pack_signature)
     if metric is None or total_price is None:
         return None
@@ -474,7 +505,7 @@ def calculate_unit_price(
         return offer.base_price, unit, False
     return calculated, unit, True
 
-def format_unit_price(value: Optional[float], unit: str) -> str:
+def format_unit_price(value: float | None, unit: str) -> str:
     labels = {
         "l": "l",
         "kg": "kg",
@@ -515,9 +546,9 @@ def format_pack(pack: str) -> str:
     return one(pack)
 
 def date_is_current(
-    start: Optional[date],
-    end: Optional[date],
-    reference_date: Optional[date] = None,
+    start: date | None,
+    end: date | None,
+    reference_date: date | None = None,
 ) -> bool:
     today = offer_reference_date(reference_date)
     if start is not None and today < start:
@@ -526,7 +557,7 @@ def date_is_current(
         return False
     return True
 
-def format_validity(start: Optional[date], end: Optional[date]) -> str:
+def format_validity(start: date | None, end: date | None) -> str:
     if start and end:
         return f"{start:%d.%m.} – {end:%d.%m.%Y}"
     if start:
@@ -535,50 +566,77 @@ def format_validity(start: Optional[date], end: Optional[date]) -> str:
         return f"bis {end:%d.%m.%Y}"
     return "Aktuell"
 
+def _dedupe_aldi_sued_offer(unique: dict[tuple[Any, ...], Offer], offer: Offer, benefits: tuple[Any, ...]) -> None:
+    """ALDI Süd meldet dieselbe Aktion teils mehrfach mit unterschiedlich präzisem Gültigkeits-Label;
+    bevorzugt die präzisere Angabe und verwirft die doppelten vagen/präzisen Einträge derselben Identität."""
+    try:
+        source_host = (urlsplit(offer.source_url).hostname or "").casefold()
+    except ValueError:
+        source_host = ""
+    identity = (offer.retailer, offer.offer_id, offer.price, offer.pack_signature, benefits, source_host)
+    vague = offer.validity_label.casefold() in {"aktuell", "aktuelle woche", "aktuelle angebotsseite"}
+    competing = [key for key in unique if key[:6] == identity]
+    if competing:
+        precise = next((key for key in competing if key[6] is False), None)
+        if vague and precise is not None:
+            return
+        if not vague:
+            same_period = next(
+                (
+                    key for key in competing
+                    if key[6] is False
+                    and key[7][:2] == (offer.valid_from or "", offer.valid_until or "")
+                ),
+                None,
+            )
+            if same_period is not None:
+                existing_specific = unique[same_period].validity_label.casefold().startswith("nur ")
+                incoming_specific = offer.validity_label.casefold().startswith("nur ")
+                if not incoming_specific or existing_specific:
+                    return
+                del unique[same_period]
+            for key in competing:
+                if key in unique and key[6] is True:
+                    del unique[key]
+    period = (offer.valid_from or "", offer.valid_until or "", offer.validity_label.casefold())
+    key = identity + (vague, period)
+    unique.setdefault(key, offer)
+
+def _description_identity(value: str) -> str:
+    text = clean_text(value).casefold()
+    # Typography only: do not remove variety names, conditions or punctuation.
+    return re.sub(r"(?<=\d)\s+(?=(?:kg|g|ml|l)\b)", "", text)
+
+
+def _period_identity(offer: Offer) -> tuple:
+    if parse_iso_date(offer.valid_from) and parse_iso_date(offer.valid_until):
+        return (offer.valid_from, offer.valid_until)
+    return (offer.valid_from, offer.valid_until, clean_text(offer.validity_label).casefold())
+
+
+def _purchase_terms(offer: Offer) -> tuple:
+    return (offer.benefits, offer.deposit, offer.container_deposit, offer.packaging_deposit,
+            offer.multi_buy_quantity, offer.multi_buy_total_price, offer.single_price,
+            offer.pack_size, offer.multi_buy_condition, offer.multi_buy_mix_group,
+            offer.minimum_quantity, offer.offer_condition, offer.comparison_eligible)
+
+
 def deduplicate_offers(offers: Iterable[Offer]) -> list[Offer]:
     unique: dict[tuple[Any, ...], Offer] = {}
     for offer in offers:
         benefits = tuple((benefit.program_id, benefit.kind, benefit.value) for benefit in offer.benefits)
         if offer.retailer == "ALDI Süd":
-            try:
-                source_host = (urlsplit(offer.source_url).hostname or "").casefold()
-            except ValueError:
-                source_host = ""
-            identity = (offer.retailer, offer.offer_id, offer.price, offer.pack_signature, benefits, source_host)
-            vague = offer.validity_label.casefold() in {"aktuell", "aktuelle woche", "aktuelle angebotsseite"}
-            competing = [key for key in unique if key[:6] == identity]
-            if competing:
-                precise = next((key for key in competing if key[6] is False), None)
-                if vague and precise is not None:
-                    continue
-                if not vague:
-                    same_period = next(
-                        (
-                            key for key in competing
-                            if key[6] is False
-                            and key[7][:2] == (offer.valid_from or "", offer.valid_until or "")
-                        ),
-                        None,
-                    )
-                    if same_period is not None:
-                        existing_specific = unique[same_period].validity_label.casefold().startswith("nur ")
-                        incoming_specific = offer.validity_label.casefold().startswith("nur ")
-                        if not incoming_specific or existing_specific:
-                            continue
-                        del unique[same_period]
-                    for key in competing:
-                        if key in unique and key[6] is True:
-                            del unique[key]
-            period = (offer.valid_from or "", offer.valid_until or "", offer.validity_label.casefold())
-            key = identity + (vague, period)
-            unique.setdefault(key, offer)
+            _dedupe_aldi_sued_offer(unique, offer, benefits)
             continue
         key = (
             offer.retailer,
             offer.match_key,
+            normalize_pack(offer.pack_signature),
             offer.price,
-            benefits,
-            offer.validity_label,
+            _purchase_terms(offer),
+            _period_identity(offer),
+            tuple(offer.product_gtins),
+            _description_identity(offer.description),
         )
         unique.setdefault(key, offer)
     return list(unique.values())
@@ -680,34 +738,49 @@ def _marktguru_offer_image_url(value: Any, base_url: str = "") -> str:
     return ""
 
 
+_IMAGE_PREFERRED_FIELDS = (
+    "thumbnailUrl", "thumbnailURL", "thumbnail_url", "thumbnail",
+    "imageUrl", "imageURL", "image_url", "productImageUrl", "productImage",
+    "mainImage", "image", "images", "picture", "photo", "contentUrl",
+    "bild_app", "bild_web130", "bild_web90",
+)
+
+def _image_from_preferred_fields(value: dict[str, Any], base_url: str = "") -> str:
+    """Prüft erst die üblichen Bildfeld-Namen, dann jeden Schlüssel, der nach einem Bild klingt."""
+    for field in _IMAGE_PREFERRED_FIELDS:
+        if field in value:
+            candidate = _coerce_image_url(value.get(field), base_url=base_url, path_hint=field)
+            if candidate and not is_rejected_image_url(candidate):
+                return candidate
+    for key, item in value.items():
+        key_text = str(key).casefold()
+        if any(token in key_text for token in ("thumbnail", "image", "picture", "photo", "media", "asset", "bild")):
+            candidate = _coerce_image_url(item, base_url=base_url, path_hint=str(key))
+            if candidate and not is_rejected_image_url(candidate):
+                return candidate
+    return ""
+
+def _image_from_nested_dict_values(value: dict[str, Any], base_url: str = "") -> str:
+    """Steigt in verschachtelte dict/list-Werte ab, falls kein Treffer über die bekannten Feldnamen kam."""
+    for item in value.values():
+        if isinstance(item, (dict, list)):
+            candidate = extract_image_url(item, base_url=base_url)
+            if candidate:
+                return candidate
+    return ""
+
 def extract_image_url(value: Any, base_url: str = "") -> str:
     marktguru = _marktguru_offer_image_url(value, base_url=base_url)
     if marktguru:
         return marktguru
 
-    preferred_fields = (
-        "thumbnailUrl", "thumbnailURL", "thumbnail_url", "thumbnail",
-        "imageUrl", "imageURL", "image_url", "productImageUrl", "productImage",
-        "mainImage", "image", "images", "picture", "photo", "contentUrl",
-        "bild_app", "bild_web130", "bild_web90",
-    )
     if isinstance(value, dict):
-        for field in preferred_fields:
-            if field in value:
-                candidate = _coerce_image_url(value.get(field), base_url=base_url, path_hint=field)
-                if candidate and not is_rejected_image_url(candidate):
-                    return candidate
-        for key, item in value.items():
-            key_text = str(key).casefold()
-            if any(token in key_text for token in ("thumbnail", "image", "picture", "photo", "media", "asset", "bild")):
-                candidate = _coerce_image_url(item, base_url=base_url, path_hint=str(key))
-                if candidate and not is_rejected_image_url(candidate):
-                    return candidate
-        for item in value.values():
-            if isinstance(item, (dict, list)):
-                candidate = extract_image_url(item, base_url=base_url)
-                if candidate:
-                    return candidate
+        candidate = _image_from_preferred_fields(value, base_url=base_url)
+        if candidate:
+            return candidate
+        candidate = _image_from_nested_dict_values(value, base_url=base_url)
+        if candidate:
+            return candidate
     elif isinstance(value, list):
         for item in value:
             candidate = extract_image_url(item, base_url=base_url)
@@ -734,7 +807,7 @@ def first_text(value: dict[str, Any], fields: Iterable[str]) -> str:
             return clean_text(candidate)
     return ""
 
-def first_number(value: dict[str, Any], fields: Iterable[str]) -> Optional[float]:
+def first_number(value: dict[str, Any], fields: Iterable[str]) -> float | None:
     for field in fields:
         candidate = value.get(field)
         if isinstance(candidate, dict):
@@ -747,7 +820,7 @@ def first_number(value: dict[str, Any], fields: Iterable[str]) -> Optional[float
                 return parsed
     return None
 
-def first_date(value: dict[str, Any], fields: Iterable[str]) -> Optional[date]:
+def first_date(value: dict[str, Any], fields: Iterable[str]) -> date | None:
     for field in fields:
         parsed = parse_iso_date(value.get(field))
         if parsed is not None:
@@ -759,14 +832,14 @@ def normalize_heading(value: str) -> str:
     normalized = "".join(character for character in normalized if not unicodedata.combining(character))
     return re.sub(r"[^a-z0-9]+", " ", normalized).strip()
 
-def heading_index(headers: list[str], names: Iterable[str]) -> Optional[int]:
+def heading_index(headers: list[str], names: Iterable[str]) -> int | None:
     normalized_names = [normalize_heading(name) for name in names]
     for index, header in enumerate(headers):
         if any(name == header or name in header for name in normalized_names):
             return index
     return None
 
-def identify_retailer_text(value: Any, retailers: dict[str, RetailerContext]) -> Optional[str]:
+def identify_retailer_text(value: Any, retailers: dict[str, RetailerContext]) -> str | None:
     label = clean_text(value).casefold()
     if not label:
         return None
@@ -777,14 +850,14 @@ def identify_retailer_text(value: Any, retailers: dict[str, RetailerContext]) ->
             return name
     return None
 
-def parse_price_text(value: Any) -> Optional[float]:
+def parse_price_text(value: Any) -> float | None:
     text = clean_text(value)
     match = re.search(r"(?<!\d)(\d{1,4}(?:[.,]\d{1,2})?)\s*€", text)
     if match:
         return parse_number(match.group(1))
     return parse_number(text)
 
-def parse_base_price_text(value: Any) -> tuple[Optional[float], str]:
+def parse_base_price_text(value: Any) -> tuple[float | None, str]:
     text = clean_text(value)
     match = re.search(
         r"(?:1\s*)?(kg|kilogramm|l|liter|wl|waschladungen?|stück|stueck|stk\.?)\s*=\s*(?:€\s*)?(\d+(?:[.,]\d{1,2})?)"
@@ -820,9 +893,9 @@ def flatten_json_text(value: Any, limit: int = 5000) -> str:
     walk(value)
     return " | ".join(parts)[:limit]
 
-def find_marktguru_keys(value: Any) -> tuple[Optional[str], Optional[str]]:
-    api_key: Optional[str] = None
-    client_key: Optional[str] = None
+def find_marktguru_keys(value: Any) -> tuple[str | None, str | None]:
+    api_key: str | None = None
+    client_key: str | None = None
 
     def walk(item: Any) -> None:
         nonlocal api_key, client_key
@@ -841,9 +914,34 @@ def find_marktguru_keys(value: Any) -> tuple[Optional[str], Optional[str]]:
     walk(value)
     return api_key, client_key
 
-def first_regex_group(value: str, patterns: Iterable[str]) -> Optional[str]:
+def first_regex_group(value: str, patterns: Iterable[str]) -> str | None:
     for pattern in patterns:
         match = re.search(pattern, value, re.IGNORECASE)
         if match:
             return match.group(1)
     return None
+
+
+def supplement_offers(primary: Iterable[Offer], supplemental: Iterable[Offer]) -> list[Offer]:
+    """Union independent sources, retaining primary evidence on exact identity.
+
+    Do not fuzzy-match varieties, pack sizes, dates or membership prices. Source
+    identifiers differ, so they cannot establish cross-source identity.
+    """
+    def text(value: str) -> str:
+        return re.sub(r"[^\w]+", " ", clean_text(value).casefold()).strip()
+
+    def identity(offer: Offer) -> tuple:
+        return (offer.retailer, text(offer.name), text(offer.brand),
+                normalize_pack(offer.pack_signature), offer.price,
+                _period_identity(offer), _description_identity(offer.description),
+                _purchase_terms(offer), tuple(offer.product_gtins))
+
+    result = list(primary)
+    seen = {identity(offer) for offer in result}
+    for offer in supplemental:
+        key = identity(offer)
+        if key not in seen:
+            result.append(offer)
+            seen.add(key)
+    return result

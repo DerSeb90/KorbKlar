@@ -1,7 +1,7 @@
-name: korbklar_app
-description: KorbKlar mobile client for comparing regional supermarket offers.
+name: korbunio_app
+description: Korbuino mobile client for comparing regional supermarket offers.
 publish_to: "none"
-version: 0.1.21+21
+version: 0.1.55+55
 
 environment:
   sdk: ^3.9.0
@@ -20,6 +20,7 @@ dependencies:
   open_filex: ^4.7.0
   crypto: ^3.0.6
   cupertino_icons: ^1.0.8
+  material_ui: ^1.2.0
 
 dev_dependencies:
   flutter_test:

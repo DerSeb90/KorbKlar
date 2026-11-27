@@ -2,7 +2,7 @@
 
 ## Android-App
 
-Unter [`app/`](app/) liegt ein Offline-first-Flutter-Client. In den Einstellungen kann eine eigene KorbKlar-Docker-Instanz verbunden werden; API-Tokens liegen im Android Keystore und werden nur über HTTPS übertragen. Bereits geladene Angebote bleiben ohne Server verfügbar. Unter Android holt ein Button in den Einstellungen die aktuelle Release-APK aus den GitHub-Releases dieses Repositories und prüft sie vor der Installation gegen die von GitHub veröffentlichte Prüfsumme. Eine eigene KitchenOwl-Instanz kann direkt per HTTPS angebunden werden, ohne den Token an KorbKlar weiterzugeben. Details und APK-Bauanleitung stehen in [`app/README.md`](app/README.md).
+Unter [`app/`](app/) liegt unverändert der Offline-first-Flutter-Client des Upstream-Projekts; er heißt „Korbuino“ und hat dessen Paketkennung `de.korbunio.korbunio_app`. In den Einstellungen kann eine eigene KorbKlar-Docker-Instanz verbunden werden; API-Tokens liegen im Android Keystore und werden nur über HTTPS übertragen. Bereits geladene Angebote bleiben ohne Server verfügbar. Der Update-Button in den Einstellungen sucht in den GitHub-Releases des Upstream-Projekts, nicht in diesem Repository; neue Builds dieses Forks werden von Hand installiert. Eine eigene KitchenOwl-Instanz kann direkt per HTTPS angebunden werden, ohne den Token an KorbKlar weiterzugeben. Details und APK-Bauanleitung stehen in [`app/README.md`](app/README.md).
 
 [← Sprachauswahl](README.md) · [English](README.en.md)
 
@@ -375,6 +375,16 @@ KorbKlar erfindet keine fehlenden Preise und schätzt keine unbekannten Bonusvor
 Der Bereich **Einkauf** speichert die persönliche Liste ausschließlich im IndexedDB-Speicher des jeweiligen Browserprofils. Es gibt keine Konten, serverseitigen persönlichen Listen, Tracker oder automatische Gerätesynchronisation. Angebote und manuelle Artikel lassen sich hinzufügen, bearbeiten, abhaken und nach Händler gruppieren. Warenwert und Pfand werden getrennt berechnet; fehlen Preise, zeigt KorbKlar nur die bekannte Gesamtsumme.
 
 Für die allgemeine Geräteübergabe stehen Textkopie, Web Share, TXT sowie ein versioniertes JSON-Backup mit lokaler Importvorschau bereit. KorbKlar enthält keine app-spezifische Bring- oder KitchenOwl-Verbindung.
+
+## Rossmann-Filialbestand ohne Händler-App
+
+Unter **Filialbestand prüfen** (`/availability`) fragt die Weboberfläche bis zu fünf Rossmann-Artikelnummern für eine Postleitzahl ab. Die sechsstellige Artikelnummer steht auf der Rossmann-Produktseite; eine EAN oder ein Produktname ist kein Ersatz dafür.
+
+Für Agenten steht `get_store_availability(postal_code, dans, store_ids=[])` bereit. Die geschützte HTTP-Schnittstelle ist `POST /api/v1/availability` mit demselben JSON-Vertrag. Beispiel: `{"postal_code":"04109","dans":["120585"]}`. Bei eingerichteter Server-Authentifizierung ist der vorhandene Bearer-Token erforderlich. Die OpenAPI-Schnittstelle für den bisherigen Angebotsvergleich bleibt unverändert.
+
+Die Funktion benötigt weder die Rossmann-App noch ein Rossmann-Konto, API-Schlüssel, Gerätekennungen oder Tracking-SDKs. Übertragen werden Suchkoordinaten und Artikelnummern an Rossmann sowie die PLZ zur Auflösung an OpenStreetMap/Nominatim; die jeweilige Gegenstelle sieht die IP-Adresse. Es gibt kein automatisches Bestandsmonitoring.
+
+Jeder Artikel wird einzeln mit mindestens zwei Sekunden Abstand abgefragt; höchstens eine Bestandsabfrage läuft pro Prozess. Erfolgreiche Ergebnisse werden 60 Sekunden im Arbeitsspeicher gehalten und mit Abrufzeit angezeigt. **„5+“ bedeutet mindestens fünf; `available=true` beweist keinen positiven Bestand.** Nullbestand, unbekannter Bestand und Abruffehler bleiben getrennt. Ein HTTP-406-Fehler ist keine Ausverkauft-Meldung. Die Werte sind Buchbestände, keine Reservierung oder Garantie für Regalware. Die verwendete mobile Schnittstelle kann sich ändern und wird hier nicht als offiziell unterstützte Drittanbieter-API ausgegeben.
 
 ## Roadmap
 

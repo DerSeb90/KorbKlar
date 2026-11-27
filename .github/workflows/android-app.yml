@@ -12,8 +12,8 @@ on:
       - "app/**"
       - ".github/workflows/android-app.yml"
     # A version tag additionally publishes the APKs as a GitHub release. The
-    # app's update check reads the latest release of this repository, so a
-    # tag is what makes a new version reach the phones.
+    # app is upstream's and looks for updates in upstream's releases, not
+    # here, so a new build reaches a phone only by installing it by hand.
     tags:
       - "v*"
   workflow_dispatch:
@@ -69,12 +69,17 @@ jobs:
         working-directory: app
         # Split per ABI so the download stays small; the arm64 file fits
         # every phone from the last several years.
+        # app/ is upstream's app, unchanged, and its Gradle build reads the
+        # KORBUNIO_* names. The repository secrets keep their names.
         env:
-          KORBKLAR_STORE_FILE: ../korbklar-release.jks
-          KORBKLAR_STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
-          KORBKLAR_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
-          KORBKLAR_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
-        run: flutter build apk --release --split-per-abi
+          KORBUNIO_STORE_FILE: ../korbklar-release.jks
+          KORBUNIO_STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
+          KORBUNIO_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KORBUNIO_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        # app/ is upstream's tree unchanged; its Gradle wrapper (9.1.0) trails the
+        # minimum that current stable Flutter asks for. Skip that version check
+        # here instead of patching the wrapper, so app/ stays identical to upstream.
+        run: flutter build apk --release --split-per-abi --android-skip-build-dependency-validation
 
       - name: Verify release signature
         working-directory: app
@@ -86,7 +91,7 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: korbklar-apk
+          name: korbunio-apk
           path: app/build/app/outputs/flutter-apk/*.apk
           if-no-files-found: error
           retention-days: 30
@@ -96,19 +101,18 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ github.ref_name }}
-        # GitHub computes the SHA-256 digest of each asset; the app verifies
-        # the download against it before installing.
         run: |
           gh release create "$TAG"             --repo "$GITHUB_REPOSITORY"             --title "KorbKlar $TAG"             --generate-notes             app/build/app/outputs/flutter-apk/*.apk
 
       - name: Explain how to install it
         run: |
           {
-            echo "### KorbKlar app"
+            echo "### Korbuino app (upstream's Flutter client, built by this fork)"
             echo
-            echo "Download the **korbklar-apk** artifact from this run and install"
+            echo "Download the **korbunio-apk** artifact from this run and install"
             echo "\`app-arm64-v8a-release.apk\` on the phone."
             echo
-            echo "The APK is signed with KorbKlar's persistent release key and can"
-            echo "be updated by future KorbKlar releases without losing app data."
+            echo "The APK has upstream's package name and is signed with this"
+            echo "fork's persistent release key. Later builds from this repository"
+            echo "update it without losing app data; upstream's own APK does not."
           } >> "$GITHUB_STEP_SUMMARY"

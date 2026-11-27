@@ -6,8 +6,9 @@ import tempfile
 import threading
 import time
 from datetime import date
-from typing import Callable
-from urllib.parse import urlencode, urljoin
+from concurrent.futures import ThreadPoolExecutor
+from typing import Any, Callable
+from urllib.parse import parse_qs, urlsplit, urlencode, urljoin
 
 from ..common import (
     build_match_key,
@@ -17,7 +18,7 @@ from ..common import (
     parse_number,
 )
 from ..http import HttpClient
-from ..models import Offer, ToolError
+from ..models import Offer, ToolError, PartialOffers
 from .browser import chromium_command
 
 
@@ -41,7 +42,7 @@ class OfficialRossmannSource:
                     [
                         chromium_command(), "--headless=new", "--no-sandbox", "--disable-gpu",
                         "--disable-software-rasterizer", "--disable-crashpad-for-testing", "--single-process",
-                        "--disable-dev-shm-usage", "--virtual-time-budget=12000",
+                        "--disable-dev-shm-usage", "--virtual-time-budget=20000",
                         f"--user-data-dir={profile}", "--dump-dom", url,
                     ],
                     capture_output=True,
@@ -62,15 +63,22 @@ class OfficialRossmannSource:
 
     @staticmethod
     def _validity(text: str) -> tuple[date | None, date | None]:
+        # Rossmann has used two header wordings for the same flyer-wide period:
+        # "Gültig ab <Wochentag>: DD.MM. - DD.MM.YYYY" and, since November 2026,
+        # "Täglich gültig vom DD.MM. – DD.MM.YYYY" (en dash). Both keep the short
+        # start date immediately followed by a dash, which per-product footnote
+        # periods elsewhere on the page (full dates on both sides, "bis"/"bis zum") never do.
         match = re.search(
-            r"Gültig\s+ab\s+\w+\s*:\s*(\d{2})\.(\d{2})\.\s*-\s*(\d{2})\.(\d{2})\.(\d{4})",
+            r"[Gg]ültig\s+(?:ab\s+\w+\s*:|vom)\s*(\d{2})\.(\d{2})\.\s*[-–]\s*(\d{2})\.(\d{2})\.(\d{4})",
             text,
             flags=re.IGNORECASE,
         )
         if not match:
             return None, None
         try:
-            return date(int(match[5]), int(match[2]), int(match[1])), date(int(match[5]), int(match[4]), int(match[3]))
+            end_year = int(match[5])
+            start_year = end_year - (int(match[2]) > int(match[4]))
+            return date(start_year, int(match[2]), int(match[1])), date(end_year, int(match[4]), int(match[3]))
         except ValueError:
             return None, None
 
@@ -80,10 +88,34 @@ class OfficialRossmannSource:
             from bs4 import BeautifulSoup
         except Exception as exc:  # pragma: no cover
             raise ToolError(f"Rossmann benötigt BeautifulSoup: {exc}") from exc
-        page = BeautifulSoup(self.renderer(self.OFFERS_URL), "html.parser")
-        start, end = self._validity(page.get_text(" ", strip=True))
+        # Retry once for late banners, but do not require a banner that the
+        # official page does not always publish. Coupon footnotes are not
+        # evidence of a flyer-wide period. Malformed published banners still fail.
+        page = start = end = None
+        retry_error = None
+        for _attempt in range(2):
+            try:
+                html = self.renderer(self.OFFERS_URL)
+            except ToolError as exc:
+                if page is None:
+                    raise
+                retry_error = exc
+                break
+            page = BeautifulSoup(html, "html.parser")
+            text = page.get_text(" ", strip=True)
+            start, end = self._validity(text)
+            if start and end and start <= end:
+                break
+            if re.search(r"gültig\s+ab\s+\w+\s*:|(?:täglich\s+)?gültig\s+vom\s+\d{2}\.\d{2}\.\s*[-–]", text, re.I):
+                raise ToolError("Rossmann: veröffentlichte Angebotsgültigkeit nicht lesbar oder widersprüchlich")
+            start = end = None
         result: list[Offer] = []
-        for index, card in enumerate(page.select('[data-testid="product-card"]'), 1):
+        # Rossmann dropped the data-testid="product-card" marker from this
+        # page (it now renders through the same template as their generic
+        # search results); the per-tile data-item-id attribute is still on
+        # the same element, so select on that, keeping the old marker too
+        # in case it comes back.
+        for index, card in enumerate(page.select('[data-testid="product-card"], [data-item-id]'), 1):
             text = clean_text(card.get_text(" ", strip=True))
             if "Aus der Werbung" not in text:
                 continue
@@ -107,26 +139,49 @@ class OfficialRossmannSource:
                 detail_match = re.search(r"(\d+(?:[,.]\d+)?\s*(?:ml|l|g|kg|Stk\.?|Stück)[^€]{0,20}\([^)]*€[^)]*\))", text, re.I)
                 details = clean_text(detail_match[1]) if detail_match else text
             base_price, base_unit = parse_base_price_text(details)
-            pack = normalize_pack(details)
+            # The dedicated field starts with the published pack quantity.
+            # Its later unit-price and "3 x 60 per pack" explanation are not
+            # additional packs to add to an already stated total of 180.
+            pack = normalize_pack(details.split("(", 1)[0] if details_node else details)
             offer_id = f"rossmann:{index}:{_slug(name)}"
             product_url = urljoin(self.OFFERS_URL, clean_text(link.get("href")) if link else "")
+            dan = clean_text(card.get("data-item-id"))
             result.append(Offer(
                 offer_id, "Rossmann", "Drogerie", name, "", details, price,
-                base_price, base_unit, pack, "Aktuelle Werbung" if not start else f"{start:%d.%m.}–{end:%d.%m.%Y}",
+                base_price, base_unit, pack, "Werbung – Gültigkeit unbestätigt" if not start else f"{start:%d.%m.}–{end:%d.%m.%Y}",
                 build_match_key("", name, pack, offer_id), self.OFFERS_URL,
                 image_url=urljoin(self.OFFERS_URL, clean_text(image.get("src"))) if image else "",
                 product_url=product_url, retailer_url=self.last_market_url,
-                coverage_note="Offizielle Rossmann-Werbung; lokale Verfügbarkeit vorbehalten",
+                coverage_note="Offizielle Rossmann-Werbung; lokale Verfügbarkeit vorbehalten" + (
+                    "; kein seitenweiter Zeitraum veröffentlicht, Gültigkeit unbestätigt" if not start else ""
+                ),
                 valid_from=start.isoformat() if start else None,
                 valid_until=end.isoformat() if end else None,
+                article_number=dan if re.fullmatch(r"[0-9]{6}", dan) else "",
             ))
         if not result:
+            if retry_error is not None:
+                raise retry_error
             raise ToolError("Rossmann lieferte keine lesbaren Werbeangebote")
         return result
 
 
 class OfficialMuellerSource:
-    OFFERS_URL = "https://www.mueller.de/c/online-angebote/"
+    # /c/online-angebote/ now redirects (HTTP 308) to the flyer page, which lists no products. The "Aktionen" pages of the
+    # main departments still render priced product tiles in plain HTML.
+    OFFERS_URLS = (
+        "https://www.mueller.de/c/drogerie/aktionen/",
+        "https://www.mueller.de/c/haushalt/aktionen/",
+        "https://www.mueller.de/c/schreibwaren/aktionen/",
+        "https://www.mueller.de/c/spielwaren/aktionen/",
+        "https://www.mueller.de/c/naturshop/aktionen/",
+        "https://www.mueller.de/c/multi-media/aktionen/",
+        "https://www.mueller.de/c/struempfe/aktionen/",
+        "https://www.mueller.de/c/handarbeit/aktionen/",
+        "https://www.mueller.de/c/tiershop/aktionen/",
+    )
+    OFFERS_URL = OFFERS_URLS[0]
+    MAX_PAGES_PER_DEPARTMENT = 200
     MAX_RESPONSE = 4_000_000
     CHALLENGE_MESSAGE = (
         "Müller verlangt eine Browser-Prüfung (Client Challenge) und ist ohne Browser nicht lesbar; "
@@ -137,27 +192,133 @@ class OfficialMuellerSource:
         self.http = http
         self.last_market_url = "https://www.mueller.de/storefinder/"
         self.last_market_label = "Müller"
+        self._catalogue = PartialOffers()
+        self._catalogue_at = 0.0
+        self._catalogue_lock = threading.Lock()
 
     def load(self, postal_code: str) -> list[Offer]:
+        # The online catalogue is shared by postal areas; do not fetch all
+        # department pages again for every regional comparison.
+        with self._catalogue_lock:
+            ttl = 60 if self._catalogue.note else 30 * 60
+            if self._catalogue and time.monotonic() - self._catalogue_at < ttl:
+                return PartialOffers(self._catalogue, self._catalogue.note)
+            catalogue = self._load_catalogue(postal_code)
+            self._catalogue = catalogue
+            self._catalogue_at = time.monotonic()
+            return PartialOffers(catalogue, catalogue.note)
+
+    def _load_catalogue(self, postal_code: str) -> PartialOffers:
         del postal_code
-        try:
-            from bs4 import BeautifulSoup
-        except Exception as exc:  # pragma: no cover
-            raise ToolError(f"Müller benötigt BeautifulSoup: {exc}") from exc
-        try:
-            payload = self.http.get_bytes(self.OFFERS_URL, {"Accept": "text/html"})
-        except ToolError as exc:
-            # Fastly's response is a user-facing JavaScript/CAPTCHA challenge.
-            # Do not disable TLS verification or attempt to evade it in the
-            # unattended provider.
-            if any(code in str(exc) for code in ("HTTP 403", "HTTP 429")):
-                raise ToolError(self.CHALLENGE_MESSAGE) from exc
-            raise
+        # Two bounded requests at a time, shared by all postal areas through
+        # load()'s catalogue lock/cache. Never spawn one request per page.
+        result: list[Offer] = []
+        seen: set[str] = set()
+        failures = []
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            for part in pool.map(self._load_department, self.OFFERS_URLS):
+                if part.note:
+                    failures.append(part.note)
+                for offer in part:
+                    if offer.offer_id not in seen:
+                        seen.add(offer.offer_id)
+                        result.append(offer)
+        if not result:
+            if any(code in failure for failure in failures for code in ("HTTP 403", "HTTP 429")):
+                raise ToolError(self.CHALLENGE_MESSAGE)
+            raise ToolError(" | ".join(failures) or "Müller lieferte keine lesbaren Online-Angebote")
+        return PartialOffers(result, " | ".join(failures))
+
+    def _fetch_department_page(self, url: str) -> tuple[Any, set[str], list[Offer]]:
+        """Fetch and parse one department listing page. Retries once if the listing came back
+        empty on an 'Aktion' category page, but never on an access challenge."""
+        from bs4 import BeautifulSoup
+        payload = self.http.get_bytes(url, {"Accept": "text/html"})
         if len(payload) > self.MAX_RESPONSE:
             raise ToolError("Müller-Antwort überschreitet das Größenlimit")
-        page = BeautifulSoup(payload.decode("utf-8", errors="replace"), "html.parser")
+        soup = BeautifulSoup(payload, "html.parser")
+        parsed = self._parse(BeautifulSoup, url, payload, page=soup)
+        page_ids = self._listing_ids(soup)
+        if not page_ids:
+            visible = soup.get_text(" ", strip=True).casefold()
+            title = soup.title.get_text().casefold() if soup.title else ""
+            blocked = any(word in visible for word in ("verify you are human", "client challenge", "access denied", "captcha"))
+            if "aktion" in title and not blocked:
+                payload = self.http.get_bytes(url, {"Accept": "text/html"})
+                if len(payload) > self.MAX_RESPONSE:
+                    raise ToolError("Müller-Antwort überschreitet das Größenlimit")
+                soup = BeautifulSoup(payload, "html.parser")
+                parsed = self._parse(BeautifulSoup, url, payload, page=soup)
+                page_ids = self._listing_ids(soup)
+            if not page_ids:
+                raise ToolError("Müller lieferte keine lesbaren Produktkarten")
+        return soup, page_ids, parsed
+
+    @staticmethod
+    def _department_page_links(soup, department: str) -> dict[int, str]:
+        """Map page number -> absolute URL for every pagination link on this listing page."""
+        pages: dict[int, str] = {}
+        for link in soup.select("a[href]"):
+            candidate = urlsplit(urljoin(department, link["href"]))
+            query = parse_qs(candidate.query)
+            if (candidate.scheme == "https" and candidate.hostname == "www.mueller.de"
+                    and candidate.path == urlsplit(department).path and set(query) == {"page"}
+                    and len(query["page"]) == 1 and query["page"][0].isdigit()):
+                pages[int(query["page"][0])] = candidate.geturl()
+        return pages
+
+    def _load_department(self, department: str) -> PartialOffers:
+        result: list[Offer] = []
+        seen: set[str] = set()
+        failures: list[ToolError] = []
+        url = department
+        department_ids: set[str] = set()
+        for number in range(1, self.MAX_PAGES_PER_DEPARTMENT + 1):
+            try:
+                soup, page_ids, parsed = self._fetch_department_page(url)
+                if page_ids <= department_ids:
+                    raise ToolError("Müller wiederholt eine Seite; Katalog unvollständig")
+                department_ids.update(page_ids)
+                for offer in parsed:
+                    if offer.offer_id not in seen:
+                        seen.add(offer.offer_id)
+                        result.append(offer)
+                pages = self._department_page_links(soup, department)
+                if number + 1 not in pages:
+                    if any(value > number for value in pages):
+                        raise ToolError("Müller Pagination überspringt eine Seite; Katalog unvollständig")
+                    break
+                if number == self.MAX_PAGES_PER_DEPARTMENT:
+                    raise ToolError("Müller Seitenlimit erreicht; Katalog unvollständig")
+                url = pages[number + 1]
+            except ToolError as exc:
+                failures.append(ToolError(f"{url}: {exc}"))
+                break
+        return PartialOffers(result, " | ".join(map(str, failures)))
+
+    @staticmethod
+    def _listing_ids(page) -> set[str]:
+        # Pagination identity comes from all readable products, not only Sale.
+        # A page of regular assortment must not terminate the offer scan.
+        ids = set()
+        for card in page.select("article"):
+            link = card.select_one("a[data-product-id][href]")
+            if (link and card.select_one("[class*='product-tile__product-name']")
+                    and card.select_one('[data-testid="plp-currentPrice-label"]')):
+                ids.add(clean_text(link.get("data-product-id")))
+        return ids - {""}
+
+    def _parse(self, BeautifulSoup, url: str, payload: bytes, page=None) -> list[Offer]:
+        page = page if page is not None else BeautifulSoup(payload.decode("utf-8", errors="replace"), "html.parser")
         result: list[Offer] = []
         for index, card in enumerate(page.select("article"), 1):
+            # Aktion category pages also contain regular assortment, "Neu",
+            # own brands and multipacks. Neither category nor UVP comparison
+            # alone proves an offer. Require the retailer's explicit Sale badge.
+            badges = {clean_text(n.get_text(" ", strip=True)).casefold()
+                for n in card.select("[class*='product-badges__text']")}
+            if "sale" not in badges:
+                continue
             name_node = card.select_one("[class*='product-tile__product-name']")
             price_node = card.select_one('[data-testid="plp-currentPrice-label"]')
             link = card.select_one("a[data-product-id][href]") or card.select_one('a[href*="/p/"]')
@@ -176,15 +337,13 @@ class OfficialMuellerSource:
             image = card.select_one("img[src*='products']") or card.select_one("img[src]")
             result.append(Offer(
                 offer_id, "Müller", "Drogerie und Haushalt", name, "", details,
-                price, base_price, base_unit, pack, "Aktuelles Online-Angebot",
-                build_match_key("", name, pack, offer_id), self.OFFERS_URL,
-                image_url=urljoin(self.OFFERS_URL, clean_text(image.get("src"))) if image else "",
-                product_url=urljoin(self.OFFERS_URL, clean_text(link.get("href"))),
+                price, base_price, base_unit, pack, "Online-Sale (ohne veröffentlichten Zeitraum)",
+                build_match_key("", name, pack, offer_id), url,
+                image_url=urljoin(url, clean_text(image.get("src"))) if image else "",
+                product_url=urljoin(url, clean_text(link.get("href"))),
                 retailer_url=self.last_market_url,
-                coverage_note="Offizielles Müller-Online-Angebot; Filialpreis und Filialbestand können abweichen",
+                coverage_note="Von Müller als Sale markierter Online-Artikel; keine vollständige Wochenprospektabdeckung; Filialpreis und Filialbestand können abweichen",
             ))
-        if not result:
-            raise ToolError("Müller lieferte keine lesbaren Online-Angebote")
         return result
 
 
@@ -234,15 +393,59 @@ class OfficialDmSource:
             return None
         return parse_number(current["current"].get("value"))
 
-    def _fetch(self) -> list[Offer]:
-        query = urlencode({"query": "ausverkauf", "pageSize": 500, "currentPage": 0})
-        payload = self.http.get_json(
-            f"{self.SEARCH_API}?{query}",
-            {"Accept": "application/json", "Referer": self.OFFERS_URL},
-        )
-        products = payload.get("products")
-        if not isinstance(products, list) or len(products) > 2_000:
+    @staticmethod
+    def _validate_page_payload(payload: dict[str, Any], page: int, expected_count: int | None) -> tuple[list, int | None, int | None]:
+        """Validate one page's self-reported counters. Returns (batch, totalPages, updated expected_count)."""
+        batch = payload.get("products")
+        if not isinstance(batch, list) or any(not isinstance(product, dict) for product in batch):
             raise ToolError("dm lieferte einen unerwarteten Angebotskatalog")
+        count = payload.get("count")
+        if count is not None:
+            if not isinstance(count, int) or isinstance(count, bool) or not 0 <= count <= 2000:
+                raise ToolError("dm Gesamtzahl unbekannt oder zu groß")
+            if expected_count is not None and count != expected_count:
+                raise ToolError("dm Katalog während des Abrufs verändert")
+            expected_count = count
+        current = payload.get("currentPage")
+        if current is not None and (not isinstance(current, int) or isinstance(current, bool) or current != page):
+            raise ToolError("dm falsche Pagination-Seite geliefert")
+        pages = payload.get("totalPages")
+        if pages is not None and (not isinstance(pages, int) or isinstance(pages, bool) or not 1 <= pages <= 4):
+            raise ToolError("dm Seitenzahl unbekannt oder Seitenlimit überschritten")
+        return batch, pages, expected_count
+
+    def _fetch_product_pages(self) -> list[dict[str, Any]]:
+        """Fetch every dm 'Ausverkauf' search-API page, validating each page's self-reported
+        counters against the others and bailing out if the catalogue is inconsistent mid-fetch."""
+        products = []
+        expected_count = None
+        seen_pages: set[str] = set()
+        for page in range(4):
+            query = urlencode({"query": "ausverkauf", "pageSize": 500, "currentPage": page})
+            payload = self.http.get_json(f"{self.SEARCH_API}?{query}",
+                {"Accept": "application/json", "Referer": self.OFFERS_URL})
+            batch, pages, expected_count = self._validate_page_payload(payload, page, expected_count)
+            import json
+            fingerprint = json.dumps(batch, sort_keys=True, ensure_ascii=False)
+            if batch and fingerprint in seen_pages:
+                raise ToolError("dm wiederholt eine Seite; Katalog unvollständig")
+            if batch:
+                seen_pages.add(fingerprint)
+            if not batch and (page > 0 or (pages and page < pages - 1)):
+                raise ToolError("dm Folgeseite fehlt; Katalog unvollständig")
+            products.extend(batch)
+            if len(products) > 2000:
+                raise ToolError("dm Katalog überschreitet das Größenlimit")
+            if (pages is not None and page + 1 >= pages) or (pages is None and len(batch) < 500):
+                break
+        else:
+            raise ToolError("dm Seitenlimit erreicht; Katalog unvollständig")
+        if expected_count is not None and len(products) != expected_count:
+            raise ToolError("dm Teilantwort: Produktzahl stimmt nicht mit der angekündigten Gesamtzahl überein")
+        return products
+
+    def _fetch(self) -> list[Offer]:
+        products = self._fetch_product_pages()
         result: list[Offer] = []
         for product in products:
             if not isinstance(product, dict) or not isinstance(product.get("tileData"), dict):
@@ -297,6 +500,7 @@ class OfficialDmSource:
                 product_url=urljoin("https://www.dm.de/", product_path),
                 retailer_url=self.last_market_url,
                 coverage_note="Offizieller dm-Ausverkauf; Onlinepreis, lokale Filialverfügbarkeit unbekannt",
+                article_number=product_id if re.fullmatch(r"[0-9]{7}", product_id) else "",
             ))
         if not result:
             raise ToolError("dm lieferte keine lesbaren Ausverkaufsangebote")

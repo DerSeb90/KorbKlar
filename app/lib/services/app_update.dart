@@ -11,18 +11,7 @@ import 'package:path_provider/path_provider.dart';
 
 /// Where the app is published. The releases of this repository carry one
 /// signed APK per ABI, and GitHub records a SHA-256 digest for each asset.
-///
-/// This is the fork, not the original project: upstream was renamed to
-/// Korbunio and its releases now ship a different, natively built app under
-/// another package name. Following those would replace KorbKlar on the phone.
-const String kUpdateRepository = 'DerSeb90/KorbKlar';
-
-/// Names the Flutter build gives its release APKs: `app-<abi>-release.apk`
-/// per ABI, or `app-release.apk` for a universal build. Anything else in a
-/// release is not this app and is never offered as an update.
-final RegExp kReleaseApkName = RegExp(
-  r'^app-(?:(arm64-v8a|armeabi-v7a|x86_64|x86)-)?release\.apk$',
-);
+const String kUpdateRepository = 'lesecuritae/Korbunio';
 
 enum AppUpdateStatus { available, current, error }
 
@@ -92,9 +81,8 @@ class AppUpdateInfo {
   final DateTime? date;
 
   /// Reads one entry of the GitHub releases API and picks the APK built for
-  /// [abi] (`arm64-v8a`, `armeabi-v7a`, `x86_64`). A universal
-  /// `app-release.apk` is taken when no split one matches. Assets that are not
-  /// named like this app's builds are ignored, see [kReleaseApkName].
+  /// [abi] (`arm64-v8a`, `armeabi-v7a`, `x86_64`). A universal APK is taken
+  /// when no split one matches.
   factory AppUpdateInfo.fromRelease(Map<String, dynamic> json, String abi) {
     final tag = json['tag_name']?.toString().trim() ?? '';
     final version = AppVersion.tryParse(tag);
@@ -103,15 +91,15 @@ class AppUpdateInfo {
     }
     final assets = (json['assets'] as List<dynamic>? ?? const [])
         .whereType<Map<String, dynamic>>()
-        .where((a) => kReleaseApkName.hasMatch(a['name']?.toString() ?? ''))
+        .where((a) => (a['name']?.toString() ?? '').endsWith('.apk'))
         .toList(growable: false);
     if (assets.isEmpty) {
-      throw const FormatException('Das Release enthält keine KorbKlar-APK.');
+      throw const FormatException('Das Release enthält keine APK.');
     }
     final asset = assets.firstWhere(
-      (a) => a['name'].toString() == 'app-$abi-release.apk',
+      (a) => a['name'].toString().contains('-$abi-'),
       orElse: () => assets.firstWhere(
-        (a) => a['name'].toString() == 'app-release.apk',
+        (a) => a['name'].toString().contains('universal'),
         orElse: () => throw FormatException('Keine APK für $abi im Release.'),
       ),
     );
@@ -256,7 +244,7 @@ class AppUpdateService {
   Future<File> download(AppUpdateInfo info, UpdateProgress onProgress) async {
     _cancelDownload = false;
     final dir = await getTemporaryDirectory();
-    final file = File('${dir.path}/korbklar-update-${info.tag}-$_abi.apk');
+    final file = File('${dir.path}/korbunio-update-${info.tag}-$_abi.apk');
     if (await file.exists()) await file.delete();
     final sink = file.openWrite();
     var received = 0;
@@ -326,7 +314,7 @@ class AppUpdateService {
       final dir = await getTemporaryDirectory();
       await for (final entity in dir.list()) {
         if (entity is File &&
-            entity.uri.pathSegments.last.startsWith('korbklar-update-') &&
+            entity.uri.pathSegments.last.startsWith('korbunio-update-') &&
             entity.path.endsWith('.apk')) {
           await entity.delete();
         }

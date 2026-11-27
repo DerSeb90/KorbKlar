@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 
 import '../api/client.dart';
@@ -79,7 +79,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   /// The search running on the server, kept so a lost connection can be
   /// picked back up instead of starting the whole comparison again.
-  KorbKlarClient? _client;
+  KorbunioClient? _client;
   String _jobId = '';
 
   @override
@@ -94,7 +94,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     if (_serverConfigured &&
         (!widget.settings.hasPostalCode ||
             !widget.settings.hasSelectedRetailers)) {
-      final client = KorbKlarClient(
+      final client = KorbunioClient(
         baseUrl: widget.settings.serverUrl,
         apiKey: widget.settings.apiKey,
       );
@@ -173,11 +173,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     // Without a server the stored pages are all there is; the client then
     // points nowhere and the results screen falls back to the offline store.
     final client = _serverConfigured
-        ? KorbKlarClient(
+        ? KorbunioClient(
             baseUrl: widget.settings.serverUrl,
             apiKey: widget.settings.apiKey,
           )
-        : KorbKlarClient(baseUrl: 'http://127.0.0.1:1');
+        : KorbunioClient(baseUrl: 'http://127.0.0.1:1');
     await Navigator.of(context).push(
       MaterialPageRoute<void>(
         builder: (_) => ResultsScreen(
@@ -323,10 +323,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   }
 
   Future<void> _saveServer() async {
-    final normalized = KorbKlarClient.normalizeBaseUrl(_server.text);
+    final normalized = KorbunioClient.normalizeBaseUrl(_server.text);
     if (normalized.isEmpty) {
       setState(
-        () => _error = 'Bitte die Adresse deines KorbKlar-Servers eingeben.',
+        () => _error = 'Bitte die Adresse deines Korbuino-Servers eingeben.',
       );
       return;
     }
@@ -335,7 +335,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       _error = '';
     });
     final key = _apiKey.text.trim();
-    final securityError = KorbKlarClient.connectionSecurityError(
+    final securityError = KorbunioClient.connectionSecurityError(
       normalized,
       key,
     );
@@ -346,12 +346,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       });
       return;
     }
-    final client = KorbKlarClient(baseUrl: normalized, apiKey: key);
+    final client = KorbunioClient(baseUrl: normalized, apiKey: key);
     try {
       switch (await client.check()) {
-        case ServerCheck.notKorbKlar:
+        case ServerCheck.notKorbunio:
           setState(
-            () => _error = 'Unter dieser Adresse antwortet kein KorbKlar.',
+            () => _error = 'Unter dieser Adresse antwortet kein Korbuino.',
           );
           return;
         case ServerCheck.needsApiKey:
@@ -368,7 +368,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       await widget.settings.setApiKey(key);
       _server.text = normalized;
       setState(() {});
-    } on KorbKlarException catch (exception) {
+    } on KorbunioException catch (exception) {
       setState(() => _error = exception.message);
     } finally {
       client.close();
@@ -390,7 +390,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
     await _watch?.cancel();
     _client?.close();
-    final client = KorbKlarClient(
+    final client = KorbunioClient(
       baseUrl: widget.settings.serverUrl,
       apiKey: widget.settings.apiKey,
     );
@@ -438,7 +438,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         nettoScottieMarketId: _nettoScottieMarketId,
       );
       _watchJob();
-    } on KorbKlarException catch (exception) {
+    } on KorbunioException catch (exception) {
       _finish();
       if (mounted) {
         setState(() {
@@ -526,14 +526,14 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             // so this is recoverable and the user is offered the way back in.
             setState(() {
               _busy = false;
-              _error = error is KorbKlarException ? error.message : '$error';
+              _error = error is KorbunioException ? error.message : '$error';
             });
           },
         );
   }
 
   Future<String?> _chooseNettoMarket(
-    KorbKlarClient client,
+    KorbunioClient client,
     String postalCode,
   ) => _chooseMarket(
     postalCode: postalCode,
@@ -556,7 +556,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     List<MarketChoice> markets;
     try {
       markets = await load(postalCode);
-    } on KorbKlarException catch (exception) {
+    } on KorbunioException catch (exception) {
       if (mounted) setState(() => _error = exception.message);
       return null;
     }
@@ -624,7 +624,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                       ],
                     ),
                   ),
-                  const Center(child: KorbKlarWordmark(fontSize: 34)),
+                  const Center(child: KorbunioWordmark(fontSize: 34)),
                   const SizedBox(height: 8),
                   Center(
                     child: Text(
@@ -681,7 +681,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           ),
           const SizedBox(height: 6),
           Text(
-            'Adresse deiner KorbKlar-Instanz. Die App rechnet nichts selbst, '
+            'Adresse deiner Korbuino-Instanz. Die App rechnet nichts selbst, '
             'sie zeigt den Vergleich deines Servers.',
             style: TextStyle(color: colors.muted, fontSize: 14),
           ),

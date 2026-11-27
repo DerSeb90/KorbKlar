@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 import json
+import time
 import ssl
 import threading
 from functools import lru_cache
-from typing import Any, Optional
+from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.parse import SplitResult, urlencode, urlsplit
 from urllib.request import Request, urlopen
@@ -34,11 +35,36 @@ def trusted_ssl_context() -> ssl.SSLContext:
     return context
 
 
+def curl_cffi_session(retailer_label: str, impersonate: str = "chrome"):
+    """A `curl_cffi` session with a browser TLS fingerprint, for retailer sites that reject urllib's handshake.
+
+    Shared by the retailer sources that need it (REWE, EDEKA, trinkgut) instead of each repeating the same
+    import/error-message/session-construction. `retailer_label` only affects the error message if curl_cffi is
+    missing from the environment.
+    """
+    try:
+        from curl_cffi import requests as curl_requests
+    except Exception as exc:
+        raise ToolError(f"{retailer_label} benötigt curl_cffi: {exc}") from exc
+    return curl_requests.Session(impersonate=impersonate)
+
+
+RETRYABLE_STATUS = frozenset({429, 502, 503, 504})
+
+
+def _retry_delay(error: HTTPError) -> float:
+    try:
+        wanted = float(error.headers.get("Retry-After", "") or 1)
+    except (TypeError, ValueError, AttributeError):
+        wanted = 1.0
+    return max(0.0, min(wanted, 5.0))
+
+
 class HttpClient:
     def __init__(self, timeout_seconds: int) -> None:
         self.timeout_seconds = max(3, timeout_seconds)
 
-    def get_bytes(self, url: str, headers: Optional[dict[str, str]] = None) -> bytes:
+    def get_bytes(self, url: str, headers: dict[str, str] | None = None) -> bytes:
         self._validate_https_url(url)
         request_headers = {
             "User-Agent": USER_AGENT,
@@ -47,19 +73,27 @@ class HttpClient:
         }
         request_headers.update(headers or {})
         request = Request(url, headers=request_headers)
-        try:
-            with urlopen(request, timeout=self.timeout_seconds, context=trusted_ssl_context()) as response:  # nosec B310
-                self._validate_https_url(response.geturl())
-                data = response.read(10 * 1024 * 1024 + 1)
-                if len(data) > 10 * 1024 * 1024:
-                    raise ToolError("Quellantwort überschreitet das Größenlimit")
-                return data
-        except HTTPError as exc:
-            raise ToolError(f"HTTP {exc.code} bei {urlsplit(url).netloc}") from exc
-        except (URLError, TimeoutError, OSError) as exc:
-            raise ToolError(f"Abruf von {urlsplit(url).netloc} fehlgeschlagen: {exc}") from exc
+        for attempt in (1, 2):
+            try:
+                with urlopen(request, timeout=self.timeout_seconds, context=trusted_ssl_context()) as response:  # nosec B310
+                    self._validate_https_url(response.geturl())
+                    data = response.read(10 * 1024 * 1024 + 1)
+                    if len(data) > 10 * 1024 * 1024:
+                        raise ToolError("Quellantwort überschreitet das Größenlimit")
+                    return data
+            except HTTPError as exc:
+                if attempt == 1 and exc.code in RETRYABLE_STATUS:
+                    # One bounded retry for throttling / transient gateway errors; Retry-After is honoured up to 5 s.
+                    delay = _retry_delay(exc)
+                    exc.close()
+                    time.sleep(delay)
+                    continue
+                raise ToolError(f"HTTP {exc.code} bei {urlsplit(url).netloc}") from exc
+            except (URLError, TimeoutError, OSError) as exc:
+                raise ToolError(f"Abruf von {urlsplit(url).netloc} fehlgeschlagen: {exc}") from exc
+        raise ToolError(f"Abruf von {urlsplit(url).netloc} fehlgeschlagen")  # pragma: no cover - loop always returns or raises
 
-    def get_json(self, url: str, headers: Optional[dict[str, str]] = None) -> dict[str, Any]:
+    def get_json(self, url: str, headers: dict[str, str] | None = None) -> dict[str, Any]:
         try:
             payload = json.loads(self.get_bytes(url, headers).decode("utf-8", errors="replace"))
         except json.JSONDecodeError as exc:
@@ -124,6 +158,14 @@ class PostalCodeLocator:
                 self._cache[postal_code] = locality
         return locality
 
+    def coordinates(self, postal_code: str) -> tuple[float, float] | None:
+        address = self._address(postal_code)
+        try:
+            lat, lon = float(address["_latitude"]), float(address["_longitude"])
+            return (lat, lon) if -90 <= lat <= 90 and -180 <= lon <= 180 else None
+        except (KeyError, ValueError, TypeError):
+            return None
+
     def state(self, postal_code: str) -> str:
         """Return the federal state for source pages that group stores by state."""
         with self._lock:
@@ -154,6 +196,7 @@ class PostalCodeLocator:
                 raw = payload[0].get("address")
                 if isinstance(raw, dict):
                     address = {str(key): clean_text(value) for key, value in raw.items()}
+                    address.update(_latitude=clean_text(payload[0].get("lat")), _longitude=clean_text(payload[0].get("lon")))
                     with self._lock:
                         self._address_cache[postal_code] = address
                     return address

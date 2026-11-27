@@ -1,15 +1,15 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
-import 'package:korbklar_app/api/client.dart';
-import 'package:korbklar_app/screens/results_screen.dart';
-import 'package:korbklar_app/services/local_shopping_list.dart';
-import 'package:korbklar_app/services/offline_store.dart';
-import 'package:korbklar_app/services/settings.dart';
-import 'package:korbklar_app/theme.dart';
+import 'package:korbunio_app/api/client.dart';
+import 'package:korbunio_app/screens/results_screen.dart';
+import 'package:korbunio_app/services/local_shopping_list.dart';
+import 'package:korbunio_app/services/offline_store.dart';
+import 'package:korbunio_app/services/settings.dart';
+import 'package:korbunio_app/theme.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 Map<String, Object?> _offer(String category, String product, double price) => {
@@ -47,8 +47,10 @@ class _Stub extends http.BaseClient {
   final requests = <http.BaseRequest>[];
 
   /// The last request for the result page (the app also asks for shopping-list targets).
-  String get lastResults =>
-      requests.lastWhere((r) => !r.url.path.contains('shopping-list')).url.toString();
+  String get lastResults => requests
+      .lastWhere((r) => !r.url.path.contains('shopping-list'))
+      .url
+      .toString();
 
   @override
   Future<http.StreamedResponse> send(http.BaseRequest request) async {
@@ -91,14 +93,22 @@ void main() {
   // between the frames instead of waiting for a settle that could hang.
   Future<void> settle(WidgetTester tester) async {
     for (var i = 0; i < 20; i++) {
-      await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 40)));
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 40)),
+      );
       await tester.pump(const Duration(milliseconds: 50));
     }
   }
 
-  Future<_Stub> pump(WidgetTester tester) async {
-    tester.view.physicalSize = const Size(900 * 2, 1600 * 2);
+  Future<_Stub> pump(
+    WidgetTester tester, {
+    Size size = const Size(900, 1600),
+    double bottomInset = 0,
+  }) async {
+    tester.view.physicalSize = size * 2;
     tester.view.devicePixelRatio = 2;
+    tester.view.padding = FakeViewPadding(bottom: bottomInset * 2);
+    tester.view.viewPadding = FakeViewPadding(bottom: bottomInset * 2);
     addTearDown(tester.view.reset);
     SharedPreferences.setMockInitialValues({});
     final stub = _Stub(page);
@@ -107,10 +117,10 @@ void main() {
       return (
         await Settings.load(),
         await OfflineStore.open(
-          directory: await Directory.systemTemp.createTemp('korbklar-groups-'),
+          directory: await Directory.systemTemp.createTemp('korbuino-groups-'),
         ),
         await LocalShoppingListStore.open(
-          directory: await Directory.systemTemp.createTemp('korbklar-list-'),
+          directory: await Directory.systemTemp.createTemp('korbuino-list-'),
         ),
       );
     }))!;
@@ -118,7 +128,10 @@ void main() {
       MaterialApp(
         theme: korbLightTheme(),
         home: ResultsScreen(
-          client: KorbKlarClient(baseUrl: 'http://korb.example', httpClient: stub),
+          client: KorbunioClient(
+            baseUrl: 'http://korb.example',
+            httpClient: stub,
+          ),
           handle: const ResultHandle(searchId: 'demo', token: 'token'),
           settings: deps.$1,
           offlineStore: deps.$2,
@@ -179,5 +192,32 @@ void main() {
     expect(find.text('Feigen'), findsNothing);
     expect(find.text('Kohlrabi'), findsNothing);
     expect(find.text('Apfelsaft'), findsOneWidget);
+  });
+
+  testWidgets('the last offer scrolls clear of the system navigation bar', (
+    tester,
+  ) async {
+    const navBar = 48.0; // three-button navigation
+    const height = 420.0;
+    await pump(tester, size: const Size(360, height), bottomInset: navBar);
+
+    await tester.drag(find.byType(Scrollable).last, const Offset(0, -3000));
+    await settle(tester);
+
+    // Everything in the list, the footer line included, not just the cards.
+    final lowest = find
+        .descendant(
+          of: find.byType(Scrollable).last,
+          matching: find.byType(Text),
+        )
+        .evaluate()
+        .map((e) => tester.getBottomLeft(find.byWidget(e.widget)).dy)
+        .reduce((a, b) => a > b ? a : b);
+    expect(
+      lowest,
+      lessThanOrEqualTo(height - navBar + 0.5),
+      reason:
+          'the last list entry ends at $lowest dp, under the ${navBar}dp nav bar',
+    );
   });
 }

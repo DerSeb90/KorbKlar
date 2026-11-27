@@ -1,3 +1,84 @@
+# 0.1.22
+
+Der Server übernimmt den Stand des Upstream-Projekts (Korbuino 0.1.68 bis
+0.1.85). Die Flutter-App unter `app/` ist ab jetzt unverändert die des
+Upstream-Projekts; die eigene KorbKlar-Variante entfällt.
+
+Server:
+
+- Filialbestand: neue Seite „Filialbestand prüfen“ (`/availability`),
+  `POST /api/v1/availability` und das MCP-Werkzeug `get_store_availability`
+  für Rossmann; dm- und Rossmann-Bestände hängen außerdem direkt an den
+  Angeboten (höchstens fünf belegte Artikelnummern je Händler und Seite,
+  sonst „Bestand unbekannt“). dm läuft über den offiziellen MCP-Server
+  mcp.dm.de; drei dm-Werkzeuge (Produktsuche, Produktdetails, Marktfinder)
+  stehen auch im eigenen MCP bereit. Buchbestand ist keine Reservierung.
+- Grocy als Einkaufsliste (Server und MCP): Artikel hinzufügen, Dubletten
+  vermeiden, gegen aktuelle Angebote prüfen. Einrichtung über
+  `PUT /api/v1/grocy` (gespeichert in `/data/grocy.json`) oder über
+  `SUPERMARKT_GROCY_URL`, `SUPERMARKT_GROCY_API_KEY` und
+  `SUPERMARKT_GROCY_SHOPPING_LIST_ID`; `compose.yml` reicht diese Variablen
+  nicht durch.
+- Beobachtungen (`watch_product`) werden sofort geprüft, nicht erst beim
+  täglichen Durchlauf. Benachrichtigungen an NextPush/UnifiedPush tragen den
+  Titel als erste Textzeile; ntfy und Webhooks bleiben unverändert.
+- Rossmann: liest die neue Angebotsseite wieder (geänderte
+  Gültigkeitsformulierung, Karten ohne `product-card`-Markierung, zweiter
+  Abrufversuch, Browser-Zeitbudget 20 statt 12 Sekunden). Ohne
+  veröffentlichten Zeitraum erscheinen die Artikel mit „Gültigkeit
+  unbestätigt“.
+- HOL’AB! liest die Angebotskarten im neuen Karussell; Müller liest die
+  Aktionsseiten von Drogerie, Haushalt, Schreibwaren und Spielwaren (rund 240
+  statt 16 Angebote) beziehungsweise datierte Prospektangebote.
+- ALDI Süd wird in Köln und anderen Grenzgebieten nicht mehr durch eine
+  falsche Nord-Zuordnung ausgeschlossen; die Prüfung nutzt beide offiziellen
+  Filiallisten.
+- EDEKA-Marktsuche liefert wieder bis zu 100 statt zehn Märkte (`size` statt
+  `limit`); EDEKA-Angebote tragen Beginn und Ende der Woche.
+- Angebotsabdeckung aller Händler geprüft: Lidl und ALDI Nord ergänzen den
+  regionalen Prospekt auch bei gefülltem Katalog; App-, Kunden- und
+  Mehrkaufpreise, Pfand, Mengen und Aktionsstarts werden nur so übernommen,
+  wie sie veröffentlicht sind. Lidl-Dubletten aus Marktguru und KaufDA werden
+  zusammengeführt. Teilweise ausgefallene Quellen werden als solche angezeigt.
+- Kategorien: Drogerie-, Baby-, Tier-, Getränke- und Fischprodukte sowie
+  Enteiser und Eiskratzer landen nicht mehr durch Schlüsselwörter in der
+  falschen Gruppe.
+- Produktbilder: Ersatzbild vom selben Artikel eines anderen Händlers bei
+  totem Link.
+- MCP: HOL’AB! als Händlername, leerer Suchbegriff mit ausgewählten Händlern,
+  getrennte Meldungen für leere, unvollständige und nicht verfügbare
+  Kataloge, Hinweis auf nicht verrechnete App-Preise und Coupons.
+- Händlerkataloge werden unabhängig voneinander aktualisiert; ein langsamer
+  Katalog blockiert die anderen nicht mehr.
+- Die Ergebnis-Caches werden nach dem Update einmal neu aufgebaut
+  (Snapshot-Schema 18). Einkaufslisten, Beobachtungen, Preisverlauf, Tokens
+  und Einstellungen bleiben erhalten.
+- `/health` und `/api/v1/client` melden `service: korbunio` statt `korbklar`,
+  weil die Upstream-App nur diesen Wert annimmt. Die bisherige KorbKlar-App
+  akzeptiert beide Werte. Image, Volume, Umgebungsvariablen und `compose.yml`
+  heißen weiter wie bisher.
+
+App:
+
+- Die App heißt jetzt „Korbuino“ und hat die Paketkennung
+  `de.korbunio.korbunio_app`. Android installiert sie deshalb als eigene App
+  neben der bisherigen KorbKlar-App (`de.korbklar.korbklar_app`), nicht als
+  Update. Serveradresse, Token, KitchenOwl-Verbindung und die lokale
+  Einkaufsliste werden nicht übernommen; danach kann die alte App
+  deinstalliert werden.
+- Gebaut und signiert wird weiter in diesem Repository mit dem bisherigen
+  Schlüssel. Die APK des Upstream-Projekts trägt dieselbe Paketkennung mit
+  anderer Signatur und lässt sich nicht darüber installieren.
+- Der Update-Button sucht in den Releases von `lesecuritae/Korbunio`. Dort
+  liegt nur die native App; die Suche endet deshalb mit „Keine APK für … im
+  Release“. Neue Builds kommen von Hand aus den Releases oder
+  Build-Artefakten (`korbunio-apk`) dieses Repositories.
+- Die App zeigt die Versionsnummer des Upstream-Clients (0.1.55), nicht die
+  des Servers.
+- Angebotskarten laufen auf schmalen Displays nicht mehr über den Rand.
+- Ergebnisliste und Einstellungen lassen sich bis über die
+  Android-Navigationsleiste hinaus scrollen.
+
 # 0.1.21
 
 Der Server übernimmt den Stand des Upstream-Projekts (Korbuino 0.1.57 bis

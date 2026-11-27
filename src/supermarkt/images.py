@@ -26,42 +26,51 @@ class ImageResult:
 
 
 class ImageServiceError(RuntimeError):
-    def __init__(self, message: str, status_code: int = 404) -> None:
+    def __init__(self, message: str, status_code: int = 404, permanent: bool = False) -> None:
         super().__init__(message)
         self.status_code = status_code
+        self.permanent = permanent
 
 
 def _clean(value: Any) -> str:
     return re.sub(r"\s+", " ", str(value or "")).strip()
 
 
-def normalize_image_url(value: Any, base_url: str = "") -> str:
-    if isinstance(value, dict):
-        for field in ("url", "src", "contentUrl", "content_url", "href"):
-            candidate = normalize_image_url(value.get(field), base_url)
-            if candidate:
-                return candidate
-        return ""
-    if isinstance(value, list):
-        for item in value:
-            candidate = normalize_image_url(item, base_url)
-            if candidate:
-                return candidate
-        return ""
-    text = _clean(value)
-    if not text:
-        return ""
-    if "," in text and re.search(r"\s(?:\d+w|\d+(?:\.\d+)?x)(?:,|$)", text):
-        parts = [item.strip().split()[0] for item in text.split(",") if item.strip()]
-        for part in reversed(parts):
-            candidate = normalize_image_url(part, base_url)
-            if candidate:
-                return candidate
-        return ""
+def _normalize_image_url_dict(value: dict[str, Any], base_url: str) -> str:
+    for field in ("url", "src", "contentUrl", "content_url", "href"):
+        candidate = normalize_image_url(value.get(field), base_url)
+        if candidate:
+            return candidate
+    return ""
+
+
+def _normalize_image_url_list(value: list[Any], base_url: str) -> str:
+    for item in value:
+        candidate = normalize_image_url(item, base_url)
+        if candidate:
+            return candidate
+    return ""
+
+
+def _resolve_srcset_candidate(text: str, base_url: str) -> str:
+    """``srcset``-artige Listen ("foo.jpg 1x, bar.jpg 2x"): nimmt die höchstaufgelöste Angabe zuerst."""
+    parts = [item.strip().split()[0] for item in text.split(",") if item.strip()]
+    for part in reversed(parts):
+        candidate = normalize_image_url(part, base_url)
+        if candidate:
+            return candidate
+    return ""
+
+
+def _resolve_relative_image_url(text: str, base_url: str) -> str:
     if text.startswith("//"):
-        text = "https:" + text
-    elif base_url and text.startswith(("/", "./", "../")):
-        text = urljoin(base_url, text)
+        return "https:" + text
+    if base_url and text.startswith(("/", "./", "../")):
+        return urljoin(base_url, text)
+    return text
+
+
+def _validate_http_image_url(text: str) -> str:
     try:
         parsed = urlsplit(text)
     except ValueError:
@@ -69,6 +78,20 @@ def normalize_image_url(value: Any, base_url: str = "") -> str:
     if parsed.scheme not in {"http", "https"} or not parsed.netloc:
         return ""
     return text[:5000]
+
+
+def normalize_image_url(value: Any, base_url: str = "") -> str:
+    if isinstance(value, dict):
+        return _normalize_image_url_dict(value, base_url)
+    if isinstance(value, list):
+        return _normalize_image_url_list(value, base_url)
+    text = _clean(value)
+    if not text:
+        return ""
+    if "," in text and re.search(r"\s(?:\d+w|\d+(?:\.\d+)?x)(?:,|$)", text):
+        return _resolve_srcset_candidate(text, base_url)
+    text = _resolve_relative_image_url(text, base_url)
+    return _validate_http_image_url(text)
 
 
 def is_rejected_image_url(value: Any) -> bool:
@@ -151,6 +174,7 @@ class ImageService:
         self._cleanup_lock = threading.Lock()
         self._cleanup_next = 0.0
         self._opener = build_opener(_SafeRedirects())
+        self._negative: dict[str, tuple[float, ImageServiceError]] = {}
         self.cache_dir.mkdir(parents=True, exist_ok=True)
         self.cleanup(force=True)
 
@@ -166,11 +190,33 @@ class ImageService:
         direct = normalize_image_url(source_url)
         if not direct or is_rejected_image_url(direct):
             raise ImageServiceError("Kein direktes Produktbild verfügbar", 404)
+        failed = self._negative.get(direct)
+        if failed is not None and failed[0] > time.monotonic():
+            raise failed[1]  # remembered failure: do not hit a dead link on every request
         self.cleanup()
-        data, content_type = self._download(direct, referer=referer)
+        try:
+            data, content_type = self._download(direct, referer=referer)
+        except ImageServiceError as exc:
+            self._remember_failure(direct, exc)
+            raise
+        self._negative.pop(direct, None)
         result = ImageResult(data, content_type, "source")
         self._write(key, result, direct)
         return result
+
+    NEGATIVE_PERMANENT_SECONDS = 24 * 3600
+    NEGATIVE_TRANSIENT_SECONDS = 10 * 60
+    NEGATIVE_MAX_ENTRIES = 2048
+
+    def _remember_failure(self, url: str, error: ImageServiceError) -> None:
+        with self._lock:
+            now = time.monotonic()
+            for key in [key for key, (expires, _) in self._negative.items() if expires <= now]:
+                del self._negative[key]
+            while len(self._negative) >= self.NEGATIVE_MAX_ENTRIES:
+                del self._negative[next(iter(self._negative))]
+            ttl = self.NEGATIVE_PERMANENT_SECONDS if error.permanent else self.NEGATIVE_TRANSIENT_SECONDS
+            self._negative[url] = (now + ttl, error)
 
     def health(self) -> dict[str, Any]:
         self.cleanup()
@@ -297,13 +343,14 @@ class ImageService:
         except ImageServiceError:
             raise
         except HTTPError as exc:
-            raise ImageServiceError(f"Bildquelle antwortet mit HTTP {exc.code}", 502) from exc
+            # 400/401/403/404/410 will not fix themselves soon; 429/5xx and timeouts may.
+            raise ImageServiceError(f"Bildquelle antwortet mit HTTP {exc.code}", 502, permanent=exc.code in {400, 401, 403, 404, 410}) from exc
         except (URLError, TimeoutError, OSError) as exc:
             raise ImageServiceError(f"Bildquelle nicht erreichbar ({type(exc).__name__})", 502) from exc
         data = b"".join(chunks)
         content_type = _sniff_image(data, declared)
         if not content_type:
-            raise ImageServiceError("Bildquelle lieferte kein unterstütztes Bild", 415)
+            raise ImageServiceError("Bildquelle lieferte kein unterstütztes Bild", 415, permanent=True)
         return data, content_type
 
 

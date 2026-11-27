@@ -5,20 +5,30 @@ import json
 import re
 import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import Any, Iterable, Optional
+from typing import Any, Iterable
 from urllib.parse import urlencode
 
 from ..common import clean_text, find_marktguru_keys, first_regex_group
 from ..config import MARKTGURU_HOME, MARKTGURU_SEARCH_API, SEARCH_TERMS
 from ..http import HttpClient
-from ..models import ToolError
+from ..models import ToolError, PartialOffers
+
+MAX_PAGES = 50
+
+
+class SearchPage(list):
+    """Raw rows plus optional source-declared total; remains list-compatible."""
+    def __init__(self, rows, total_results=None):
+        super().__init__(rows)
+        self.total_results = total_results
+
 
 class MarktguruClient:
     def __init__(self, http: HttpClient, page_size: int, max_workers: int) -> None:
         self.http = http
         self.page_size = max(1, min(page_size, 1000))
         self.max_workers = max(1, max_workers)
-        self._credentials: Optional[tuple[str, str]] = None
+        self._credentials: tuple[str, str] | None = None
         self._credentials_lock = threading.Lock()
 
     def _headers(self) -> dict[str, str]:
@@ -61,6 +71,8 @@ class MarktguruClient:
                 except Exception as exc:
                     errors.append(f"{term}: {type(exc).__name__}: {exc}")
                     continue
+                if getattr(offers, "note", ""):
+                    errors.append(f"{term}: {offers.note}")
                 self._merge_unique(collected, offers)
 
         if not collected:
@@ -99,6 +111,8 @@ class MarktguruClient:
                 except Exception as exc:
                     errors.append(f"Marktguru Händlerabfrage {term}: {type(exc).__name__}: {exc}")
                     continue
+                if getattr(offers, "note", ""):
+                    errors.append(f"Marktguru Händlerabfrage {term}: {offers.note}")
                 self._merge_unique(collected, offers)
         return list(collected.values()), errors
 
@@ -130,8 +144,32 @@ class MarktguruClient:
             }
         )
         payload = self.http.get_json(f"{MARKTGURU_SEARCH_API}?{query}", headers)
-        results = payload.get("results")
-        return [item for item in results if isinstance(item, dict)] if isinstance(results, list) else []
+        results = payload.get("results") if isinstance(payload, dict) else None
+        if not isinstance(results, list) or any(not isinstance(item, dict) for item in results):
+            raise ToolError("Marktguru-Angebotsliste hat ein unerwartetes Format")
+        total = payload.get("totalResults")
+        if total is not None and (not isinstance(total, int) or isinstance(total, bool) or total < 0):
+            raise ToolError("Marktguru lieferte eine ungültige Gesamtzahl")
+        return SearchPage(results, total)
+
+    def _fetch_consistent_page(
+        self,
+        postal_code: str,
+        query_text: str,
+        offset: int,
+        headers: dict[str, str],
+        expected_total: int | None,
+    ) -> tuple[Any, int | None]:
+        """Fetch one page and check its self-reported total against earlier pages of the same query."""
+        page = self._fetch_page(postal_code, query_text, offset, headers)
+        total = getattr(page, "total_results", None)
+        if total is not None:
+            if expected_total is not None and total != expected_total:
+                raise ToolError("Marktguru Gesamtzahl hat sich während des Abrufs verändert")
+            expected_total = total
+        if expected_total is not None and (offset + len(page) > expected_total or (not page and offset < expected_total)):
+            raise ToolError("Marktguru Teilantwort: angekündigte Treffer fehlen oder Gesamtzahl widersprüchlich")
+        return page, expected_total
 
     def _fetch_query_pages(
         self,
@@ -141,15 +179,33 @@ class MarktguruClient:
     ) -> list[dict[str, Any]]:
         collected: dict[str, dict[str, Any]] = {}
         offset = 0
-        for _ in range(50):
-            page = self._fetch_page(postal_code, query_text, offset, headers)
+        note = ""
+        expected_total = None
+        for page_number in range(MAX_PAGES):
+            try:
+                page, expected_total = self._fetch_consistent_page(postal_code, query_text, offset, headers, expected_total)
+            except Exception as exc:
+                if not collected:
+                    raise
+                # Keep what earlier pages delivered, but never present the term as complete.
+                note = f"Seite {page_number + 1} fehlgeschlagen ({type(exc).__name__}: {exc}); Ergebnis unvollständig"
+                break
             if not page:
                 break
             added = self._merge_unique(collected, page)
-            if len(page) < self.page_size or added == 0:
+            if added == 0:
+                # A full page of nothing new: the source repeats itself, so further pages cannot be trusted to be complete.
+                note = f"Seite {page_number + 1} lieferte nur bereits bekannte Angebote; Ergebnis möglicherweise unvollständig"
                 break
             offset += len(page)
-        return list(collected.values())
+            if expected_total is not None:
+                if offset == expected_total:
+                    break
+            elif len(page) < self.page_size:
+                break
+        else:
+            note = f"Seitenlimit ({MAX_PAGES}) erreicht; Ergebnis möglicherweise unvollständig"
+        return PartialOffers(collected.values(), note)
 
     def _clear_credentials(self) -> None:
         with self._credentials_lock:

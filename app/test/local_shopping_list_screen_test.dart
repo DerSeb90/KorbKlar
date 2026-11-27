@@ -1,11 +1,11 @@
 import 'dart:io';
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:korbklar_app/api/models.dart';
-import 'package:korbklar_app/screens/local_shopping_list_screen.dart';
-import 'package:korbklar_app/services/local_shopping_list.dart';
+import 'package:korbunio_app/api/models.dart';
+import 'package:korbunio_app/screens/local_shopping_list_screen.dart';
+import 'package:korbunio_app/services/local_shopping_list.dart';
 
 /// Tests render with a placeholder font in which every character is a square,
 /// so text is far wider than on a phone. Load Roboto from the Flutter SDK so
@@ -45,7 +45,7 @@ Future<LocalShoppingListStore> _store(WidgetTester tester) async {
   late Directory root;
   late LocalShoppingListStore store;
   await tester.runAsync(() async {
-    root = await Directory.systemTemp.createTemp('korbklar-list-screen-');
+    root = await Directory.systemTemp.createTemp('korbunio-list-screen-');
     store = await LocalShoppingListStore.open(directory: root);
     await store.add(_offer('REWE', 'Nutella Nuss-Nougat-Creme', '3,49'));
     await store.add(_offer('Lidl', 'Vollmilch 1,5 % Fett frische', '1,19'));

@@ -2,7 +2,7 @@
 
 ## Android app
 
-[`app/`](app/) contains an offline-first Flutter client. Users can connect their own KorbKlar Docker instance in Settings; API tokens are kept in the Android Keystore and transmitted over HTTPS only. Previously loaded offers remain available without a server. On Android a button in the settings fetches the latest release APK from this repository's GitHub releases, verified against the digest GitHub publishes before installing it. A user-owned KitchenOwl instance can be connected directly over HTTPS without forwarding its token to KorbKlar. See [`app/README.md`](app/README.md) for details and APK build instructions.
+[`app/`](app/) contains the upstream project's offline-first Flutter client, unchanged; it is called “Korbuino” and has upstream's package name `de.korbunio.korbunio_app`. Users can connect their own KorbKlar Docker instance in Settings; API tokens are kept in the Android Keystore and transmitted over HTTPS only. Previously loaded offers remain available without a server. The update button in the settings looks at the upstream project's GitHub releases, not at this repository; new builds of this fork are installed by hand. A user-owned KitchenOwl instance can be connected directly over HTTPS without forwarding its token to KorbKlar. See [`app/README.md`](app/README.md) for details and APK build instructions.
 
 [← Language selection](README.md) · [Deutsch](README.de.md)
 
@@ -363,6 +363,16 @@ KorbKlar does not invent missing prices or estimate unknown loyalty benefits. Co
 The **Einkauf** area stores the personal list exclusively in IndexedDB in the current browser profile. There are no accounts, server-side personal lists, trackers, or automatic device synchronisation. Offers and manual items can be added, edited, checked, and grouped by retailer. Goods and deposits are calculated separately; when prices are missing, KorbKlar shows only the known total.
 
 General transfer options include text copy, Web Share, TXT, and a versioned JSON backup with a local import preview. KorbKlar has no app-specific Bring or KitchenOwl connection.
+
+## Rossmann store stock without the retailer app
+
+**Filialbestand prüfen** (`/availability`) in the web UI checks up to five six-digit Rossmann article numbers near a German postal code. Article numbers are shown on Rossmann product pages; product names and EANs must not be guessed or substituted.
+
+Agents can use `get_store_availability(postal_code, dans, store_ids=[])`. The authenticated HTTP endpoint is `POST /api/v1/availability`, for example `{"postal_code":"04109","dans":["120585"]}`. Existing server Bearer authentication applies. The existing comparison OpenAPI contract is preserved.
+
+No Rossmann app, retailer account, API key, device identifier or tracking SDK is required. Queries send area coordinates and article numbers to Rossmann and the postal code to OpenStreetMap/Nominatim; these services see the connecting IP. There is no automatic stock monitoring.
+
+Requests are sequential, at least two seconds apart, with one admitted batch per process and a 60-second memory cache for successful results. Responses include their check time. **“5+” is a lower bound; `available=true` alone does not prove stock.** Zero, unknown and failed retrieval remain distinct. HTTP 406 does not mean sold out. Book stock is neither a reservation nor a shelf-stock guarantee. The observed mobile endpoint is not claimed to be an officially supported third-party API.
 
 ## Roadmap
 

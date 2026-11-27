@@ -139,6 +139,7 @@ def offer_for_response(
     cashback_credit, cashback_note = _cashback_credit(offer)
     result = {
         "offer_id": offer.offer_id,
+        "article_number": offer.article_number,
         "retailer": offer.retailer,
         "category": offer.category,
         "source_category": offer.source_category,
@@ -169,6 +170,7 @@ def offer_for_response(
         "cashback_credit": cashback_credit,
         "cashback_credit_text": format_euro(cashback_credit) if cashback_credit > 0 else "",
         "cashback_credit_note": cashback_note,
+        "product_gtins": list(offer.product_gtins),
         "pack": format_pack(offer.pack_signature) if offer.pack_signature else "",
         "unit_price": _unit_price_label(offer, regular),
         "selected_unit_price": (

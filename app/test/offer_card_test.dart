@@ -1,8 +1,8 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:korbklar_app/api/models.dart';
-import 'package:korbklar_app/theme.dart';
-import 'package:korbklar_app/widgets/offer_card.dart';
+import 'package:korbunio_app/api/models.dart';
+import 'package:korbunio_app/theme.dart';
+import 'package:korbunio_app/widgets/offer_card.dart';
 
 Offer _offer() => Offer.fromJson({
   'retailer': 'REWE',

@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../services/app_update.dart';
@@ -30,14 +30,14 @@ class AppUpdateFlow {
     final action = await showDialog<String>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text('KorbKlar ${info.version} verfügbar'),
+        title: Text('Korbuino ${info.version} verfügbar'),
         content: SingleChildScrollView(
           child: Text(
             '${info.notes.isEmpty ? 'Eine neue Version ist verfügbar.' : info.notes}\n\n'
             'Die APK (${(info.size / 1024 / 1024).toStringAsFixed(1)} MB) kommt '
             'direkt aus dem GitHub-Release und wird vor der Installation gegen '
             'die dort hinterlegte Prüfsumme geprüft. Android kann beim ersten '
-            'Mal fragen, ob KorbKlar unbekannte Apps installieren darf.',
+            'Mal fragen, ob Korbuino unbekannte Apps installieren darf.',
           ),
         ),
         actions: [
