@@ -4,7 +4,7 @@ library;
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
@@ -166,13 +166,20 @@ void main() {
 
   Future<void> pumpResults(WidgetTester tester, Brightness brightness) async {
     SharedPreferences.setMockInitialValues({});
-    final settings = await Settings.load();
-    final offlineStore = await OfflineStore.open(
-      directory: await Directory.systemTemp.createTemp('korbklar-golden-'),
-    );
-    final localShoppingList = await LocalShoppingListStore.open(
-      directory: await Directory.systemTemp.createTemp('korbklar-list-golden-'),
-    );
+    // Real file IO never completes inside testWidgets' fake-async zone.
+    final deps = (await tester.runAsync(() async {
+      final settings = await Settings.load();
+      final offlineStore = await OfflineStore.open(
+        directory: await Directory.systemTemp.createTemp('korbklar-golden-'),
+      );
+      final localShoppingList = await LocalShoppingListStore.open(
+        directory: await Directory.systemTemp.createTemp(
+          'korbklar-list-golden-',
+        ),
+      );
+      return (settings, offlineStore, localShoppingList);
+    }))!;
+    final (settings, offlineStore, localShoppingList) = deps;
     final client = KorbKlarClient(
       baseUrl: 'http://korb.example',
       httpClient: _StubClient(page),
@@ -195,7 +202,14 @@ void main() {
         ),
       ),
     );
-    await tester.pumpAndSettle();
+    // The stub client answers on real time, so give it real time between
+    // frames; pumpAndSettle alone would only advance the fake clock.
+    for (var i = 0; i < 30; i++) {
+      await tester.pump(const Duration(milliseconds: 200));
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 20)),
+      );
+    }
   }
 
   testWidgets('results screen, light', (tester) async {

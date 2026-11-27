@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 import '../api/client.dart';
 import '../api/kitchenowl_client.dart';
@@ -159,7 +159,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(title: const Text('Verbindungen')),
     body: ListView(
-      padding: const EdgeInsets.all(16),
+      // Edge-to-edge: the last setting must be able to scroll above the
+      // system navigation bar.
+      padding: EdgeInsets.fromLTRB(
+        16,
+        16,
+        16,
+        16 + MediaQuery.viewPaddingOf(context).bottom,
+      ),
       children: [
         const Text(
           'Darstellung',
