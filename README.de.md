@@ -376,6 +376,16 @@ Der Bereich **Einkauf** speichert die persönliche Liste ausschließlich im Inde
 
 Für die allgemeine Geräteübergabe stehen Textkopie, Web Share, TXT sowie ein versioniertes JSON-Backup mit lokaler Importvorschau bereit. KorbKlar enthält keine app-spezifische Bring- oder KitchenOwl-Verbindung.
 
+## Rossmann-Filialbestand ohne Händler-App
+
+Unter **Filialbestand prüfen** (`/availability`) fragt die Weboberfläche bis zu fünf Rossmann-Artikelnummern für eine Postleitzahl ab. Die sechsstellige Artikelnummer steht auf der Rossmann-Produktseite; eine EAN oder ein Produktname ist kein Ersatz dafür.
+
+Für Agenten steht `get_store_availability(postal_code, dans, store_ids=[])` bereit. Die geschützte HTTP-Schnittstelle ist `POST /api/v1/availability` mit demselben JSON-Vertrag. Beispiel: `{"postal_code":"04109","dans":["120585"]}`. Bei eingerichteter Server-Authentifizierung ist der vorhandene Bearer-Token erforderlich. Die OpenAPI-Schnittstelle für den bisherigen Angebotsvergleich bleibt unverändert.
+
+Die Funktion benötigt weder die Rossmann-App noch ein Rossmann-Konto, API-Schlüssel, Gerätekennungen oder Tracking-SDKs. Übertragen werden Suchkoordinaten und Artikelnummern an Rossmann sowie die PLZ zur Auflösung an OpenStreetMap/Nominatim; die jeweilige Gegenstelle sieht die IP-Adresse. Es gibt kein automatisches Bestandsmonitoring.
+
+Jeder Artikel wird einzeln mit mindestens zwei Sekunden Abstand abgefragt; höchstens eine Bestandsabfrage läuft pro Prozess. Erfolgreiche Ergebnisse werden 60 Sekunden im Arbeitsspeicher gehalten und mit Abrufzeit angezeigt. **„5+“ bedeutet mindestens fünf; `available=true` beweist keinen positiven Bestand.** Nullbestand, unbekannter Bestand und Abruffehler bleiben getrennt. Ein HTTP-406-Fehler ist keine Ausverkauft-Meldung. Die Werte sind Buchbestände, keine Reservierung oder Garantie für Regalware. Die verwendete mobile Schnittstelle kann sich ändern und wird hier nicht als offiziell unterstützte Drittanbieter-API ausgegeben.
+
 ## Roadmap
 
 Für spätere Versionen sind zusätzliche REST-/OpenAPI-Anbindungen für lokale Automationen denkbar. Der aktuelle Stand enthält keine Verbindung oder Synchronisation mit einer externen Einkaufslisten-App.

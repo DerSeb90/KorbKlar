@@ -70,6 +70,10 @@ PROGRAMS: tuple[LoyaltyProgram, ...] = (
         "Öffentlich ausgewiesene mein-GLOBUS-Preise werden berücksichtigt.",
     ),
     LoyaltyProgram(
+        "moin_card", "MOIN CARD", ("famila Nordwest", "Combi"),
+        "Nur konkret veröffentlichte MOIN-CARD-Preise; Punkte und persönliche Coupons werden nicht geschätzt.",
+    ),
+    LoyaltyProgram(
         "payback",
         "PAYBACK",
         ("EDEKA", "Marktkauf", "Netto Marken-Discount", "Globus"),
@@ -118,6 +122,8 @@ def normalize_program_ids(values: Iterable[str]) -> tuple[str, ...]:
 
 def program_for_condition(retailer: str, condition: str) -> str:
     folded = str(condition or "").casefold()
+    if "moin" in folded:
+        return "moin_card" if retailer in {"famila Nordwest", "Combi"} else ""
     if "payback" in folded:
         return "payback"
     if "kaufland" in folded or "xtra" in folded:
@@ -190,17 +196,29 @@ def apply_selected_programs(
     return checkout, effective, savings, applicable
 
 
-def parse_public_loyalty_prices(
-    description: str,
-    regular_price: float | None,
-    retailer: str,
-) -> tuple[LoyaltyBenefit, ...]:
-    """Extract concrete public loyalty prices from offer text.
+def _netto_plus_cashback_benefit(description: str) -> LoyaltyBenefit | None:
+    """Netto plus Vorteil/Guthaben/Gutschrift ist ein Cashback-Hinweis, keine reduzierte Kaufpreisangabe."""
+    import re
 
-    This parser deliberately ignores point balances, percentage coupons without a
-    concrete resulting price, and personalized offers. REWE cashback is parsed by
-    the REWE source because its Euro badge is a reward, not a checkout price.
-    """
+    from .common import clean_text, parse_number
+
+    advantage = re.search(
+        r"(\d+[,.]\d{2})\s*€\s*netto\s*plus\s*(?:vorteil|guthaben|gutschrift)",
+        description,
+        flags=re.IGNORECASE,
+    )
+    if not advantage:
+        return None
+    value = parse_number(advantage.group(1))
+    if not value or value <= 0:
+        return None
+    return LoyaltyBenefit("netto_plus", "cashback", float(value), clean_text(advantage.group(0)))
+
+
+def _direct_price_loyalty_benefits(
+    description: str, regular_price: float | None, retailer: str
+) -> dict[tuple[str, str], LoyaltyBenefit]:
+    """Findet konkrete Mitglieds-/App-Preise ("1,99€ Lidl Plus-Preis" oder "Lidl Plus-Preis 1,99€") im Angebotstext."""
     import re
 
     from .common import clean_text, parse_number
@@ -209,11 +227,14 @@ def parse_public_loyalty_prices(
         r"lidl\s*plus(?:[- ]?preis)?",
         r"penny\s*app(?:[- ]?preis)?",
         r"netto\s*plus(?:[- ]?preis)?",
+        r"netto\s*(?:plus\s*)?app",
+        r"moin\s*card",
         r"kaufland\s*card(?:\s*xtra)?",
         r"xtra[- ]?preis",
         r"mein\s*globus(?:[- ]?preis)?",
         r"edeka\s*app(?:[- ]?preis)?",
         r"marktkauf\s*app(?:[- ]?preis)?",
+        r"müller\s*app(?:[- ]?preis)?",
         r"payback(?:[- ]?preis)?",
         r"app[- ]?preis",
         r"club[- ]?preis",
@@ -226,18 +247,6 @@ def parse_public_loyalty_prices(
     )
 
     found: dict[tuple[str, str], LoyaltyBenefit] = {}
-    if retailer == "Netto Marken-Discount":
-        advantage = re.search(
-            r"(\d+[,.]\d{2})\s*€\s*netto\s*plus\s*(?:vorteil|guthaben|gutschrift)",
-            description,
-            flags=re.IGNORECASE,
-        )
-        if advantage:
-            value = parse_number(advantage.group(1))
-            if value and value > 0:
-                found[("netto_plus", "cashback")] = LoyaltyBenefit(
-                    "netto_plus", "cashback", float(value), clean_text(advantage.group(0))
-                )
     for index, pattern in enumerate(patterns):
         for match in re.finditer(pattern, description, flags=re.IGNORECASE):
             price_text, condition = (
@@ -251,7 +260,7 @@ def parse_public_loyalty_prices(
             if regular_price is not None and price > regular_price:
                 continue
             program_id = program_for_condition(retailer, condition)
-            if not program_id:
+            if not program_id or not any(p.id == program_id and retailer in p.retailers for p in PROGRAMS):
                 continue
             nearby = description[max(0, match.start() - 10):match.end() + 20]
             if program_id == "netto_plus" and re.search(r"vorteil|guthaben|gutschrift", nearby, re.I):
@@ -266,9 +275,64 @@ def parse_public_loyalty_prices(
             previous = found.get(key)
             if previous is None or benefit.value < previous.value:
                 found[key] = benefit
+    return found
+
+
+def parse_public_loyalty_prices(
+    description: str,
+    regular_price: float | None,
+    retailer: str,
+) -> tuple[LoyaltyBenefit, ...]:
+    """Extract concrete public loyalty prices from offer text.
+
+    This parser deliberately ignores point balances, percentage coupons without a
+    concrete resulting price, and personalized offers. REWE cashback is parsed by
+    the REWE source because its Euro badge is a reward, not a checkout price.
+    """
+    found: dict[tuple[str, str], LoyaltyBenefit] = {}
+    if retailer == "Netto Marken-Discount":
+        cashback = _netto_plus_cashback_benefit(description)
+        if cashback:
+            found[(cashback.program_id, cashback.kind)] = cashback
+    found.update(_direct_price_loyalty_benefits(description, regular_price, retailer))
     return tuple(found.values())
 
 
 def benefit_label(benefit: LoyaltyBenefit) -> str:
     program = PROGRAM_BY_ID.get(benefit.program_id)
     return program.label if program else benefit.program_id
+
+
+def marktguru_public_prices(description: str, advertised_price: float | None, retailer: str) -> tuple[float | None, tuple[LoyaltyBenefit, ...]]:
+    """Respect explicit member/normal price pairs even if the API boolean is false.
+
+    The feed may put the member price in `price`. A named MIT … program plus
+    Normalpreis is the explicit evidence; do not depend solely on an auxiliary
+    membership boolean or interpret an unrelated amount or percentage as a price.
+    """
+    import re
+    from .common import parse_number
+
+    benefits = parse_public_loyalty_prices(description, advertised_price, retailer)
+    if advertised_price is None or any(b.kind == "direct_price" and b.value < advertised_price for b in benefits):
+        return advertised_price, benefits
+    membership = re.search(r"\bmit\s+(?:der\s+)?(lidl\s+plus(?:\s+app)?|penny\s+app|netto\s+(?:plus\s+)?app|moin\s+card|kaufland\s+card(?:\s+xtra)?|mein\s+globus)\b", description, re.I)
+    if not membership:
+        return advertised_price, benefits
+    program = program_for_condition(retailer, membership[1])
+    normal = re.search(r"\bnormalpreis\s*:\s*(\d{1,4}[,.]\d{2})\b", description, re.I)
+    if not normal:
+        # "ohne PENNY App 2.99" is explicit public-price evidence too, but
+        # only for the same named program as the advertised member price.
+        without = re.search(r"\bohne\s+(?:die\s+)?(lidl\s+plus(?:\s+app)?|penny\s+app|netto\s+(?:plus\s+)?app|moin\s+card|kaufland\s+card(?:\s+xtra)?|mein\s+globus)\s*:?\s*(\d{1,4}[,.]\d{2})\b", description, re.I)
+        if not without or program_for_condition(retailer, without[1]) != program:
+            return advertised_price, benefits
+        regular = parse_number(without[2])
+    else:
+        regular = parse_number(normal[1])
+    if not any(p.id == program and retailer in p.retailers for p in PROGRAMS):
+        return advertised_price, benefits
+    if regular is None or regular <= advertised_price:
+        return advertised_price, benefits
+    direct = LoyaltyBenefit(program, "direct_price", advertised_price, membership[1])
+    return regular, tuple(b for b in benefits if not (b.program_id == program and b.kind == "direct_price")) + (direct,)

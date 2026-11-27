@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import threading
-from typing import Optional
 
 from .config import (
     IMAGE_CACHE_DIR,
@@ -14,12 +13,33 @@ from .images import ImageService
 from .service import SupermarketEngine
 from .jobs import SearchJobStore
 
-_engine: Optional[SupermarketEngine] = None
+_engine: SupermarketEngine | None = None
 _engine_lock = threading.Lock()
-_image_service: Optional[ImageService] = None
+_image_service: ImageService | None = None
 _image_service_lock = threading.Lock()
-_jobs: Optional[SearchJobStore] = None
+_jobs: SearchJobStore | None = None
 _jobs_lock = threading.Lock()
+_stock_service = None
+_stock_lock = threading.Lock()
+_dm_mcp = None
+
+
+def get_dm_mcp():
+    from .dm_mcp import DmMcp
+    with _stock_lock:
+        global _dm_mcp
+        if _dm_mcp is None:
+            _dm_mcp = DmMcp()
+        return _dm_mcp
+
+
+def get_stock_service():
+    from .availability import StockService
+    with _stock_lock:
+        global _stock_service
+        if _stock_service is None:
+            _stock_service = StockService(lambda postal: get_engine().loader.aldi_region.postal_coordinates(postal))
+        return _stock_service
 
 
 def get_engine() -> SupermarketEngine:

@@ -4,6 +4,7 @@ from fastapi.testclient import TestClient
 
 from supermarkt.asgi import app
 from supermarkt import access, ui
+from supermarkt.version import __version__
 
 
 def test_home_and_static_assets():
@@ -23,7 +24,7 @@ def test_home_and_static_assets():
     assert 'name="rewe_market_id"' in response.text
     assert 'name="offer_week"' in response.text
     assert 'value="next"' in response.text
-    assert "KorbKlar 0.1.21" in response.text
+    assert f"KorbKlar {__version__}" in response.text
     assert "Korbuino" not in response.text
     assert "Korbunio" not in response.text
     assert client.get("/static/home.css").status_code == 200

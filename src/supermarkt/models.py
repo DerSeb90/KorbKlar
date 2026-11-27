@@ -1,7 +1,19 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
-from typing import Any, Optional
+from typing import Any
+
+
+class NoLocalMarketOffers(list):
+    """A successfully resolved absence, never a network/schema error."""
+
+
+class PartialOffers(list):
+    """A usable list plus explicit evidence that a source was not read completely."""
+
+    def __init__(self, items=(), note: str = "") -> None:
+        super().__init__(items)
+        self.note = note
 
 
 @dataclass(frozen=True)
@@ -25,10 +37,11 @@ RETAILER_SPECS: tuple[RetailerSpec, ...] = (
         ("netto marken-discount", "netto markendiscount", "netto-online", "netto"),
         "#f4c300",
         "https://www.netto-online.de/angebote/",
+        excluded_aliases=("netto scottie", "netto mit scottie", "netto mit dem scottie", "netto mit hund", "netto salling", "netto schwarz"),
     ),
     RetailerSpec(
         "Netto schwarz",
-        ("netto scottie", "netto mit scottie", "netto mit hund", "netto salling", "netto schwarz"),
+        ("netto scottie", "netto mit scottie", "netto mit dem scottie", "netto mit hund", "netto salling", "netto schwarz"),
         "#ffd500",
         "https://netto.de/marktsuche/",
         True,
@@ -74,7 +87,7 @@ RETAILER_SPECS: tuple[RetailerSpec, ...] = (
         "https://www.combi.de/",
         True,
     ),
-    RetailerSpec("HOL’AB!", ("hol'ab", "hol’ab", "holab"), "#e30613", "https://holab.de/angebote", True),
+    RetailerSpec("HOL’AB!", ("hol'ab!", "hol'ab", "hol’ab", "holab"), "#e30613", "https://holab.de/angebote", True),
     RetailerSpec("trinkgut", ("trinkgut", "trink gut"), "#003399", "https://www.trinkgut.de/angebote/", True),
     RetailerSpec("Rossmann", ("rossmann",), "#cf003d", "https://www.rossmann.de/de/filialen/index.html", True),
     RetailerSpec("Müller", ("mueller", "müller drogerie", "mueller drogerie"), "#e30613", "https://www.mueller.de/storefinder/", True),
@@ -135,8 +148,8 @@ class Offer:
     name: str
     brand: str
     description: str
-    price: Optional[float]
-    base_price: Optional[float]
+    price: float | None
+    base_price: float | None
     base_unit: str
     pack_signature: str
     validity_label: str
@@ -148,26 +161,29 @@ class Offer:
     category_conflict: bool = False
     product_url: str = ""
     retailer_url: str = ""
-    deposit: Optional[float] = None
-    container_deposit: Optional[float] = None
-    packaging_deposit: Optional[float] = None
-    multi_buy_quantity: Optional[int] = None
-    multi_buy_total_price: Optional[float] = None
-    single_price: Optional[float] = None
+    deposit: float | None = None
+    container_deposit: float | None = None
+    packaging_deposit: float | None = None
+    multi_buy_quantity: int | None = None
+    multi_buy_total_price: float | None = None
+    single_price: float | None = None
     pack_size: str = ""
     multi_buy_condition: str = ""
-    multi_buy_mix_group: Optional[str] = None
-    minimum_quantity: Optional[int] = None
+    multi_buy_mix_group: str | None = None
+    minimum_quantity: int | None = None
     offer_condition: str = ""
     comparison_eligible: bool = True
     coverage_note: str = ""
-    valid_from: Optional[str] = None
-    valid_until: Optional[str] = None
+    valid_from: str | None = None
+    valid_until: str | None = None
+    product_gtins: tuple[str, ...] = ()
     benefits: tuple[LoyaltyBenefit, ...] = ()
+    # Only copied from the retailer's own product identifier, never a name guess.
+    article_number: str = ""
 
     # These fields are calculated for a request and are not part of source parsing.
-    effective_price: Optional[float] = None
-    checkout_price: Optional[float] = None
+    effective_price: float | None = None
+    checkout_price: float | None = None
     loyalty_savings: float = 0.0
     applied_benefits: tuple[LoyaltyBenefit, ...] = ()
     regular_comparison_note: str = ""
@@ -192,6 +208,10 @@ class ToolError(RuntimeError):
     pass
 
 
+class NoLocalMarketError(ToolError):
+    """No allowed nearby store after a successful location/market lookup."""
+
+
 def offer_to_dict(offer: Offer) -> dict[str, Any]:
     return asdict(offer)
 
@@ -209,6 +229,8 @@ def _benefits_from_dict(value: Any) -> tuple[LoyaltyBenefit, ...]:
 def offer_from_dict(value: dict[str, Any]) -> Offer:
     fields = Offer.__dataclass_fields__
     payload = {name: value[name] for name in fields if name in value}
+    identifiers = payload.get("product_gtins", ())
+    payload["product_gtins"] = tuple(sorted({str(v) for v in identifiers if isinstance(v, str) and v.isdigit() and len(v) in {8, 12, 13, 14}})) if isinstance(identifiers, (list, tuple)) else ()
     payload["benefits"] = _benefits_from_dict(payload.get("benefits"))
     payload["applied_benefits"] = _benefits_from_dict(payload.get("applied_benefits"))
     return Offer(**payload)

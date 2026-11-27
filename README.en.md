@@ -364,6 +364,16 @@ The **Einkauf** area stores the personal list exclusively in IndexedDB in the cu
 
 General transfer options include text copy, Web Share, TXT, and a versioned JSON backup with a local import preview. KorbKlar has no app-specific Bring or KitchenOwl connection.
 
+## Rossmann store stock without the retailer app
+
+**Filialbestand prüfen** (`/availability`) in the web UI checks up to five six-digit Rossmann article numbers near a German postal code. Article numbers are shown on Rossmann product pages; product names and EANs must not be guessed or substituted.
+
+Agents can use `get_store_availability(postal_code, dans, store_ids=[])`. The authenticated HTTP endpoint is `POST /api/v1/availability`, for example `{"postal_code":"04109","dans":["120585"]}`. Existing server Bearer authentication applies. The existing comparison OpenAPI contract is preserved.
+
+No Rossmann app, retailer account, API key, device identifier or tracking SDK is required. Queries send area coordinates and article numbers to Rossmann and the postal code to OpenStreetMap/Nominatim; these services see the connecting IP. There is no automatic stock monitoring.
+
+Requests are sequential, at least two seconds apart, with one admitted batch per process and a 60-second memory cache for successful results. Responses include their check time. **“5+” is a lower bound; `available=true` alone does not prove stock.** Zero, unknown and failed retrieval remain distinct. HTTP 406 does not mean sold out. Book stock is neither a reservation nor a shelf-stock guarantee. The observed mobile endpoint is not claimed to be an officially supported third-party API.
+
 ## Roadmap
 
 Future versions may add REST or OpenAPI connections for local automations. The current release does not connect or synchronise with an external shopping-list application. The existing REST API can already support custom automations.
