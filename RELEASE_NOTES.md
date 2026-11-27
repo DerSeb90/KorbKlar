@@ -1,8 +1,8 @@
 # 0.1.22
 
-Server und Flutter-App übernehmen den Stand des Upstream-Projekts (Korbuino
-0.1.68 bis 0.1.85). Die App bleibt die Flutter-App dieses Forks mit eigenem
-Namen, eigener Paketkennung und eigener Update-Quelle.
+Der Server übernimmt den Stand des Upstream-Projekts (Korbuino 0.1.68 bis
+0.1.85). Die Flutter-App unter `app/` ist ab jetzt unverändert die des
+Upstream-Projekts; die eigene KorbKlar-Variante entfällt.
 
 Server:
 
@@ -53,13 +53,31 @@ Server:
 - Die Ergebnis-Caches werden nach dem Update einmal neu aufgebaut
   (Snapshot-Schema 18). Einkaufslisten, Beobachtungen, Preisverlauf, Tokens
   und Einstellungen bleiben erhalten.
+- `/health` und `/api/v1/client` melden `service: korbunio` statt `korbklar`,
+  weil die Upstream-App nur diesen Wert annimmt. Die bisherige KorbKlar-App
+  akzeptiert beide Werte. Image, Volume, Umgebungsvariablen und `compose.yml`
+  heißen weiter wie bisher.
 
 App:
 
+- Die App heißt jetzt „Korbuino“ und hat die Paketkennung
+  `de.korbunio.korbunio_app`. Android installiert sie deshalb als eigene App
+  neben der bisherigen KorbKlar-App (`de.korbklar.korbklar_app`), nicht als
+  Update. Serveradresse, Token, KitchenOwl-Verbindung und die lokale
+  Einkaufsliste werden nicht übernommen; danach kann die alte App
+  deinstalliert werden.
+- Gebaut und signiert wird weiter in diesem Repository mit dem bisherigen
+  Schlüssel. Die APK des Upstream-Projekts trägt dieselbe Paketkennung mit
+  anderer Signatur und lässt sich nicht darüber installieren.
+- Der Update-Button sucht in den Releases von `lesecuritae/Korbunio`. Dort
+  liegt nur die native App; die Suche endet deshalb mit „Keine APK für … im
+  Release“. Neue Builds kommen von Hand aus den Releases oder
+  Build-Artefakten (`korbunio-apk`) dieses Repositories.
+- Die App zeigt die Versionsnummer des Upstream-Clients (0.1.55), nicht die
+  des Servers.
 - Angebotskarten laufen auf schmalen Displays nicht mehr über den Rand.
 - Ergebnisliste und Einstellungen lassen sich bis über die
   Android-Navigationsleiste hinaus scrollen.
-- Umstellung auf das Paket `material_ui`.
 
 # 0.1.21
 

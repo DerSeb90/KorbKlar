@@ -2,52 +2,52 @@ import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
-import 'package:korbklar_app/api/client.dart';
-import 'package:korbklar_app/api/kitchenowl_client.dart';
-import 'package:korbklar_app/api/models.dart';
-import 'package:korbklar_app/services/shopping_list.dart';
+import 'package:korbunio_app/api/client.dart';
+import 'package:korbunio_app/api/kitchenowl_client.dart';
+import 'package:korbunio_app/api/models.dart';
+import 'package:korbunio_app/services/shopping_list.dart';
 
 void main() {
   group('normalizeBaseUrl', () {
     test('accepts what a user actually types', () {
       expect(
-        KorbKlarClient.normalizeBaseUrl('192.0.2.10:8000'),
+        KorbunioClient.normalizeBaseUrl('192.0.2.10:8000'),
         'http://192.0.2.10:8000',
       );
       expect(
-        KorbKlarClient.normalizeBaseUrl('  http://host:8000/  '),
+        KorbunioClient.normalizeBaseUrl('  http://host:8000/  '),
         'http://host:8000',
       );
       expect(
-        KorbKlarClient.normalizeBaseUrl('https://korb.example/'),
+        KorbunioClient.normalizeBaseUrl('https://korb.example/'),
         'https://korb.example',
       );
-      expect(KorbKlarClient.normalizeBaseUrl(''), '');
+      expect(KorbunioClient.normalizeBaseUrl(''), '');
     });
   });
 
   group('connection security', () {
-    test('never sends a KorbKlar token over plain HTTP', () {
+    test('never sends a Korbuino token over plain HTTP', () {
       expect(
-        KorbKlarClient.connectionSecurityError('http://korb.example', 'secret'),
+        KorbunioClient.connectionSecurityError('http://korb.example', 'secret'),
         isNotNull,
       );
       expect(
-        KorbKlarClient.connectionSecurityError(
+        KorbunioClient.connectionSecurityError(
           'https://korb.example',
           'secret',
         ),
         isNull,
       );
       expect(
-        KorbKlarClient.connectionSecurityError('http://192.168.1.2:8000', ''),
+        KorbunioClient.connectionSecurityError('http://192.168.1.2:8000', ''),
         isNull,
       );
     });
 
     test('exchanges an admin key for a separate app token', () async {
       late http.Request request;
-      final client = KorbKlarClient(
+      final client = KorbunioClient(
         baseUrl: 'https://korb.example',
         apiKey: 'admin-secret',
         httpClient: MockClient((incoming) {
@@ -61,13 +61,13 @@ void main() {
       expect(await client.createAppToken(), 'personal-app-token');
       expect(request.url.path, '/api/v1/access-tokens');
       expect(request.headers['Authorization'], 'Bearer admin-secret');
-      expect(jsonDecode(request.body)['label'], 'KorbKlar Android');
+      expect(jsonDecode(request.body)['label'], 'Korbuino Android');
     });
   });
 
   test('search sends the locally selected retailers to the server', () async {
     late http.Request request;
-    final client = KorbKlarClient(
+    final client = KorbunioClient(
       baseUrl: 'https://korb.example',
       httpClient: MockClient((incoming) {
         request = incoming as http.Request;
@@ -95,7 +95,7 @@ void main() {
   });
 
   test('reads and deduplicates selectable Netto branches', () async {
-    final client = KorbKlarClient(
+    final client = KorbunioClient(
       baseUrl: 'https://korb.example',
       httpClient: MockClient(
         (_) => http.Response(
@@ -117,60 +117,13 @@ void main() {
     expect(markets.map((market) => market.label), ['Netto A', 'Netto B']);
   });
 
-  group('server check', () {
-    KorbKlarClient serving(String service, {int clientStatus = 200}) =>
-        KorbKlarClient(
-          baseUrl: 'https://korb.example',
-          httpClient: MockClient((request) {
-            if (request.url.path == '/health') {
-              return http.Response(
-                jsonEncode({'status': 'ok', 'service': service}),
-                200,
-              );
-            }
-            expect(request.url.path, '/api/v1/client');
-            return http.Response(
-              jsonEncode({'status': 'ok', 'service': service}),
-              clientStatus,
-            );
-          }),
-        );
-
-    test('accepts a KorbKlar server', () async {
-      final client = serving('korbklar');
-      addTearDown(client.close);
-      expect(await client.check(), ServerCheck.ok);
-    });
-
-    test(
-      'accepts a server built from the renamed upstream (Korbunio)',
-      () async {
-        final client = serving('korbunio');
-        addTearDown(client.close);
-        expect(await client.check(), ServerCheck.ok);
-      },
-    );
-
-    test('rejects anything else answering at the address', () async {
-      final client = serving('grafana');
-      addTearDown(client.close);
-      expect(await client.check(), ServerCheck.notKorbKlar);
-    });
-
-    test('reports a missing API key', () async {
-      final client = serving('korbunio', clientStatus: 401);
-      addTearDown(client.close);
-      expect(await client.check(), ServerCheck.needsApiKey);
-    });
-  });
-
   test('reads instance defaults from the server', () async {
-    final client = KorbKlarClient(
+    final client = KorbunioClient(
       baseUrl: 'https://korb.example',
       httpClient: MockClient(
         (_) => http.Response(
           jsonEncode({
-            'service': 'korbklar',
+            'service': 'korbunio',
             'default_postal_code': '06108',
             'default_retailers': ['REWE', 'dm'],
           }),
@@ -371,7 +324,7 @@ void main() {
       final page = ResultPage.fromJson({
         'search_id': 'abc',
         'postal_code': '26188',
-        'retailer_counts': {'Combi': 216, 'famila Nordwest': 289},
+        'retailer_counts': {'Lidl': 216, 'famila Nordwest': 289},
         'has_next': true,
         'page': 1,
         'offers': [
@@ -403,7 +356,7 @@ void main() {
   });
 
   group('image urls', () {
-    final client = KorbKlarClient(baseUrl: 'http://korb.example:8000');
+    final client = KorbunioClient(baseUrl: 'http://korb.example:8000');
 
     test('server-relative proxy paths become absolute', () {
       expect(
@@ -425,13 +378,13 @@ void main() {
     test('joins only the values an offer actually carries', () {
       final full = Offer.fromJson({
         'product': 'Kerrygold Butter',
-        'retailer': 'Combi',
+        'retailer': 'Lidl',
         'effective_price_text': '1,59 €',
         'pack': '250 g',
       });
       expect(
         ShoppingListText.lineFor(full),
-        'Kerrygold Butter · 250 g · Combi · 1,59 €',
+        'Kerrygold Butter · 250 g · Lidl · 1,59 €',
       );
 
       final sparse = Offer.fromJson({'product': 'Brot'});
@@ -449,7 +402,7 @@ void main() {
 
   group('image requests', () {
     test('carry the bearer token, because the proxy is gated too', () {
-      final client = KorbKlarClient(
+      final client = KorbunioClient(
         baseUrl: 'http://korb.example',
         apiKey: 'k',
       );
@@ -457,7 +410,7 @@ void main() {
     });
 
     test('carry nothing when no key is configured', () {
-      final client = KorbKlarClient(baseUrl: 'http://korb.example');
+      final client = KorbunioClient(baseUrl: 'http://korb.example');
       expect(client.imageHeaders, isEmpty);
     });
   });
@@ -477,14 +430,14 @@ void main() {
     test('a merged row names every retailer it stands for', () {
       final offer = Offer.fromJson({
         'product': 'Butter',
-        'retailer': 'Combi',
-        'retailers': ['Combi', 'famila Nordwest'],
-        'retailer_label': 'Combi · famila Nordwest',
+        'retailer': 'Lidl',
+        'retailers': ['Lidl', 'famila Nordwest'],
+        'retailer_label': 'Lidl · famila Nordwest',
         'effective_price_text': '1,59 €',
       });
       expect(
         ShoppingListText.lineFor(offer),
-        'Butter · Combi · famila Nordwest · 1,59 €',
+        'Butter · Lidl · famila Nordwest · 1,59 €',
       );
     });
   });
@@ -494,7 +447,7 @@ void main() {
       'a dropped poll does not end a search the server is still running',
       () async {
         var calls = 0;
-        final client = KorbKlarClient(
+        final client = KorbunioClient(
           baseUrl: 'http://korb.example',
           httpClient: MockClient((_) {
             calls++;
@@ -519,7 +472,7 @@ void main() {
     );
 
     test('gives up once the server stays unreachable', () async {
-      final client = KorbKlarClient(
+      final client = KorbunioClient(
         baseUrl: 'http://korb.example',
         httpClient: MockClient((_) => http.Response('down', 502)),
       );
@@ -527,14 +480,14 @@ void main() {
         client
             .watchSearch('j', interval: Duration.zero, pollFailureLimit: 3)
             .toList(),
-        throwsA(isA<KorbKlarException>()),
+        throwsA(isA<KorbunioException>()),
       );
     });
   });
 
   group('error handling', () {
     test('reports the server detail message', () async {
-      final client = KorbKlarClient(
+      final client = KorbunioClient(
         baseUrl: 'http://korb.example',
         httpClient: MockClient(
           (_) => http.Response(
@@ -546,7 +499,7 @@ void main() {
       expect(
         () => client.results(const ResultHandle(searchId: 'a', token: 'b')),
         throwsA(
-          isA<KorbKlarException>().having(
+          isA<KorbunioException>().having(
             (error) => error.message,
             'message',
             'Ungültiger Ergebnis-Schlüssel',
@@ -563,7 +516,7 @@ void main() {
           ],
         }),
       );
-      final client = KorbKlarClient(
+      final client = KorbunioClient(
         baseUrl: 'http://korb.example',
         httpClient: MockClient((_) => http.Response.bytes(body, 200)),
       );

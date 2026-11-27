@@ -2,7 +2,7 @@
 
 ## Android app
 
-[`app/`](app/) contains an offline-first Flutter client. Users can connect their own KorbKlar Docker instance in Settings; API tokens are kept in the Android Keystore and transmitted over HTTPS only. Previously loaded offers remain available without a server. On Android a button in the settings fetches the latest release APK from this repository's GitHub releases, verified against the digest GitHub publishes before installing it. A user-owned KitchenOwl instance can be connected directly over HTTPS without forwarding its token to KorbKlar. See [`app/README.md`](app/README.md) for details and APK build instructions.
+[`app/`](app/) contains the upstream project's offline-first Flutter client, unchanged; it is called “Korbuino” and has upstream's package name `de.korbunio.korbunio_app`. Users can connect their own KorbKlar Docker instance in Settings; API tokens are kept in the Android Keystore and transmitted over HTTPS only. Previously loaded offers remain available without a server. The update button in the settings looks at the upstream project's GitHub releases, not at this repository; new builds of this fork are installed by hand. A user-owned KitchenOwl instance can be connected directly over HTTPS without forwarding its token to KorbKlar. See [`app/README.md`](app/README.md) for details and APK build instructions.
 
 [← Language selection](README.md) · [Deutsch](README.de.md)
 

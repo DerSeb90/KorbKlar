@@ -4,12 +4,12 @@ import 'dart:io';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
-import 'package:korbklar_app/api/client.dart';
-import 'package:korbklar_app/screens/results_screen.dart';
-import 'package:korbklar_app/services/local_shopping_list.dart';
-import 'package:korbklar_app/services/offline_store.dart';
-import 'package:korbklar_app/services/settings.dart';
-import 'package:korbklar_app/theme.dart';
+import 'package:korbunio_app/api/client.dart';
+import 'package:korbunio_app/screens/results_screen.dart';
+import 'package:korbunio_app/services/local_shopping_list.dart';
+import 'package:korbunio_app/services/offline_store.dart';
+import 'package:korbunio_app/services/settings.dart';
+import 'package:korbunio_app/theme.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 Map<String, Object?> _offer(String category, String product, double price) => {
@@ -117,10 +117,10 @@ void main() {
       return (
         await Settings.load(),
         await OfflineStore.open(
-          directory: await Directory.systemTemp.createTemp('korbklar-groups-'),
+          directory: await Directory.systemTemp.createTemp('korbuino-groups-'),
         ),
         await LocalShoppingListStore.open(
-          directory: await Directory.systemTemp.createTemp('korbklar-list-'),
+          directory: await Directory.systemTemp.createTemp('korbuino-list-'),
         ),
       );
     }))!;
@@ -128,7 +128,7 @@ void main() {
       MaterialApp(
         theme: korbLightTheme(),
         home: ResultsScreen(
-          client: KorbKlarClient(
+          client: KorbunioClient(
             baseUrl: 'http://korb.example',
             httpClient: stub,
           ),

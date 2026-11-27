@@ -2,13 +2,13 @@ import 'dart:io';
 
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:korbklar_app/screens/home_screen.dart';
-import 'package:korbklar_app/screens/local_shopping_list_screen.dart';
-import 'package:korbklar_app/screens/settings_screen.dart';
-import 'package:korbklar_app/services/local_shopping_list.dart';
-import 'package:korbklar_app/services/offline_store.dart';
-import 'package:korbklar_app/services/settings.dart';
-import 'package:korbklar_app/theme.dart';
+import 'package:korbunio_app/screens/home_screen.dart';
+import 'package:korbunio_app/screens/local_shopping_list_screen.dart';
+import 'package:korbunio_app/screens/settings_screen.dart';
+import 'package:korbunio_app/services/local_shopping_list.dart';
+import 'package:korbunio_app/services/offline_store.dart';
+import 'package:korbunio_app/services/settings.dart';
+import 'package:korbunio_app/theme.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// A phone with a tall status bar / cutout, a small display and a large
@@ -58,10 +58,10 @@ void main() {
     SharedPreferences.setMockInitialValues({});
     final settings = await Settings.load();
     final offlineStore = await OfflineStore.open(
-      directory: await Directory.systemTemp.createTemp('korbklar-inset-off-'),
+      directory: await Directory.systemTemp.createTemp('korbunio-inset-off-'),
     );
     final list = await LocalShoppingListStore.open(
-      directory: await Directory.systemTemp.createTemp('korbklar-inset-list-'),
+      directory: await Directory.systemTemp.createTemp('korbunio-inset-list-'),
     );
     return HomeScreen(
       settings: settings,
@@ -90,7 +90,7 @@ void main() {
     await _phone(tester, textScale: 1.5);
     final list = await tester.runAsync(
       () async => LocalShoppingListStore.open(
-        directory: await Directory.systemTemp.createTemp('korbklar-inset-l2-'),
+        directory: await Directory.systemTemp.createTemp('korbunio-inset-l2-'),
       ),
     );
     await tester.pumpWidget(
