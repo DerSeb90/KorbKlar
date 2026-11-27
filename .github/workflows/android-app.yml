@@ -76,7 +76,10 @@ jobs:
           KORBUNIO_STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
           KORBUNIO_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           KORBUNIO_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
-        run: flutter build apk --release --split-per-abi
+        # app/ is upstream's tree unchanged; its Gradle wrapper (9.1.0) trails the
+        # minimum that current stable Flutter asks for. Skip that version check
+        # here instead of patching the wrapper, so app/ stays identical to upstream.
+        run: flutter build apk --release --split-per-abi --android-skip-build-dependency-validation
 
       - name: Verify release signature
         working-directory: app
